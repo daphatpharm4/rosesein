@@ -256,7 +256,7 @@ export const REACTION_META: Record<ReactionKind, { emoji: string; label: string 
   merci:   { emoji: "🙏",  label: "Merci" },
 };
 
-function makeEmptyPayload(): ReactionsPayload {
+export function makeEmptyPayload(): ReactionsPayload {
   return {
     summary: REACTION_KINDS.map((kind) => ({ kind, count: 0, users: [] })),
     myReaction: null,

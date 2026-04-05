@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import type { Route } from "next";
 
 import { AppShell } from "@/components/shell/app-shell";
-import { getThreadWithReplies, getThreadReactionsMap, getReplyReactionsMap } from "@/lib/communaute";
+import { getThreadWithReplies, getThreadReactionsMap, getReplyReactionsMap, makeEmptyPayload } from "@/lib/communaute";
 import { ReactionBar } from "@/components/community/reaction-bar";
 import { postReply } from "./actions";
 import { toggleThreadReaction, toggleReplyReaction } from "../../actions";
@@ -61,7 +61,7 @@ export default async function ThreadPage({ params }: Props) {
           <h1 className="font-headline text-2xl font-bold text-on-surface">{thread.title}</h1>
           <p className="text-base leading-8 text-on-surface-variant">{thread.body}</p>
           <ReactionBar
-            initialPayload={threadReactionsMap[threadId]}
+            initialPayload={threadReactionsMap[threadId] ?? makeEmptyPayload()}
             onToggle={threadToggle}
           />
         </div>
@@ -86,7 +86,7 @@ export default async function ThreadPage({ params }: Props) {
                 </div>
                 <p className="text-sm leading-7 text-on-surface-variant">{reply.body}</p>
                 <ReactionBar
-                  initialPayload={replyReactionsMap[reply.id]}
+                  initialPayload={replyReactionsMap[reply.id] ?? makeEmptyPayload()}
                   onToggle={replyToggle}
                 />
               </article>

@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import type { Route } from "next";
 
 import { AppShell } from "@/components/shell/app-shell";
-import { getSpaceWithThreads, getThreadReactionsMap } from "@/lib/communaute";
+import { getSpaceWithThreads, getThreadReactionsMap, makeEmptyPayload } from "@/lib/communaute";
 import { ReactionBar } from "@/components/community/reaction-bar";
 import { toggleThreadReaction } from "../actions";
 
@@ -96,7 +96,7 @@ export default async function SpacePage({ params }: Props) {
                   </Link>
 
                   <ReactionBar
-                    initialPayload={reactionsMap[thread.id]}
+                    initialPayload={reactionsMap[thread.id] ?? makeEmptyPayload()}
                     onToggle={toggle}
                   />
                 </article>
