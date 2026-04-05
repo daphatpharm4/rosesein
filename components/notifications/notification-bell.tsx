@@ -12,9 +12,18 @@ const KIND_ICONS: Record<NotificationKind, typeof Bell> = {
 };
 
 function formatRelative(value: string) {
-  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" }).format(
-    new Date(value),
-  );
+  const diffMs = Date.now() - new Date(value).getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  const rtf = new Intl.RelativeTimeFormat("fr-FR", { numeric: "auto" });
+
+  if (diffDays > 0) return rtf.format(-diffDays, "day");
+  if (diffHours > 0) return rtf.format(-diffHours, "hour");
+  if (diffMins > 0) return rtf.format(-diffMins, "minute");
+  return rtf.format(-diffSecs, "second");
 }
 
 export async function NotificationBell() {
