@@ -231,3 +231,144 @@ export async function getThreadWithReplies(
     }),
   };
 }
+
+// ─── Reactions ────────────────────────────────────────────────────────────────
+
+export type ReactionKind = "touche" | "pense" | "courage" | "merci";
+
+export type ReactionSummary = {
+  kind: ReactionKind;
+  count: number;
+  users: { displayName: string; isAnonymous: boolean }[];
+};
+
+export type ReactionsPayload = {
+  summary: ReactionSummary[];   // always all 4 kinds; count 0 if none
+  myReaction: ReactionKind | null;
+};
+
+export const REACTION_KINDS: ReactionKind[] = ["touche", "pense", "courage", "merci"];
+
+export const REACTION_META: Record<ReactionKind, { emoji: string; label: string }> = {
+  touche:  { emoji: "❤️",  label: "Touché(e)" },
+  pense:   { emoji: "🕯️", label: "Je pense à vous" },
+  courage: { emoji: "💪",  label: "Courage" },
+  merci:   { emoji: "🙏",  label: "Merci" },
+};
+
+function makeEmptyPayload(): ReactionsPayload {
+  return {
+    summary: REACTION_KINDS.map((kind) => ({ kind, count: 0, users: [] })),
+    myReaction: null,
+  };
+}
+
+type ReactionRow = {
+  kind: string;
+  user_id: string;
+  profiles: {
+    display_name: string;
+    pseudonym: string | null;
+    is_anonymous: boolean;
+  } | null;
+};
+
+function aggregateReactions(
+  rows: ReactionRow[],
+  currentUserId: string | null
+): ReactionsPayload {
+  const summaryMap = Object.fromEntries(
+    REACTION_KINDS.map((kind): [ReactionKind, ReactionSummary] => [
+      kind,
+      { kind, count: 0, users: [] },
+    ])
+  ) as Record<ReactionKind, ReactionSummary>;
+
+  let myReaction: ReactionKind | null = null;
+
+  for (const row of rows) {
+    const kind = row.kind as ReactionKind;
+    summaryMap[kind].count++;
+    const p = row.profiles;
+    const displayName = p?.is_anonymous
+      ? (p.pseudonym ?? "Anonyme")
+      : (p?.display_name ?? "Membre");
+    summaryMap[kind].users.push({
+      displayName,
+      isAnonymous: p?.is_anonymous ?? false,
+    });
+    if (currentUserId && row.user_id === currentUserId) myReaction = kind;
+  }
+
+  return { summary: Object.values(summaryMap), myReaction };
+}
+
+export async function getThreadReactionsMap(
+  threadIds: string[]
+): Promise<Record<string, ReactionsPayload>> {
+  const empty = Object.fromEntries(threadIds.map((id) => [id, makeEmptyPayload()]));
+  if (!hasSupabaseBrowserEnv() || threadIds.length === 0) return empty;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data } = await supabase
+    .from("community_thread_reactions")
+    .select("thread_id, kind, user_id, profiles(display_name, pseudonym, is_anonymous)")
+    .in("thread_id", threadIds);
+
+  if (!data) return empty;
+
+  const result: Record<string, ReactionsPayload> = Object.fromEntries(
+    threadIds.map((id) => [id, makeEmptyPayload()])
+  );
+
+  const byThread = (
+    data as unknown as Array<ReactionRow & { thread_id: string }>
+  ).reduce<Record<string, ReactionRow[]>>((acc, row) => {
+    const tid = row.thread_id;
+    (acc[tid] ??= []).push(row);
+    return acc;
+  }, {});
+
+  for (const [tid, rows] of Object.entries(byThread)) {
+    if (tid in result) result[tid] = aggregateReactions(rows, user?.id ?? null);
+  }
+
+  return result;
+}
+
+export async function getReplyReactionsMap(
+  replyIds: string[]
+): Promise<Record<string, ReactionsPayload>> {
+  const empty = Object.fromEntries(replyIds.map((id) => [id, makeEmptyPayload()]));
+  if (!hasSupabaseBrowserEnv() || replyIds.length === 0) return empty;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data } = await supabase
+    .from("community_reply_reactions")
+    .select("reply_id, kind, user_id, profiles(display_name, pseudonym, is_anonymous)")
+    .in("reply_id", replyIds);
+
+  if (!data) return empty;
+
+  const result: Record<string, ReactionsPayload> = Object.fromEntries(
+    replyIds.map((id) => [id, makeEmptyPayload()])
+  );
+
+  const byReply = (
+    data as unknown as Array<ReactionRow & { reply_id: string }>
+  ).reduce<Record<string, ReactionRow[]>>((acc, row) => {
+    const rid = row.reply_id;
+    (acc[rid] ??= []).push(row);
+    return acc;
+  }, {});
+
+  for (const [rid, rows] of Object.entries(byReply)) {
+    if (rid in result) result[rid] = aggregateReactions(rows, user?.id ?? null);
+  }
+
+  return result;
+}
