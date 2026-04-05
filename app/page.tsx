@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { ArrowRight, CalendarHeart, HeartHandshake, MessageCircleHeart, Newspaper, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarHeart, HandHeart, HeartHandshake, MessageCircleHeart, Newspaper, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import {
   formatEventSchedule,
@@ -8,6 +8,7 @@ import {
   getPublicContentSnapshot,
 } from "@/lib/content";
 import { getCurrentUserContext } from "@/lib/auth";
+import type { ProfileKind } from "@/lib/auth";
 
 type Shortcut =
   | {
@@ -27,44 +28,59 @@ type Shortcut =
       tone: string;
     };
 
-const shortcuts: Shortcut[] = [
-  {
-    title: "Messagerie apaisée",
-    description:
-      "Retrouvez les échanges avec l’association, vos groupes et vos contacts de confiance.",
-    href: "/messages" as Route,
-    external: false,
-    icon: MessageCircleHeart,
-    tone: "bg-primary/10 text-primary",
-  },
-  {
-    title: "Actualités validées",
-    description:
-      "Centralisez les contenus vérifiés sur les traitements, le quotidien et les événements.",
-    href: "/actualites" as Route,
-    external: false,
-    icon: Newspaper,
-    tone: "bg-secondary-container text-on-secondary-container",
-  },
-  {
-    title: "Mon parcours",
-    description:
-      "Préparez rendez-vous, notes personnelles et suivi doux dans un seul espace.",
-    href: "/parcours" as Route,
-    external: false,
-    icon: CalendarHeart,
-    tone: "bg-primary/10 text-primary",
-  },
-  {
-    title: "Soutiens & ressources",
-    description:
-      "Accédez rapidement à la nutrition, au bien-être, aux groupes de parole et à l’aide.",
-    href: "/association" as Route,
-    external: false,
-    icon: HeartHandshake,
-    tone: "bg-secondary-container text-on-secondary-container",
-  },
-];
+function getShortcuts(profileKind: ProfileKind | undefined): Shortcut[] {
+  const parcoursShortcut: Shortcut =
+    profileKind === "caregiver"
+      ? {
+          title: "Accompagner au quotidien",
+          description:
+            "Organisez les rendez-vous, gardez des notes et suivez le parcours de la personne que vous soutenez.",
+          href: "/parcours" as Route,
+          external: false,
+          icon: HandHeart,
+          tone: "bg-primary/10 text-primary",
+        }
+      : {
+          title: "Mon parcours",
+          description:
+            "Préparez rendez-vous, notes personnelles et suivi doux dans un seul espace.",
+          href: "/parcours" as Route,
+          external: false,
+          icon: CalendarHeart,
+          tone: "bg-primary/10 text-primary",
+        };
+
+  return [
+    {
+      title: "Messagerie apaisée",
+      description:
+        "Retrouvez les échanges avec l’association, vos groupes et vos contacts de confiance.",
+      href: "/messages" as Route,
+      external: false,
+      icon: MessageCircleHeart,
+      tone: "bg-primary/10 text-primary",
+    },
+    {
+      title: "Actualités validées",
+      description:
+        "Centralisez les contenus vérifiés sur les traitements, le quotidien et les événements.",
+      href: "/actualites" as Route,
+      external: false,
+      icon: Newspaper,
+      tone: "bg-secondary-container text-on-secondary-container",
+    },
+    parcoursShortcut,
+    {
+      title: "Soutiens & ressources",
+      description:
+        "Accédez rapidement à la nutrition, au bien-être, aux groupes de parole et à l’aide.",
+      href: "/association" as Route,
+      external: false,
+      icon: HeartHandshake,
+      tone: "bg-secondary-container text-on-secondary-container",
+    },
+  ];
+}
 
 const WELLNESS_TIPS = [
   "Aujourd'hui, accordez-vous une pause sans écrans — même 10 minutes font la différence.",
@@ -89,6 +105,7 @@ export default async function HomePage() {
   const { configured, latestArticle, nextEvent } = await getPublicContentSnapshot();
   const { profile } = await getCurrentUserContext();
   const todayTip = WELLNESS_TIPS[new Date().getDay() % WELLNESS_TIPS.length];
+  const shortcuts = getShortcuts(profile?.profileKind);
 
   return (
     <AppShell currentPath="/">
