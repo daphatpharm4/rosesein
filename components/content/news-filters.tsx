@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowRight, CalendarRange, ExternalLink, Newspaper, Search, ShieldCheck } from "lucide-react";
@@ -15,8 +15,10 @@ type Props = {
 };
 
 export function NewsFilters({ articles, events, configured }: Props) {
-  const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState<string>("Tout");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const search = searchParams.get("q") ?? "";
+  const activeCategory = searchParams.get("cat") ?? "Tout";
 
   const allCategories = ["Tout", ...Array.from(new Set(articles.map((a) => a.category))).sort()];
 
@@ -42,7 +44,15 @@ export function NewsFilters({ articles, events, configured }: Props) {
           type="search"
           placeholder="Rechercher un sujet..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            const params = new URLSearchParams(searchParams.toString());
+            if (e.target.value) {
+              params.set("q", e.target.value);
+            } else {
+              params.delete("q");
+            }
+            router.push(`?${params.toString()}`, { scroll: false });
+          }}
           className="w-full rounded-brand bg-surface-container-high py-4 pl-11 pr-4 text-sm text-on-surface placeholder:text-outline"
         />
       </div>
@@ -52,7 +62,16 @@ export function NewsFilters({ articles, events, configured }: Props) {
         {allCategories.map((cat) => (
           <button
             key={cat}
-            onClick={() => setActiveCategory(cat)}
+            onClick={() => {
+              const params = new URLSearchParams(searchParams.toString());
+              if (cat === "Tout") {
+                params.delete("cat");
+              } else {
+                params.set("cat", cat);
+              }
+              params.delete("q"); // reset search when changing category
+              router.push(`?${params.toString()}`, { scroll: false });
+            }}
             className={`rounded-full px-4 py-2 font-label text-sm font-semibold transition-colors ${
               activeCategory === cat
                 ? "bg-gradient-primary text-on-primary"
