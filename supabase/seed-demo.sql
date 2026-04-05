@@ -232,3 +232,80 @@ on conflict (slug) do update set
   content = excluded.content,
   published_at = excluded.published_at,
   updated_at = timezone('utc', now());
+
+-- ─── COMMUNITY REPLIES ───────────────────────────────────────────────────────
+do $$
+declare
+  v_admin uuid;
+  v_thread uuid;
+begin
+  select user_id into v_admin from public.user_roles where role = 'admin' limit 1;
+  if v_admin is null then
+    raise notice 'No admin user found — skipping community reply seed.';
+    return;
+  end if;
+
+  -- Replies for "Comment gérez-vous la fatigue au quotidien ?"
+  select id into v_thread from public.community_threads where title = 'Comment gérez-vous la fatigue au quotidien ?' limit 1;
+  if v_thread is not null then
+    insert into public.community_replies (thread_id, author_id, body, is_anonymous) values
+    (v_thread, v_admin, 'Je fais des micro-siestes de 20 minutes après le déjeuner. Ça m''aide vraiment à tenir le reste de la journée.', false),
+    (v_thread, v_admin, 'J''ai arrêté de culpabiliser quand je dois annuler des plans. La fatigue n''est pas un échec.', true),
+    (v_thread, v_admin, 'La marche lente le matin, même 10 minutes, change vraiment mon énergie pour la journée.', false)
+    on conflict do nothing;
+  end if;
+
+  -- Replies for "Vos recettes préférées pendant le traitement"
+  select id into v_thread from public.community_threads where title = 'Vos recettes préférées pendant le traitement' limit 1;
+  if v_thread is not null then
+    insert into public.community_replies (thread_id, author_id, body, is_anonymous) values
+    (v_thread, v_admin, 'Le risotto au parmesan — simple, crémeux, et toujours facile à avaler même les mauvais jours.', false),
+    (v_thread, v_admin, 'Des smoothies banane-lait d''amande-miel. Rapide, nourrissant, et ne nécessite aucune cuisson.', true),
+    (v_thread, v_admin, 'La soupe de carottes gingembre. Douce, anti-nausées, et elle se congèle bien pour les jours sans énergie.', false)
+    on conflict do nothing;
+  end if;
+
+  -- Replies for "Se présenter — dites-nous qui vous êtes"
+  select id into v_thread from public.community_threads where title = 'Se présenter — dites-nous qui vous êtes' limit 1;
+  if v_thread is not null then
+    insert into public.community_replies (thread_id, author_id, body, is_anonymous) values
+    (v_thread, v_admin, 'Bonjour à tous. Je m''appelle Marie, j''ai 43 ans, en cours de chimio depuis 3 mois. Heureuse de trouver cet espace.', false),
+    (v_thread, v_admin, 'Je suis l''aidante de ma femme. C''est parfois difficile de savoir quoi faire. Merci pour cet espace.', true),
+    (v_thread, v_admin, 'Sophie, 51 ans, en rémission depuis 6 mois. Ici pour soutenir et partager ce qui m''a aidée.', false)
+    on conflict do nothing;
+  end if;
+
+  -- Replies for "Présentation des mentors disponibles"
+  select id into v_thread from public.community_threads where title = 'Présentation des mentors disponibles' limit 1;
+  if v_thread is not null then
+    insert into public.community_replies (thread_id, author_id, body, is_anonymous) values
+    (v_thread, v_admin, 'Merci à l''équipe pour cette initiative. Le mentorat a été une bouée de sauvetage pour moi lors de mon parcours.', false),
+    (v_thread, v_admin, 'Je serais intéressée pour être mentorée. Comment fonctionne le processus de mise en relation ?', false),
+    (v_thread, v_admin, 'Je suis disponible comme mentor pour des patientes en chimio. N''hésitez pas à me contacter via la messagerie.', false)
+    on conflict do nothing;
+  end if;
+end $$;
+
+-- ─── NOTIFICATIONS (demo user) ──────────────────────────────────────────────
+-- These will only insert if an admin user exists.
+do $$
+declare
+  v_admin uuid;
+begin
+  select user_id into v_admin from public.user_roles where role = 'admin' limit 1;
+  if v_admin is null then
+    raise notice 'No admin user found — skipping notification seed.';
+    return;
+  end if;
+
+  insert into public.notifications (user_id, kind, title, body, href, created_at) values
+  (v_admin, 'message', 'Nouveau message de l''association', 'L''équipe ROSE-SEIN vous a envoyé un message.', '/messages', timezone('utc', now()) - interval '1 hour'),
+  (v_admin, 'message', 'Réponse dans votre fil', 'Quelqu''un a répondu à votre message.', '/messages', timezone('utc', now()) - interval '3 hours'),
+  (v_admin, 'article', 'Nouvel article publié', 'Un article sur la nutrition pendant le traitement est disponible.', '/actualites', timezone('utc', now()) - interval '5 hours'),
+  (v_admin, 'article', 'Atelier disponible', 'Un nouvel atelier socio-esthétique a été ajouté aux ressources.', '/soins/beaute', timezone('utc', now()) - interval '8 hours'),
+  (v_admin, 'event', 'Rappel : atelier demain', 'N''oubliez pas l''atelier prévu demain.', '/actualites', timezone('utc', now()) - interval '12 hours'),
+  (v_admin, 'event', 'Nouvel événement ajouté', 'Un groupe de parole en ligne a été programmé.', '/actualites', timezone('utc', now()) - interval '1 day'),
+  (v_admin, 'community_reply', 'Quelqu''un a répondu dans Espace patientes', 'Une nouvelle réponse a été publiée dans le fil sur la fatigue.', '/communaute/patientes', timezone('utc', now()) - interval '2 days'),
+  (v_admin, 'community_reply', 'Nouveau fil dans Groupe de parole', 'Un nouveau sujet de discussion a été ouvert.', '/communaute/parole', timezone('utc', now()) - interval '3 days')
+  on conflict do nothing;
+end $$;
