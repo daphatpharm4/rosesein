@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import type { Route } from "next";
 
 import { AppShell } from "@/components/shell/app-shell";
-import { requireCompletedProfile } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { getActiveAssociationMessage } from "@/lib/association-message";
 import { publishAssociationMessage } from "./actions";
 
@@ -37,7 +37,7 @@ function expiryLabel(expiresAt: string): string {
 type Props = { searchParams: Promise<Record<string, string | undefined>> };
 
 export default async function MessageAssociationPage({ searchParams }: Props) {
-  await requireCompletedProfile("/admin/message-association");
+  await requireStaff("/admin/message-association");
 
   const { error } = await searchParams;
   const activeMessage = await getActiveAssociationMessage();

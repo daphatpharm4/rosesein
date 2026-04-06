@@ -4,7 +4,7 @@ import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { requireCompletedProfile } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function publishAssociationMessage(formData: FormData): Promise<void> {
@@ -16,20 +16,16 @@ export async function publishAssociationMessage(formData: FormData): Promise<voi
   if (body.length < 10) redirect("/admin/message-association?error=body-too-short" as Route);
   if (!expiresAtRaw) redirect("/admin/message-association?error=expiry-required" as Route);
 
-  const expiresAt = new Date(expiresAtRaw);
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
+  const todayUtc = new Date().toISOString().split("T")[0]!;
+  if (expiresAtRaw <= todayUtc) redirect("/admin/message-association?error=expiry-past" as Route);
 
-  if (expiresAt < tomorrow) redirect("/admin/message-association?error=expiry-past" as Route);
-
-  const { user } = await requireCompletedProfile("/admin/message-association");
+  const { user } = await requireStaff("/admin/message-association");
   const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.from("association_messages").insert({
     title,
     body,
-    expires_at: expiresAt.toISOString(),
+    expires_at: new Date(expiresAtRaw + "T00:00:00.000Z").toISOString(),
     created_by: user.id,
   });
 
