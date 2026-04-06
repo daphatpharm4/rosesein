@@ -1,278 +1,272 @@
-// app/(protected)/admin/messagerie/page.tsx
 import Link from "next/link";
-import { ArrowLeft, Send, Users } from "lucide-react";
-import type { Metadata } from "next";
 import type { Route } from "next";
+import { ArrowLeft, Megaphone, Send, UsersRound } from "lucide-react";
 
 import { AppShell } from "@/components/shell/app-shell";
 import { MemberPicker } from "@/components/admin/member-picker";
+import { getAdminMessagingHistory, getMemberList } from "@/lib/admin-messaging";
 import { requireStaff } from "@/lib/auth";
-import {
-  getAdminMessagingHistory,
-  getMemberList,
-} from "@/lib/admin-messaging";
-import { sendBroadcast, createGroup } from "./actions";
 
-export const metadata: Metadata = { title: "Messagerie collective" };
-export const dynamic = "force-dynamic";
+import { createGroup, sendBroadcast } from "./actions";
 
-const ERROR_LABELS: Record<string, string> = {
-  "subject-required": "Le sujet est obligatoire.",
-  "body-too-short": "Le message doit contenir au moins 10 caractères.",
-  "segment-invalid": "Veuillez sélectionner un groupe de destinataires.",
-  "title-required": "Le nom du groupe est obligatoire.",
-  "no-members": "Sélectionnez au moins un membre.",
-  "broadcast-failed": "L'envoi a échoué. Veuillez réessayer.",
-  "group-failed": "La création du groupe a échoué. Veuillez réessayer.",
+type AdminMessagingPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-const SEGMENT_LABELS: Record<string, string> = {
-  all: "Tous",
-  patient: "Patients",
-  caregiver: "Aidants",
+const feedbackMap: Record<string, string> = {
+  "broadcast-sent": "La diffusion a ete envoyee et les notifications ont ete declenchees.",
+  "group-created": "Le groupe officiel a ete cree et ses membres ont ete prevenus.",
+  "subject-required": "Ajoutez un sujet pour la diffusion.",
+  "title-required": "Ajoutez un titre pour le groupe.",
+  "body-too-short": "Le message doit contenir au moins 10 caracteres.",
+  "segment-invalid": "Le segment choisi est invalide.",
+  "no-members": "Selectionnez au moins un membre pour le groupe.",
+  "broadcast-failed": "La diffusion n'a pas pu etre envoyee.",
+  "group-failed": "Le groupe n'a pas pu etre cree.",
 };
+
+function firstValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("fr-FR", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
+    dateStyle: "medium",
+    timeStyle: "short",
   }).format(new Date(value));
 }
 
-type Props = { searchParams: Promise<Record<string, string | undefined>> };
-
-export default async function MessageriePage({ searchParams }: Props) {
+export default async function AdminMessagingPage({
+  searchParams,
+}: AdminMessagingPageProps) {
+  const query = (await searchParams) ?? {};
+  const status = firstValue(query.status);
+  const error = firstValue(query.error);
+  const feedback = feedbackMap[error ?? status ?? ""] ?? null;
+  const feedbackTone = error
+    ? "bg-primary/10 text-on-primary-container"
+    : "bg-secondary-container text-on-secondary-container";
   const { user } = await requireStaff("/admin/messagerie");
-  const { error } = await searchParams;
-
-  const [history, members] = await Promise.all([
-    getAdminMessagingHistory(user.id),
+  const [{ broadcasts, groups }, members] = await Promise.all([
+    getAdminMessagingHistory(),
     getMemberList(),
   ]);
 
   return (
-    <AppShell title="Administration" currentPath="/admin">
-      <section className="space-y-8">
+    <AppShell title="Messagerie collective" currentPath="/admin">
+      <section className="space-y-6">
         <Link
           href={"/admin" as Route}
           className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
         >
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Administration
+          Retour a l'administration
         </Link>
 
-        <div className="space-y-2">
-          <div className="eyebrow">Espace équipe</div>
-          <h1 className="editorial-title">Messagerie collective</h1>
-          <p className="text-base leading-7 text-on-surface-variant">
-            Diffusez un message à tous vos membres ou créez des groupes de conversation.
+        <div className="space-y-3">
+          <div className="eyebrow">Diffusions equipe</div>
+          <h1 className="editorial-title">Informer largement sans perdre le cadre.</h1>
+          <p className="max-w-2xl text-base leading-7 text-on-surface-variant">
+            Envoyez un message collectif par segment ou ouvrez un groupe officiel pour un
+            atelier, un cercle de parole ou un suivi cible.
           </p>
         </div>
 
-        {/* Error banner */}
-        {error && ERROR_LABELS[error] && (
-          <div className="rounded-brand bg-primary/10 px-4 py-3 font-label text-sm font-semibold text-primary">
-            {ERROR_LABELS[error]}
+        {feedback ? (
+          <div className={`surface-card ${feedbackTone}`}>
+            <p className="font-headline text-base font-semibold">Messagerie equipe</p>
+            <p className="mt-2 text-sm leading-7">{feedback}</p>
           </div>
-        )}
+        ) : null}
 
-        {/* History */}
-        <section className="space-y-4">
-          <h2 className="font-headline text-lg font-semibold text-on-surface">Historique</h2>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {/* Broadcasts */}
-            <div className="surface-section space-y-3">
-              <h3 className="font-label text-sm font-semibold uppercase tracking-[0.12em] text-outline">
-                Diffusions envoyées
-              </h3>
-              {history.broadcasts.length === 0 ? (
-                <p className="text-sm text-on-surface-variant">Aucune diffusion envoyée.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {history.broadcasts.map((b) => (
-                    <li key={b.id} className="flex flex-col gap-0.5">
-                      <span className="font-label text-sm font-semibold text-on-surface">
-                        {b.subject}
-                      </span>
-                      <span className="flex items-center gap-2 text-xs text-on-surface-variant">
-                        <span className="rounded-full bg-secondary-container px-2 py-0.5 font-label text-xs text-on-secondary-container">
-                          {SEGMENT_LABELS[b.segment] ?? b.segment}
-                        </span>
-                        {b.recipientCount} destinataire{b.recipientCount > 1 ? "s" : ""}
-                        &middot; {formatDate(b.createdAt)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* Groups */}
-            <div className="surface-section space-y-3">
-              <h3 className="font-label text-sm font-semibold uppercase tracking-[0.12em] text-outline">
-                Groupes créés
-              </h3>
-              {history.groups.length === 0 ? (
-                <p className="text-sm text-on-surface-variant">Aucun groupe créé.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {history.groups.map((g) => (
-                    <li key={g.id} className="flex items-center justify-between gap-2">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-label text-sm font-semibold text-on-surface">
-                          {g.title}
-                        </span>
-                        <span className="text-xs text-on-surface-variant">
-                          {g.participantCount} membre{g.participantCount > 1 ? "s" : ""} &middot;{" "}
-                          {formatDate(g.createdAt)}
-                        </span>
-                      </div>
-                      <Link
-                        href={`/messages/${g.id}` as Route}
-                        className="shrink-0 font-label text-xs font-semibold text-primary hover:underline"
-                      >
-                        Ouvrir →
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Broadcast form */}
-        <section className="space-y-4">
-          <div className="space-y-1">
-            <h2 className="font-headline text-lg font-semibold text-on-surface">
-              Envoyer une diffusion
-            </h2>
-            <p className="text-sm text-on-surface-variant">
-              Chaque destinataire reçoit un fil privé avec l&apos;association dans sa messagerie.
-            </p>
-          </div>
+        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
           <form action={sendBroadcast} className="surface-section space-y-5">
-            <div className="space-y-2">
-              <label htmlFor="broadcast-subject" className="font-label text-sm font-semibold text-on-surface">
-                Sujet
-              </label>
-              <input
-                id="broadcast-subject"
-                name="subject"
-                type="text"
-                required
-                placeholder="ex : Réunion mensuelle de septembre"
-                className="w-full rounded-brand border border-outline-variant bg-surface-container-low px-4 py-3 font-body text-sm text-on-surface placeholder:text-outline focus:border-primary focus:outline-none focus:ring-[3px] focus:ring-primary/15"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="broadcast-body" className="font-label text-sm font-semibold text-on-surface">
-                Message
-              </label>
-              <textarea
-                id="broadcast-body"
-                name="body"
-                required
-                minLength={10}
-                rows={4}
-                placeholder="Écrivez votre message ici…"
-                className="w-full rounded-brand border border-outline-variant bg-surface-container-low px-4 py-3 font-body text-sm leading-7 text-on-surface placeholder:text-outline focus:border-primary focus:outline-none focus:ring-[3px] focus:ring-primary/15"
-              />
-            </div>
-
-            <fieldset className="space-y-2">
-              <legend className="font-label text-sm font-semibold text-on-surface">
-                Destinataires
-              </legend>
-              <div className="flex flex-wrap gap-4">
-                {(["all", "patient", "caregiver"] as const).map((seg) => (
-                  <label key={seg} className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="radio"
-                      name="segment"
-                      value={seg}
-                      defaultChecked={seg === "all"}
-                      className="accent-primary"
-                    />
-                    <span className="font-body text-sm text-on-surface">
-                      {seg === "all" ? "Tous les membres" : seg === "patient" ? "Patients" : "Aidants"}
-                    </span>
-                  </label>
-                ))}
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Megaphone aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
               </div>
-            </fieldset>
-
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-6 py-3 font-label text-sm font-semibold text-on-primary transition-transform hover:-translate-y-0.5"
-              >
-                <Send aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-                Envoyer la diffusion
-              </button>
+              <div>
+                <p className="font-headline text-lg font-semibold text-on-surface">
+                  Diffusion par segment
+                </p>
+                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                  Cree un fil officiel pour chaque destinataire et complete les canaux
+                  in-app, email et push quand ils sont actifs.
+                </p>
+              </div>
             </div>
-          </form>
-        </section>
 
-        {/* Group creation form */}
-        <section className="space-y-4">
-          <div className="space-y-1">
-            <h2 className="font-headline text-lg font-semibold text-on-surface">
-              Créer un groupe
-            </h2>
-            <p className="text-sm text-on-surface-variant">
-              Un groupe de conversation partagé — tous les membres peuvent lire et répondre.
-            </p>
-          </div>
-          <form action={createGroup} className="surface-section space-y-5">
-            <div className="space-y-2">
-              <label htmlFor="group-title" className="font-label text-sm font-semibold text-on-surface">
-                Nom du groupe
-              </label>
+            <label className="block space-y-2">
+              <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                Sujet
+              </span>
               <input
-                id="group-title"
-                name="title"
                 type="text"
+                name="subject"
                 required
-                placeholder="ex : Groupe soutien septembre 2026"
-                className="w-full rounded-brand border border-outline-variant bg-surface-container-low px-4 py-3 font-body text-sm text-on-surface placeholder:text-outline focus:border-primary focus:outline-none focus:ring-[3px] focus:ring-primary/15"
+                className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface placeholder:text-outline"
+                placeholder="Atelier de jeudi, information pratique..."
               />
-            </div>
+            </label>
 
-            <div className="space-y-2">
-              <label htmlFor="group-body" className="font-label text-sm font-semibold text-on-surface">
-                Premier message
-              </label>
+            <label className="block space-y-2">
+              <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                Segment
+              </span>
+              <select
+                name="segment"
+                defaultValue="all"
+                className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
+              >
+                <option value="all">Tous les membres</option>
+                <option value="patient">Patientes</option>
+                <option value="caregiver">Aidants</option>
+              </select>
+            </label>
+
+            <label className="block space-y-2">
+              <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                Message
+              </span>
               <textarea
-                id="group-body"
                 name="body"
+                rows={6}
                 required
                 minLength={10}
-                rows={3}
-                placeholder="Bonjour à toutes et tous…"
-                className="w-full rounded-brand border border-outline-variant bg-surface-container-low px-4 py-3 font-body text-sm leading-7 text-on-surface placeholder:text-outline focus:border-primary focus:outline-none focus:ring-[3px] focus:ring-primary/15"
+                className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface placeholder:text-outline"
+                placeholder="Ecrivez un message simple, concret et actionnable."
               />
+            </label>
+
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+            >
+              <Send aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+              Envoyer la diffusion
+            </button>
+          </form>
+
+          <form action={createGroup} className="surface-section space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
+                <UsersRound aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+              </div>
+              <div>
+                <p className="font-headline text-lg font-semibold text-on-surface">
+                  Groupe officiel
+                </p>
+                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                  Ideal pour un atelier ferme, une preparation benevole ou un groupe de
+                  parole a effectif choisi.
+                </p>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <p className="font-label text-sm font-semibold text-on-surface">
-                Membres
+            <label className="block space-y-2">
+              <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                Titre du groupe
+              </span>
+              <input
+                type="text"
+                name="title"
+                required
+                className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface placeholder:text-outline"
+                placeholder="Groupe atelier nutrition avril"
+              />
+            </label>
+
+            <label className="block space-y-2">
+              <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                Premier message
+              </span>
+              <textarea
+                name="body"
+                rows={5}
+                required
+                minLength={10}
+                className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface placeholder:text-outline"
+                placeholder="Bonjour, voici le cadre et le premier repere pour ce groupe..."
+              />
+            </label>
+
+            <div className="space-y-3">
+              <p className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                Membres a inclure
               </p>
               <MemberPicker members={members} />
             </div>
 
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-6 py-3 font-label text-sm font-semibold text-on-primary transition-transform hover:-translate-y-0.5"
-              >
-                <Users aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-                Créer le groupe
-              </button>
-            </div>
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+            >
+              <UsersRound aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+              Creer le groupe
+            </button>
           </form>
+        </div>
+
+        <section className="grid gap-4 xl:grid-cols-2">
+          <div className="surface-card space-y-4">
+            <div>
+              <div className="eyebrow">Historique</div>
+              <h2 className="font-headline text-xl font-semibold text-on-surface">
+                Dernieres diffusions
+              </h2>
+            </div>
+            {broadcasts.length > 0 ? (
+              broadcasts.map((broadcast) => (
+                <article key={broadcast.id} className="rounded-brand bg-surface-container-low px-4 py-4">
+                  <p className="font-headline text-base font-semibold text-on-surface">
+                    {broadcast.subject}
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                    {broadcast.body}
+                  </p>
+                  <p className="mt-3 text-xs uppercase tracking-[0.16em] text-outline">
+                    {broadcast.segment} · {broadcast.recipientCount} destinataires · {formatDate(broadcast.createdAt)}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <p className="text-sm leading-7 text-on-surface-variant">
+                Aucune diffusion enregistree pour le moment.
+              </p>
+            )}
+          </div>
+
+          <div className="surface-card space-y-4">
+            <div>
+              <div className="eyebrow">Groupes officiels</div>
+              <h2 className="font-headline text-xl font-semibold text-on-surface">
+                Derniers groupes crees
+              </h2>
+            </div>
+            {groups.length > 0 ? (
+              groups.map((group) => (
+                <article key={group.id} className="rounded-brand bg-surface-container-low px-4 py-4">
+                  <p className="font-headline text-base font-semibold text-on-surface">
+                    {group.title}
+                  </p>
+                  <p className="mt-3 text-xs uppercase tracking-[0.16em] text-outline">
+                    {group.participantCount} participants · {formatDate(group.createdAt)}
+                  </p>
+                  <Link
+                    href={`/messages/${group.id}` as Route}
+                    className="mt-3 inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                  >
+                    Ouvrir la conversation
+                    <ArrowLeft aria-hidden="true" className="h-4 w-4 rotate-180" strokeWidth={1.8} />
+                  </Link>
+                </article>
+              ))
+            ) : (
+              <p className="text-sm leading-7 text-on-surface-variant">
+                Aucun groupe officiel cree pour l'instant.
+              </p>
+            )}
+          </div>
         </section>
       </section>
     </AppShell>

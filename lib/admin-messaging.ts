@@ -31,9 +31,7 @@ export type MemberOption = {
   profileKind: "patient" | "caregiver";
 };
 
-export async function getAdminMessagingHistory(
-  staffUserId: string,
-): Promise<AdminMessagingHistory> {
+export async function getAdminMessagingHistory(): Promise<AdminMessagingHistory> {
   const supabase = await createSupabaseServerClient();
 
   const [{ data: broadcastRows }, { data: groupThreadRows }] = await Promise.all([
