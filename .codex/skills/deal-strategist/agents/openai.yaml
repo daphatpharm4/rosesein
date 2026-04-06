@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deal Strategist"
+  short_description: "Senior deal strategist specializing in MEDDPICC..."
+  default_prompt: "Use $deal-strategist to handle deal strategist work in this project."

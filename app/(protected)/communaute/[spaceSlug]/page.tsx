@@ -5,13 +5,26 @@ import type { Metadata } from "next";
 import type { Route } from "next";
 
 import { AppShell } from "@/components/shell/app-shell";
-import { getSpaceWithThreads, getThreadReactionsMap, makeEmptyPayload } from "@/lib/communaute";
+import { makeEmptyPayload } from "@/lib/community-reactions";
+import { getSpaceWithThreads, getThreadReactionsMap } from "@/lib/communaute";
 import { ReactionBar } from "@/components/community/reaction-bar";
 import { toggleThreadReaction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ spaceSlug: string }> };
+type SpacePageProps = Props & {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+const feedbackMap: Record<string, string> = {
+  "thread-created": "Votre sujet a été publié dans cet espace.",
+  "space-not-allowed": "Votre profil actuel ne peut pas publier dans cet espace.",
+};
+
+function firstValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { spaceSlug } = await params;
@@ -20,8 +33,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: result.space.title };
 }
 
-export default async function SpacePage({ params }: Props) {
+export default async function SpacePage({ params, searchParams }: SpacePageProps) {
   const { spaceSlug } = await params;
+  const query = (await searchParams) ?? {};
+  const status = firstValue(query.status);
+  const error = firstValue(query.error);
+  const feedbackKey = error ?? status;
   const result = await getSpaceWithThreads(spaceSlug);
 
   if (!result) notFound();
@@ -49,6 +66,29 @@ export default async function SpacePage({ params }: Props) {
             {space.description}
           </p>
         </div>
+
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href={`/communaute/${spaceSlug}/nouveau` as Route}
+            className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary transition-transform hover:-translate-y-0.5"
+          >
+            Ouvrir un sujet
+          </Link>
+          <div className="rounded-full bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant">
+            Charte de bienveillance active dans tout l&apos;espace.
+          </div>
+        </div>
+
+        {feedbackKey && feedbackMap[feedbackKey] ? (
+          <div
+            className={`surface-card ${
+              error ? "bg-primary/10 text-on-primary-container" : "bg-secondary-container text-on-secondary-container"
+            }`}
+          >
+            <p className="font-headline text-base font-semibold">Communauté</p>
+            <p className="mt-2 text-sm leading-7">{feedbackMap[feedbackKey]}</p>
+          </div>
+        ) : null}
 
         {threads.length > 0 ? (
           <div className="space-y-4">
@@ -109,7 +149,7 @@ export default async function SpacePage({ params }: Props) {
               Aucun fil de discussion pour le moment.
             </p>
             <p className="mt-2 text-sm text-outline">
-              L&apos;équipe publiera bientôt des sujets de conversation dans cet espace.
+              Ouvrez le premier sujet de cet espace pour lancer l&apos;échange.
             </p>
           </div>
         )}

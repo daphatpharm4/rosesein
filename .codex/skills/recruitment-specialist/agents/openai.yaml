@@ -1,0 +1,4 @@
+interface:
+  display_name: "Recruitment Specialist"
+  short_description: "Expert recruitment operations and talent acquisition..."
+  default_prompt: "Use $recruitment-specialist to handle recruitment specialist work in this project."

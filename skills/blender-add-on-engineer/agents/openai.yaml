@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blender Add-on Engineer"
+  short_description: "Blender tooling specialist - Builds Python add-ons, asset..."
+  default_prompt: "Use $blender-add-on-engineer to handle blender add-on engineer work in this project."

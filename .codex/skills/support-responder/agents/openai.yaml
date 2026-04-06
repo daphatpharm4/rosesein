@@ -1,0 +1,4 @@
+interface:
+  display_name: "Support Responder"
+  short_description: "Expert customer support specialist delivering exceptional..."
+  default_prompt: "Use $support-responder to handle support responder work in this project."

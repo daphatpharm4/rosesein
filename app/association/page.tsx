@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import {
   ArrowRight,
   CalendarRange,
@@ -197,11 +198,9 @@ export default async function AssociationPage() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            <a
-              href="https://rosesein.org/"
-              target="_blank"
-              rel="noreferrer"
-              className="surface-card space-y-4 block"
+            <Link
+              href={"/association/engagement?kind=membership" as Route}
+              className="surface-card block space-y-4"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <HeartHandshake aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
@@ -209,20 +208,18 @@ export default async function AssociationPage() {
               <div>
                 <h3 className="font-headline text-lg font-semibold text-on-surface">Adhérer</h3>
                 <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                  Rejoignez l&apos;association et participez à ses actions.
+                  Rejoignez l&apos;association et laissez l&apos;equipe vous recontacter dans l&apos;app.
                 </p>
               </div>
               <span className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary">
-                Adhérer sur rosesein.org
+                Envoyer une demande
                 <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
               </span>
-            </a>
+            </Link>
 
-            <a
-              href="https://rosesein.org/"
-              target="_blank"
-              rel="noreferrer"
-              className="surface-card space-y-4 block"
+            <Link
+              href={"/association/engagement?kind=donation" as Route}
+              className="surface-card block space-y-4"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
                 <Gift aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
@@ -234,16 +231,14 @@ export default async function AssociationPage() {
                 </p>
               </div>
               <span className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary">
-                Faire un don
+                Signaler mon soutien
                 <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
               </span>
-            </a>
+            </Link>
 
-            <a
-              href="https://rosesein.org/"
-              target="_blank"
-              rel="noreferrer"
-              className="surface-card space-y-4 block"
+            <Link
+              href={"/association/engagement?kind=volunteer" as Route}
+              className="surface-card block space-y-4"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Users aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
@@ -255,10 +250,10 @@ export default async function AssociationPage() {
                 </p>
               </div>
               <span className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary">
-                S&apos;inscrire
+                Proposer mon aide
                 <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
               </span>
-            </a>
+            </Link>
           </div>
         </section>
       </section>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Programmatic & Display Buyer"
+  short_description: "Display advertising and programmatic media buying..."
+  default_prompt: "Use $programmatic-and-display-buyer to handle programmatic & display buyer work in this project."

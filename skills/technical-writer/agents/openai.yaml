@@ -1,0 +1,4 @@
+interface:
+  display_name: "Technical Writer"
+  short_description: "Expert technical writer specializing in developer..."
+  default_prompt: "Use $technical-writer to handle technical writer work in this project."

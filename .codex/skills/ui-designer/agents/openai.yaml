@@ -1,0 +1,4 @@
+interface:
+  display_name: "UI Designer"
+  short_description: "Expert UI designer specializing in visual design systems,..."
+  default_prompt: "Use $ui-designer to handle ui designer work in this project."

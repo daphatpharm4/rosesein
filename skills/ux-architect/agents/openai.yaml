@@ -1,0 +1,4 @@
+interface:
+  display_name: "UX Architect"
+  short_description: "Technical architecture and UX specialist who provides..."
+  default_prompt: "Use $ux-architect to handle ux architect work in this project."

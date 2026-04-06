@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reddit Community Builder"
+  short_description: "Expert Reddit marketing specialist focused on authentic..."
+  default_prompt: "Use $reddit-community-builder to handle reddit community builder work in this project."

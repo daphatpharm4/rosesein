@@ -1,0 +1,4 @@
+interface:
+  display_name: "Trend Researcher"
+  short_description: "Expert market intelligence analyst specializing in..."
+  default_prompt: "Use $trend-researcher to handle trend researcher work in this project."

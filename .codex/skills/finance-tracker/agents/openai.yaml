@@ -1,0 +1,4 @@
+interface:
+  display_name: "Finance Tracker"
+  short_description: "Expert financial analyst and controller specializing in..."
+  default_prompt: "Use $finance-tracker to handle finance tracker work in this project."

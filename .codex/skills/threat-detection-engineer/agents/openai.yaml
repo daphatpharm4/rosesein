@@ -1,0 +1,4 @@
+interface:
+  display_name: "Threat Detection Engineer"
+  short_description: "Expert detection engineer specializing in SIEM rule..."
+  default_prompt: "Use $threat-detection-engineer to handle threat detection engineer work in this project."

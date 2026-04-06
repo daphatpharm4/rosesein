@@ -1,0 +1,4 @@
+interface:
+  display_name: "MCP Builder"
+  short_description: "Expert Model Context Protocol developer who designs,..."
+  default_prompt: "Use $mcp-builder to handle mcp builder work in this project."

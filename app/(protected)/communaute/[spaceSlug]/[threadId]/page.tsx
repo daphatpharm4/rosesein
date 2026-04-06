@@ -5,7 +5,8 @@ import type { Metadata } from "next";
 import type { Route } from "next";
 
 import { AppShell } from "@/components/shell/app-shell";
-import { getThreadWithReplies, getThreadReactionsMap, getReplyReactionsMap, makeEmptyPayload } from "@/lib/communaute";
+import { makeEmptyPayload } from "@/lib/community-reactions";
+import { getThreadWithReplies, getThreadReactionsMap, getReplyReactionsMap } from "@/lib/communaute";
 import { ReactionBar } from "@/components/community/reaction-bar";
 import { postReply } from "./actions";
 import { toggleThreadReaction, toggleReplyReaction } from "../../actions";
@@ -13,6 +14,15 @@ import { toggleThreadReaction, toggleReplyReaction } from "../../actions";
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ spaceSlug: string; threadId: string }> };
+type ThreadPageProps = Props & {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+const feedbackMap: Record<string, string> = {
+  "body-required": "Ajoutez au moins quelques mots avant d'envoyer votre réponse.",
+  "reply-failed": "La réponse n'a pas pu être enregistrée.",
+  "reply-posted": "Votre réponse a été publiée.",
+};
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { threadId } = await params;
@@ -28,8 +38,15 @@ function formatRelativeDate(value: string) {
   }).format(new Date(value));
 }
 
-export default async function ThreadPage({ params }: Props) {
+function firstValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function ThreadPage({ params, searchParams }: ThreadPageProps) {
+  const query = (await searchParams) ?? {};
   const { spaceSlug, threadId } = await params;
+  const status = firstValue(query.status);
+  const error = firstValue(query.error);
   const result = await getThreadWithReplies(threadId);
 
   if (!result) notFound();
@@ -54,6 +71,17 @@ export default async function ThreadPage({ params }: Props) {
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
           Retour à {thread.spaceTitle}
         </Link>
+
+        {(status || error) && feedbackMap[(error ?? status) as string] ? (
+          <div
+            className={`surface-card ${
+              error ? "bg-primary/10 text-on-primary-container" : "bg-secondary-container text-on-secondary-container"
+            }`}
+          >
+            <p className="font-headline text-base font-semibold">Communauté</p>
+            <p className="mt-2 text-sm leading-7">{feedbackMap[(error ?? status) as string]}</p>
+          </div>
+        ) : null}
 
         {/* Thread body */}
         <div className="surface-section space-y-3">

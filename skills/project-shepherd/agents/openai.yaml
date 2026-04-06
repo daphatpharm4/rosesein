@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Shepherd"
+  short_description: "Expert project manager specializing in cross-functional..."
+  default_prompt: "Use $project-shepherd to handle project shepherd work in this project."

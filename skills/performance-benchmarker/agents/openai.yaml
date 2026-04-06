@@ -1,0 +1,4 @@
+interface:
+  display_name: "Performance Benchmarker"
+  short_description: "Expert performance testing and optimization specialist..."
+  default_prompt: "Use $performance-benchmarker to handle performance benchmarker work in this project."

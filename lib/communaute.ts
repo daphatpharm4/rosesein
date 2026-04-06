@@ -1,4 +1,13 @@
+import "server-only";
+
 import { hasSupabaseBrowserEnv } from "@/lib/env";
+import {
+  makeEmptyPayload,
+  REACTION_KINDS,
+  type ReactionKind,
+  type ReactionsPayload,
+  type ReactionSummary,
+} from "@/lib/community-reactions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type CommunityKind = "patient" | "caregiver" | "all";
@@ -187,11 +196,30 @@ export async function getThreadWithReplies(
 
   const { data: replies } = await supabase
     .from("community_replies")
-    .select(
-      "id, thread_id, author_id, body, is_anonymous, created_at, profiles(display_name, pseudonym, is_anonymous)",
-    )
+    .select("id, thread_id, author_id, body, is_anonymous, created_at")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
+
+  const authorIds = Array.from(
+    new Set(((replies ?? []) as Array<{ author_id: string }>).map((reply) => reply.author_id))
+  );
+  const { data: profiles } =
+    authorIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, display_name, pseudonym, is_anonymous")
+          .in("id", authorIds)
+      : { data: [] };
+  const profileMap = new Map(
+    (profiles ?? []).map((profile) => [
+      profile.id as string,
+      {
+        display_name: profile.display_name as string,
+        pseudonym: profile.pseudonym as string | null,
+        is_anonymous: Boolean(profile.is_anonymous),
+      },
+    ])
+  );
 
   return {
     thread: {
@@ -210,15 +238,13 @@ export async function getThreadWithReplies(
       (replies ?? []) as unknown as {
         id: string; thread_id: string; author_id: string; body: string;
         is_anonymous: boolean; created_at: string;
-        profiles: {
-          display_name: string; pseudonym: string | null; is_anonymous: boolean;
-        } | null;
       }[]
     ).map((r) => {
-      const showAnon = r.is_anonymous || (r.profiles?.is_anonymous ?? false);
+      const profile = profileMap.get(r.author_id);
+      const showAnon = r.is_anonymous || (profile?.is_anonymous ?? false);
       const name = showAnon
         ? "Membre anonyme"
-        : (r.profiles?.pseudonym ?? r.profiles?.display_name ?? "Membre");
+        : (profile?.pseudonym ?? profile?.display_name ?? "Membre");
       return {
         id: r.id,
         threadId: r.thread_id,
@@ -232,49 +258,21 @@ export async function getThreadWithReplies(
   };
 }
 
-// ─── Reactions ────────────────────────────────────────────────────────────────
-
-export type ReactionKind = "touche" | "pense" | "courage" | "merci";
-
-export type ReactionSummary = {
-  kind: ReactionKind;
-  count: number;
-  users: { displayName: string; isAnonymous: boolean }[];
-};
-
-export type ReactionsPayload = {
-  summary: ReactionSummary[];   // always all 4 kinds; count 0 if none
-  myReaction: ReactionKind | null;
-};
-
-export const REACTION_KINDS: ReactionKind[] = ["touche", "pense", "courage", "merci"];
-
-export const REACTION_META: Record<ReactionKind, { emoji: string; label: string }> = {
-  touche:  { emoji: "❤️",  label: "Touché(e)" },
-  pense:   { emoji: "🕯️", label: "Je pense à vous" },
-  courage: { emoji: "💪",  label: "Courage" },
-  merci:   { emoji: "🙏",  label: "Merci" },
-};
-
-export function makeEmptyPayload(): ReactionsPayload {
-  return {
-    summary: REACTION_KINDS.map((kind) => ({ kind, count: 0, users: [] })),
-    myReaction: null,
-  };
-}
-
 type ReactionRow = {
   kind: string;
   user_id: string;
-  profiles: {
-    display_name: string;
-    pseudonym: string | null;
-    is_anonymous: boolean;
-  } | null;
 };
 
 function aggregateReactions(
   rows: ReactionRow[],
+  profileMap: Map<
+    string,
+    {
+      display_name: string;
+      pseudonym: string | null;
+      is_anonymous: boolean;
+    }
+  >,
   currentUserId: string | null
 ): ReactionsPayload {
   const summaryMap = Object.fromEntries(
@@ -289,7 +287,7 @@ function aggregateReactions(
   for (const row of rows) {
     const kind = row.kind as ReactionKind;
     summaryMap[kind].count++;
-    const p = row.profiles;
+    const p = profileMap.get(row.user_id);
     const displayName = p?.is_anonymous
       ? (p.pseudonym ?? "Anonyme")
       : (p?.display_name ?? "Membre");
@@ -314,10 +312,31 @@ export async function getThreadReactionsMap(
 
   const { data } = await supabase
     .from("community_thread_reactions")
-    .select("thread_id, kind, user_id, profiles(display_name, pseudonym, is_anonymous)")
+    .select("thread_id, kind, user_id")
     .in("thread_id", threadIds);
 
   if (!data) return empty;
+
+  const userIds = Array.from(
+    new Set((data as Array<{ user_id: string }>).map((row) => row.user_id))
+  );
+  const { data: profiles } =
+    userIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, display_name, pseudonym, is_anonymous")
+          .in("id", userIds)
+      : { data: [] };
+  const profileMap = new Map(
+    (profiles ?? []).map((profile) => [
+      profile.id as string,
+      {
+        display_name: profile.display_name as string,
+        pseudonym: profile.pseudonym as string | null,
+        is_anonymous: Boolean(profile.is_anonymous),
+      },
+    ])
+  );
 
   const result: Record<string, ReactionsPayload> = Object.fromEntries(
     threadIds.map((id) => [id, makeEmptyPayload()])
@@ -332,7 +351,7 @@ export async function getThreadReactionsMap(
   }, {});
 
   for (const [tid, rows] of Object.entries(byThread)) {
-    if (tid in result) result[tid] = aggregateReactions(rows, user?.id ?? null);
+    if (tid in result) result[tid] = aggregateReactions(rows, profileMap, user?.id ?? null);
   }
 
   return result;
@@ -349,10 +368,31 @@ export async function getReplyReactionsMap(
 
   const { data } = await supabase
     .from("community_reply_reactions")
-    .select("reply_id, kind, user_id, profiles(display_name, pseudonym, is_anonymous)")
+    .select("reply_id, kind, user_id")
     .in("reply_id", replyIds);
 
   if (!data) return empty;
+
+  const userIds = Array.from(
+    new Set((data as Array<{ user_id: string }>).map((row) => row.user_id))
+  );
+  const { data: profiles } =
+    userIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, display_name, pseudonym, is_anonymous")
+          .in("id", userIds)
+      : { data: [] };
+  const profileMap = new Map(
+    (profiles ?? []).map((profile) => [
+      profile.id as string,
+      {
+        display_name: profile.display_name as string,
+        pseudonym: profile.pseudonym as string | null,
+        is_anonymous: Boolean(profile.is_anonymous),
+      },
+    ])
+  );
 
   const result: Record<string, ReactionsPayload> = Object.fromEntries(
     replyIds.map((id) => [id, makeEmptyPayload()])
@@ -367,7 +407,7 @@ export async function getReplyReactionsMap(
   }, {});
 
   for (const [rid, rows] of Object.entries(byReply)) {
-    if (rid in result) result[rid] = aggregateReactions(rows, user?.id ?? null);
+    if (rid in result) result[rid] = aggregateReactions(rows, profileMap, user?.id ?? null);
   }
 
   return result;

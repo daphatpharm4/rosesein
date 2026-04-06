@@ -1,0 +1,157 @@
+"use server";
+
+import type { Route } from "next";
+import { redirect } from "next/navigation";
+
+import { requireUser, type ProfileKind } from "@/lib/auth";
+import { getSiteUrl, hasSupabaseBrowserEnv } from "@/lib/env";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+function normalizeRedirectTarget(value: FormDataEntryValue | null) {
+  if (typeof value !== "string") {
+    return "/messages";
+  }
+
+  return value.startsWith("/") ? value : "/messages";
+}
+
+function normalizeProfileKind(value: FormDataEntryValue | null): ProfileKind | null {
+  if (value === "patient" || value === "caregiver") {
+    return value;
+  }
+
+  return null;
+}
+
+function normalizeDisplayName(value: FormDataEntryValue | null) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeOptionalText(value: FormDataEntryValue | null) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function appendStatus(targetPath: string, key: "status" | "error", value: string) {
+  const url = new URL(targetPath, "http://localhost");
+  url.searchParams.set(key, value);
+  return `${url.pathname}${url.search}` as Route;
+}
+
+export async function signInWithMagicLink(formData: FormData) {
+  const rawEmail = formData.get("email");
+  const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
+  const redirectTo = normalizeRedirectTarget(formData.get("redirectTo"));
+
+  if (!email) {
+    redirect(`/account?error=email-required&redirectTo=${encodeURIComponent(redirectTo)}`);
+  }
+
+  if (!hasSupabaseBrowserEnv()) {
+    redirect(
+      `/account?error=missing-supabase-env&redirectTo=${encodeURIComponent(redirectTo)}`,
+    );
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const callbackUrl = new URL("/auth/callback", getSiteUrl());
+  callbackUrl.searchParams.set("next", redirectTo);
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: callbackUrl.toString(),
+    },
+  });
+
+  if (error) {
+    redirect(`/account?error=magic-link-failed&redirectTo=${encodeURIComponent(redirectTo)}`);
+  }
+
+  redirect(`/account?status=magic-link-sent&redirectTo=${encodeURIComponent(redirectTo)}`);
+}
+
+export async function signOut() {
+  if (hasSupabaseBrowserEnv()) {
+    const supabase = await createSupabaseServerClient();
+    await supabase.auth.signOut();
+  }
+
+  redirect("/account?status=signed-out");
+}
+
+export async function saveProfileSetup(formData: FormData) {
+  const redirectTo = normalizeRedirectTarget(formData.get("redirectTo"));
+  const profileKind = normalizeProfileKind(formData.get("profileKind"));
+  const displayName = normalizeDisplayName(formData.get("displayName"));
+  const pseudonym = normalizeOptionalText(formData.get("pseudonym"));
+  const isAnonymous = formData.get("isAnonymous") === "on";
+
+  if (!profileKind) {
+    redirect("/account?error=profile-kind-required");
+  }
+
+  if (displayName.length < 2) {
+    redirect("/account?error=display-name-required");
+  }
+
+  if (!hasSupabaseBrowserEnv()) {
+    redirect("/account?error=missing-supabase-env");
+  }
+
+  const user = await requireUser();
+  const supabase = await createSupabaseServerClient();
+
+  const { error: profileError } = await supabase.from("profiles").upsert(
+    {
+      id: user.id,
+      profile_kind: profileKind,
+      display_name: displayName,
+      pseudonym,
+      is_anonymous: isAnonymous,
+    },
+    {
+      onConflict: "id",
+    },
+  );
+
+  if (profileError) {
+    redirect("/account?error=profile-save-failed");
+  }
+
+  const { error: roleError } = await supabase.from("user_roles").upsert(
+    {
+      user_id: user.id,
+      role: "member",
+    },
+    {
+      onConflict: "user_id,role",
+      ignoreDuplicates: true,
+    },
+  );
+
+  if (roleError) {
+    redirect("/account?error=profile-save-failed");
+  }
+
+  const { error: preferencesError } = await supabase
+    .from("notification_preferences")
+    .upsert(
+      {
+        user_id: user.id,
+      },
+      {
+        onConflict: "user_id",
+      },
+    );
+
+  if (preferencesError) {
+    redirect("/account?error=profile-save-failed");
+  }
+
+  redirect(appendStatus(redirectTo, "status", "profile-ready"));
+}

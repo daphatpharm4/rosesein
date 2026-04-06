@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sprint Prioritizer"
+  short_description: "Expert product manager specializing in agile sprint..."
+  default_prompt: "Use $sprint-prioritizer to handle sprint prioritizer work in this project."

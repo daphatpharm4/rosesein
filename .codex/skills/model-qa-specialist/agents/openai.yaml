@@ -1,0 +1,4 @@
+interface:
+  display_name: "Model QA Specialist"
+  short_description: "Independent model QA expert who audits ML and statistical..."
+  default_prompt: "Use $model-qa-specialist to handle model qa specialist work in this project."

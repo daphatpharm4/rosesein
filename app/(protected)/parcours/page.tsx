@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarCheck2, LockKeyhole, NotebookPen, Trash2 } from "lucide-react";
+import { CalendarCheck2, FileText, LockKeyhole, NotebookPen, Trash2, UploadCloud } from "lucide-react";
 
 import { AppShell } from "@/components/shell/app-shell";
 import {
@@ -15,6 +15,8 @@ import {
   saveAppointment,
   saveMoodCheckIn,
   savePersonalNote,
+  uploadParcoursDocument,
+  deleteParcoursDocument,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +32,8 @@ const feedbackMap: Record<string, string> = {
   "note-created": "La note personnelle a été enregistrée.",
   "note-updated": "La note personnelle a été mise à jour.",
   "note-deleted": "La note personnelle a été supprimée.",
+  "document-uploaded": "Le document a été ajouté à votre espace privé.",
+  "document-deleted": "Le document a été supprimé.",
   "appointment-title-required": "Indiquez un titre d'au moins deux caractères pour le rendez-vous.",
   "appointment-date-required": "Choisissez une date et une heure pour le rendez-vous.",
   "appointment-save-failed": "Le rendez-vous n'a pas pu être enregistré.",
@@ -39,6 +43,10 @@ const feedbackMap: Record<string, string> = {
   "note-save-failed": "La note n'a pas pu être enregistrée.",
   "note-delete-failed": "La note n'a pas pu être supprimée.",
   "mood-invalid": "Humeur non reconnue, veuillez réessayer.",
+  "document-file-required": "Choisissez un document avant l'envoi.",
+  "document-too-large": "Le document dépasse la limite de 10 Mo.",
+  "document-upload-failed": "Le document n'a pas pu être envoyé.",
+  "document-delete-failed": "Le document n'a pas pu être supprimé.",
 };
 
 function firstValue(value: string | string[] | undefined) {
@@ -54,7 +62,13 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
   const feedbackTone = error
     ? "bg-primary/10 text-on-primary-container"
     : "bg-secondary-container text-on-secondary-container";
-  const { appointments, notes } = await getParcoursSnapshot();
+  const { appointments, notes, documents } = await getParcoursSnapshot();
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} o`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 102.4) / 10} Ko`;
+    return `${Math.round(bytes / 104857.6) / 10} Mo`;
+  };
 
   return (
     <AppShell title="Mon parcours" currentPath="/parcours">
@@ -134,6 +148,127 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
 
         <div className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
           <div className="space-y-4">
+            <section className="surface-section space-y-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <UploadCloud aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+                </div>
+                <div>
+                  <p className="font-headline text-lg font-semibold text-on-surface">
+                    Documents privés
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                    Ordonnances, résultats ou courriers utiles. Chaque document reste
+                    privé et n&apos;est accessible qu&apos;à votre compte.
+                  </p>
+                </div>
+              </div>
+
+              <form action={uploadParcoursDocument} className="space-y-4">
+                <label className="block space-y-2">
+                  <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                    Titre du document
+                  </span>
+                  <input
+                    type="text"
+                    name="title"
+                    className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface placeholder:text-outline"
+                    placeholder="Ordonnance oncologue, résultats prise de sang..."
+                  />
+                </label>
+
+                <label className="block space-y-2">
+                  <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                    Fichier
+                  </span>
+                  <input
+                    type="file"
+                    name="file"
+                    required
+                    className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
+                  />
+                </label>
+
+                <p className="text-xs leading-6 text-on-surface-variant">
+                  Formats usuels acceptés, limite de 10 Mo par document.
+                </p>
+
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                >
+                  Envoyer le document
+                </button>
+              </form>
+            </section>
+
+            <section className="space-y-4">
+              <div>
+                <div className="eyebrow">Documents</div>
+                <h2 className="font-headline text-2xl font-bold text-on-surface">
+                  Vos pièces utiles
+                </h2>
+              </div>
+
+              {documents.length > 0 ? (
+                <div className="space-y-4">
+                  {documents.map((document) => (
+                    <article key={document.id} className="surface-card space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
+                            <FileText aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+                          </div>
+                          <div>
+                            <p className="font-headline text-base font-semibold text-on-surface">
+                              {document.title}
+                            </p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-outline">
+                              Ajouté le {formatParcoursDate(document.createdAt)} · {formatFileSize(document.sizeBytes)}
+                            </p>
+                          </div>
+                        </div>
+                        <form action={deleteParcoursDocument}>
+                          <input type="hidden" name="documentId" value={document.id} />
+                          <button
+                            type="submit"
+                            className="inline-flex items-center gap-2 rounded-full bg-surface-container-low px-4 py-2 font-label text-xs font-semibold text-on-surface"
+                          >
+                            <Trash2 aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+                            Supprimer
+                          </button>
+                        </form>
+                      </div>
+
+                      {document.downloadUrl ? (
+                        <a
+                          href={document.downloadUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                        >
+                          Ouvrir le document
+                        </a>
+                      ) : (
+                        <p className="text-sm leading-7 text-on-surface-variant">
+                          Le lien sécurisé sera recréé au prochain chargement si nécessaire.
+                        </p>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="surface-card">
+                  <p className="font-headline text-lg font-semibold text-on-surface">
+                    Aucun document privé pour le moment
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                    Ajoutez vos pièces importantes pour les retrouver rapidement dans votre parcours.
+                  </p>
+                </div>
+              )}
+            </section>
+
             <section className="surface-section space-y-5">
               <div className="flex items-start gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Reviewer"
+  short_description: "Expert code reviewer who provides constructive, actionable..."
+  default_prompt: "Use $code-reviewer to handle code reviewer work in this project."

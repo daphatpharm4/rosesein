@@ -117,6 +117,7 @@ export default async function HomePage() {
     ]);
   const todayTip = WELLNESS_TIPS[new Date().getDay() % WELLNESS_TIPS.length];
   const shortcuts = getShortcuts(profile?.profileKind);
+  const difficultDayMode = profile?.difficultDayMode ?? false;
 
   return (
     <AppShell currentPath="/">
@@ -135,6 +136,37 @@ export default async function HomePage() {
             </div>
           </div>
         )}
+
+        {difficultDayMode ? (
+          <div className="surface-section space-y-4 border-l-4 border-secondary-container">
+            <div>
+              <div className="eyebrow">Aller a l'essentiel</div>
+              <h2 className="font-headline text-2xl font-bold text-on-surface">
+                Trois reperes simples pour aujourd&apos;hui.
+              </h2>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Link
+                href={"/aide" as Route}
+                className="rounded-brand bg-surface-container-lowest px-4 py-4 font-label text-sm font-semibold text-primary shadow-ambient"
+              >
+                Ouvrir l&apos;aide
+              </Link>
+              <Link
+                href={"/messages" as Route}
+                className="rounded-brand bg-surface-container-lowest px-4 py-4 font-label text-sm font-semibold text-primary shadow-ambient"
+              >
+                Lire mes messages
+              </Link>
+              <Link
+                href={"/parcours" as Route}
+                className="rounded-brand bg-surface-container-lowest px-4 py-4 font-label text-sm font-semibold text-primary shadow-ambient"
+              >
+                Voir mon parcours
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         {/* Association message */}
         {associationMessage && (

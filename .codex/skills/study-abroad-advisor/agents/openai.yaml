@@ -1,0 +1,4 @@
+interface:
+  display_name: "Study Abroad Advisor"
+  short_description: "Full-spectrum study abroad planning expert covering the US,..."
+  default_prompt: "Use $study-abroad-advisor to handle study abroad advisor work in this project."

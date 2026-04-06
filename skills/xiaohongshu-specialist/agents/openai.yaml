@@ -1,0 +1,4 @@
+interface:
+  display_name: "Xiaohongshu Specialist"
+  short_description: "Expert Xiaohongshu marketing specialist focused on..."
+  default_prompt: "Use $xiaohongshu-specialist to handle xiaohongshu specialist work in this project."

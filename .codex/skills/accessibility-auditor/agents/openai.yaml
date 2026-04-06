@@ -1,0 +1,4 @@
+interface:
+  display_name: "Accessibility Auditor"
+  short_description: "Expert accessibility specialist who audits interfaces..."
+  default_prompt: "Use $accessibility-auditor to handle accessibility auditor work in this project."

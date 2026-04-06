@@ -1,0 +1,4 @@
+interface:
+  display_name: "Carousel Growth Engine"
+  short_description: "Autonomous TikTok and Instagram carousel generation specialist"
+  default_prompt: "Use $carousel-growth-engine to handle carousel growth engine work in this project."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Corporate Training Designer"
+  short_description: "Expert in enterprise training system design and curriculum..."
+  default_prompt: "Use $corporate-training-designer to handle corporate training designer work in this project."

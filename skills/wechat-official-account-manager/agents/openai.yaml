@@ -1,0 +1,4 @@
+interface:
+  display_name: "WeChat Official Account Manager"
+  short_description: "Expert WeChat Official Account (OA) strategist specializing..."
+  default_prompt: "Use $wechat-official-account-manager to handle wechat official account manager work in this project."

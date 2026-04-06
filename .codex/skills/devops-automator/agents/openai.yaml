@@ -1,0 +1,4 @@
+interface:
+  display_name: "DevOps Automator"
+  short_description: "Expert DevOps engineer specializing in infrastructure..."
+  default_prompt: "Use $devops-automator to handle devops automator work in this project."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workflow Optimizer"
+  short_description: "Expert process improvement specialist focused on analyzing,..."
+  default_prompt: "Use $workflow-optimizer to handle workflow optimizer work in this project."

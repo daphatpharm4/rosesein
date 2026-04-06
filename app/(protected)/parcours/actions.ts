@@ -1,5 +1,6 @@
 "use server";
 
+import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -9,7 +10,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 function appendFeedback(targetPath: string, key: "status" | "error", value: string) {
   const url = new URL(targetPath, "http://localhost");
   url.searchParams.set(key, value);
-  return `${url.pathname}${url.search}`;
+  return `${url.pathname}${url.search}` as Route;
 }
 
 function normalizeId(value: FormDataEntryValue | null) {
@@ -32,6 +33,10 @@ function normalizeOptionalText(value: FormDataEntryValue | null) {
 
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function normalizeFileName(fileName: string) {
+  return fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-");
 }
 
 function normalizeScheduledFor(value: FormDataEntryValue | null) {
@@ -243,4 +248,87 @@ export async function saveMoodCheckIn(formData: FormData) {
 
   revalidatePath("/parcours");
   redirect(appendFeedback("/parcours", "status", "note-created"));
+}
+
+export async function uploadParcoursDocument(formData: FormData) {
+  const title = normalizeRequiredText(formData.get("title"));
+  const fileEntry = formData.get("file");
+
+  if (!(fileEntry instanceof File) || fileEntry.size === 0) {
+    redirect("/parcours?error=document-file-required");
+  }
+
+  if (fileEntry.size > 10 * 1024 * 1024) {
+    redirect("/parcours?error=document-too-large");
+  }
+
+  const { user } = await requireCompletedProfile("/parcours");
+  const supabase = await createSupabaseServerClient();
+  const fileName = normalizeFileName(fileEntry.name || "document");
+  const storagePath = `${user.id}/${Date.now()}-${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("parcours-documents")
+    .upload(storagePath, fileEntry, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: fileEntry.type || "application/octet-stream",
+    });
+
+  if (uploadError) {
+    redirect("/parcours?error=document-upload-failed");
+  }
+
+  const { error: metadataError } = await supabase.from("user_documents").insert({
+    user_id: user.id,
+    title: title.length >= 2 ? title : fileEntry.name,
+    bucket_id: "parcours-documents",
+    storage_path: storagePath,
+    mime_type: fileEntry.type || null,
+    size_bytes: fileEntry.size,
+  });
+
+  if (metadataError) {
+    await supabase.storage.from("parcours-documents").remove([storagePath]);
+    redirect("/parcours?error=document-upload-failed");
+  }
+
+  revalidatePath("/parcours");
+  redirect(appendFeedback("/parcours", "status", "document-uploaded"));
+}
+
+export async function deleteParcoursDocument(formData: FormData) {
+  const documentId = normalizeId(formData.get("documentId"));
+
+  if (!documentId) {
+    redirect("/parcours?error=document-delete-failed");
+  }
+
+  const { user } = await requireCompletedProfile("/parcours");
+  const supabase = await createSupabaseServerClient();
+  const { data: document, error: fetchError } = await supabase
+    .from("user_documents")
+    .select("id, storage_path, bucket_id")
+    .eq("id", documentId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (fetchError || !document) {
+    redirect("/parcours?error=document-delete-failed");
+  }
+
+  await supabase.storage.from(document.bucket_id).remove([document.storage_path]);
+
+  const { error: deleteError } = await supabase
+    .from("user_documents")
+    .delete()
+    .eq("id", documentId)
+    .eq("user_id", user.id);
+
+  if (deleteError) {
+    redirect("/parcours?error=document-delete-failed");
+  }
+
+  revalidatePath("/parcours");
+  redirect(appendFeedback("/parcours", "status", "document-deleted"));
 }

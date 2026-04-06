@@ -1,0 +1,4 @@
+interface:
+  display_name: "Book Co-Author"
+  short_description: "Strategic thought-leadership book collaborator for..."
+  default_prompt: "Use $book-co-author to handle book co-author work in this project."

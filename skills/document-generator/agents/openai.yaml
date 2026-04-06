@@ -1,0 +1,4 @@
+interface:
+  display_name: "Document Generator"
+  short_description: "Expert document creation specialist who generates..."
+  default_prompt: "Use $document-generator to handle document generator work in this project."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Database Optimizer"
+  short_description: "Expert database specialist focusing on schema design, query..."
+  default_prompt: "Use $database-optimizer to handle database optimizer work in this project."

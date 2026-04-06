@@ -1,0 +1,4 @@
+interface:
+  display_name: "Proposal Strategist"
+  short_description: "Strategic proposal architect who transforms RFPs and sales..."
+  default_prompt: "Use $proposal-strategist to handle proposal strategist work in this project."

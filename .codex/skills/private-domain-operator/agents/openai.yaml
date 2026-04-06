@@ -1,0 +1,4 @@
+interface:
+  display_name: "Private Domain Operator"
+  short_description: "Expert in building enterprise WeChat (WeCom) private domain..."
+  default_prompt: "Use $private-domain-operator to handle private domain operator work in this project."

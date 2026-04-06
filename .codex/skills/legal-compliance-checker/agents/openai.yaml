@@ -1,0 +1,4 @@
+interface:
+  display_name: "Legal Compliance Checker"
+  short_description: "Expert legal and compliance specialist ensuring business..."
+  default_prompt: "Use $legal-compliance-checker to handle legal compliance checker work in this project."

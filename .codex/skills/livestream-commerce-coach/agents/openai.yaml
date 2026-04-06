@@ -1,0 +1,4 @@
+interface:
+  display_name: "Livestream Commerce Coach"
+  short_description: "Veteran livestream e-commerce coach specializing in host..."
+  default_prompt: "Use $livestream-commerce-coach to handle livestream commerce coach work in this project."

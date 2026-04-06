@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Workflow Master"
+  short_description: "Expert in Git workflows, branching strategies, and version..."
+  default_prompt: "Use $git-workflow-master to handle git workflow master work in this project."

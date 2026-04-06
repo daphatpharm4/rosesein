@@ -1,0 +1,4 @@
+interface:
+  display_name: "Security Engineer"
+  short_description: "Expert application security engineer specializing in threat..."
+  default_prompt: "Use $security-engineer to handle security engineer work in this project."

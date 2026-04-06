@@ -1,0 +1,4 @@
+interface:
+  display_name: "Instagram Curator"
+  short_description: "Expert Instagram marketing specialist focused on visual..."
+  default_prompt: "Use $instagram-curator to handle instagram curator work in this project."

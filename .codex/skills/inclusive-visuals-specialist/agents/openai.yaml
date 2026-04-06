@@ -1,0 +1,4 @@
+interface:
+  display_name: "Inclusive Visuals Specialist"
+  short_description: "Representation expert who defeats systemic AI biases to..."
+  default_prompt: "Use $inclusive-visuals-specialist to handle inclusive visuals specialist work in this project."

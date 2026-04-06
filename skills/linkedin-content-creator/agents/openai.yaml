@@ -1,0 +1,4 @@
+interface:
+  display_name: "LinkedIn Content Creator"
+  short_description: "Expert LinkedIn content strategist focused on thought..."
+  default_prompt: "Use $linkedin-content-creator to handle linkedin content creator work in this project."
