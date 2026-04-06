@@ -46,6 +46,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
+`NEXT_PUBLIC_SITE_URL` is now a fallback. The auth flow prefers the incoming
+request host, which makes Vercel previews and public tunnels easier to test.
+Keep `NEXT_PUBLIC_SITE_URL` set for local development and for any links
+generated outside a live request context.
+
 Do not commit `.env.local`.
 
 ## Supabase Auth Configuration
@@ -70,6 +75,18 @@ For Vercel later, add:
 ```text
 https://your-production-domain/auth/callback
 https://your-preview-domain.vercel.app/auth/callback
+```
+
+For temporary remote-device testing with a public tunnel, also add either:
+
+```text
+https://your-current-tunnel-domain/auth/callback
+```
+
+or a wildcard redirect if you rotate temporary tunnel domains:
+
+```text
+https://*.trycloudflare.com/auth/callback
 ```
 
 ## Apply Migrations
@@ -99,6 +116,30 @@ Open:
 ```text
 http://localhost:3000
 ```
+
+## Remote Phone Testing
+
+If the phone is not on the same network as your Mac, use a public tunnel.
+
+1. Start the app:
+
+```bash
+npm run dev:public
+```
+
+2. Expose it with a tunnel:
+
+```bash
+cloudflared tunnel --url http://localhost:3000
+```
+
+3. Open the generated `https://...trycloudflare.com` URL on your phone.
+
+Important notes:
+
+- the magic-link callback now follows the incoming request host automatically
+- Supabase still needs the tunnel callback URL or wildcard redirect configured
+- if you use another tunnel provider such as ngrok, the same callback rule applies
 
 ## Local Verification Commands
 
@@ -163,6 +204,9 @@ Recommended values:
   - `NEXT_PUBLIC_SITE_URL=https://your-project-git-branch.vercel.app`
 - Production:
   - `NEXT_PUBLIC_SITE_URL=https://your-domain`
+
+`NEXT_PUBLIC_SITE_URL` remains recommended in Vercel for consistency, but the
+auth callback no longer depends exclusively on it during live requests.
 
 ## Vercel Deployment Checklist
 

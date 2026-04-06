@@ -80,9 +80,10 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
               Configuration nécessaire
             </p>
             <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-              Ajoutez `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-              et `NEXT_PUBLIC_SITE_URL` dans votre environnement pour activer les
-              liens de connexion.
+              Ajoutez `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+              dans votre environnement pour activer les liens de connexion.
+              `NEXT_PUBLIC_SITE_URL` reste recommande pour les liens generes hors
+              de la requete courante.
             </p>
           </div>
         ) : null}

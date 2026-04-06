@@ -46,6 +46,21 @@ npm run dev
 npm run test:local
 ```
 
+## Test On A Phone
+
+For a phone on another network, run the app locally and expose it through a
+public tunnel:
+
+```bash
+npm run dev:public
+cloudflared tunnel --url http://localhost:3000
+```
+
+Then open the generated tunnel URL on your phone. For auth to work, add the
+tunnel callback URL to Supabase Auth Redirect URLs. The magic-link callback now
+uses the incoming request host automatically, so you do not need to keep
+`NEXT_PUBLIC_SITE_URL` manually aligned with each preview or tunnel URL.
+
 ## Supabase Setup
 
 The repository includes the canonical migration chain through [supabase/migrations/0006_parcours_foundation.sql](/Users/charlesvictormahouve/Documents/rosesein/supabase/migrations/0006_parcours_foundation.sql) and canonical helpers under `lib/supabase/`:

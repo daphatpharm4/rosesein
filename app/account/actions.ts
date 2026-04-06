@@ -4,7 +4,8 @@ import type { Route } from "next";
 import { redirect } from "next/navigation";
 
 import { requireUser, type ProfileKind } from "@/lib/auth";
-import { getSiteUrl, hasSupabaseBrowserEnv } from "@/lib/env";
+import { hasSupabaseBrowserEnv } from "@/lib/env";
+import { getRequestSiteUrl } from "@/lib/request-site-url";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function normalizeRedirectTarget(value: FormDataEntryValue | null) {
@@ -58,7 +59,7 @@ export async function signInWithMagicLink(formData: FormData) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const callbackUrl = new URL("/auth/callback", getSiteUrl());
+  const callbackUrl = new URL("/auth/callback", await getRequestSiteUrl());
   callbackUrl.searchParams.set("next", redirectTo);
 
   const { error } = await supabase.auth.signInWithOtp({

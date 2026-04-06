@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { AppShell } from "@/components/shell/app-shell";
 import { getPublicContentSnapshot } from "@/lib/content";
 import { NewsFilters } from "@/components/content/news-filters";
@@ -19,7 +21,9 @@ export default async function NewsPage() {
           </p>
         </div>
 
-        <NewsFilters articles={articles} events={events} configured={configured} />
+        <Suspense fallback={null}>
+          <NewsFilters articles={articles} events={events} configured={configured} />
+        </Suspense>
       </section>
     </AppShell>
   );
