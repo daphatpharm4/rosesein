@@ -2,13 +2,26 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+import { hasSupabaseBrowserEnv } from "@/lib/env";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function useRealtimeMessages(threadId: string) {
   const router = useRouter();
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+    if (!threadId || !hasSupabaseBrowserEnv()) {
+      return;
+    }
+
+    let supabase;
+
+    try {
+      supabase = createSupabaseBrowserClient();
+    } catch (error) {
+      console.error("Failed to initialize Supabase realtime client for messages.", error);
+      return;
+    }
 
     const channel = supabase
       .channel(`thread-${threadId}`)
@@ -27,7 +40,7 @@ export function useRealtimeMessages(threadId: string) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [threadId, router]);
 }
