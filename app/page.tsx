@@ -9,6 +9,7 @@ import {
 } from "@/lib/content";
 import { getCurrentUserContext } from "@/lib/auth";
 import type { ProfileKind } from "@/lib/auth";
+import { getActiveAssociationMessage } from "@/lib/association-message";
 
 type Shortcut =
   | {
@@ -101,9 +102,19 @@ const WELLNESS_TIPS = [
 
 export const revalidate = 300;
 
+function formatExpiryDate(value: string) {
+  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" }).format(
+    new Date(value)
+  );
+}
+
 export default async function HomePage() {
-  const { configured, latestArticle, nextEvent } = await getPublicContentSnapshot();
-  const { profile } = await getCurrentUserContext();
+  const [{ configured, latestArticle, nextEvent }, { profile }, associationMessage] =
+    await Promise.all([
+      getPublicContentSnapshot(),
+      getCurrentUserContext(),
+      getActiveAssociationMessage(),
+    ]);
   const todayTip = WELLNESS_TIPS[new Date().getDay() % WELLNESS_TIPS.length];
   const shortcuts = getShortcuts(profile?.profileKind);
 
@@ -122,6 +133,20 @@ export default async function HomePage() {
               </p>
               <p className="mt-1 text-sm leading-7 text-on-surface-variant">{todayTip}</p>
             </div>
+          </div>
+        )}
+
+        {/* Association message */}
+        {associationMessage && (
+          <div className="surface-section space-y-2 border-l-4 border-primary/30">
+            <div className="eyebrow">Message de l&apos;association</div>
+            <p className="font-headline text-xl font-bold text-on-surface">
+              {associationMessage.title}
+            </p>
+            <p className="text-base leading-7 text-on-surface-variant">{associationMessage.body}</p>
+            <p className="font-label text-xs text-outline">
+              Jusqu&apos;au {formatExpiryDate(associationMessage.expiresAt)}
+            </p>
           </div>
         )}
 
