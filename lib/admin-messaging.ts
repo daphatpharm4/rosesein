@@ -47,7 +47,6 @@ export async function getAdminMessagingHistory(
       .select("id, title, created_at")
       .eq("kind", "group")
       .eq("is_official", true)
-      .eq("created_by", staffUserId)
       .order("created_at", { ascending: false })
       .limit(50),
   ]);
@@ -90,15 +89,21 @@ export async function getAdminMessagingHistory(
 export async function getMemberList(): Promise<MemberOption[]> {
   const supabase = await createSupabaseServerClient();
 
+  // Fetch all profiles plus their roles in one query
   const { data } = await supabase
     .from("profiles")
-    .select("id, display_name, pseudonym, profile_kind")
+    .select("id, display_name, pseudonym, profile_kind, user_roles(role)")
     .order("display_name", { ascending: true });
 
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    displayName: row.display_name as string,
-    pseudonym: row.pseudonym as string | null,
-    profileKind: row.profile_kind as "patient" | "caregiver",
-  }));
+  return (data ?? [])
+    .filter((row) => {
+      const roles = ((row.user_roles ?? []) as Array<{ role: string }>).map((r) => r.role);
+      return !roles.includes("admin") && !roles.includes("moderator");
+    })
+    .map((row) => ({
+      id: row.id as string,
+      displayName: row.display_name as string,
+      pseudonym: row.pseudonym as string | null,
+      profileKind: row.profile_kind as "patient" | "caregiver",
+    }));
 }
