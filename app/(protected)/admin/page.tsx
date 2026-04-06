@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { Megaphone, ShieldAlert } from "lucide-react";
+import { Megaphone, Send, ShieldAlert } from "lucide-react";
 import type { Route } from "next";
 
 import { AppShell } from "@/components/shell/app-shell";
-import { requireCompletedProfile } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 
 export default async function AdminPage() {
-  await requireCompletedProfile("/admin");
+  await requireStaff("/admin");
 
   return (
     <AppShell title="Administration" currentPath="/admin">
@@ -19,7 +19,7 @@ export default async function AdminPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href={"/admin/moderation" as Route}
             className="surface-card group flex items-start gap-4 hover:border-primary/20"
@@ -50,6 +50,23 @@ export default async function AdminPage() {
               </p>
               <p className="mt-1 text-sm leading-6 text-on-surface-variant">
                 Publiez un message visible sur la page d&apos;accueil.
+              </p>
+            </div>
+          </Link>
+
+          <Link
+            href={"/admin/messagerie" as Route}
+            className="surface-card group flex items-start gap-4 hover:border-primary/20"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Send aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+            </div>
+            <div>
+              <p className="font-headline text-base font-semibold text-on-surface group-hover:text-primary">
+                Messagerie collective
+              </p>
+              <p className="mt-1 text-sm leading-6 text-on-surface-variant">
+                Diffusions ciblées et groupes de conversation.
               </p>
             </div>
           </Link>
