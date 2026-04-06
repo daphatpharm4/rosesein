@@ -13,7 +13,7 @@
 ## File map
 
 **New files:**
-- `supabase/migrations/0013_admin_collective_messaging.sql`
+- `supabase/migrations/0014_admin_collective_messaging.sql`
 - `lib/admin-messaging.ts`
 - `app/(protected)/admin/messagerie/actions.ts`
 - `app/(protected)/admin/messagerie/page.tsx`
@@ -27,12 +27,12 @@
 ## Task 1: Database migration
 
 **Files:**
-- Create: `supabase/migrations/0013_admin_collective_messaging.sql`
+- Create: `supabase/migrations/0014_admin_collective_messaging.sql`
 
 - [ ] **Step 1: Write the migration file**
 
 ```sql
--- supabase/migrations/0013_admin_collective_messaging.sql
+-- supabase/migrations/0014_admin_collective_messaging.sql
 
 -- 1. admin_broadcasts — tracks each broadcast event
 create table if not exists public.admin_broadcasts (
@@ -140,14 +140,14 @@ $$;
 
 ```bash
 cd /Users/charlesvictormahouve/Documents/rosesein
-cat supabase/migrations/0013_admin_collective_messaging.sql | head -5
+cat supabase/migrations/0014_admin_collective_messaging.sql | head -5
 ```
 Expected: first 5 lines of the file printed.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add supabase/migrations/0013_admin_collective_messaging.sql
+git add supabase/migrations/0014_admin_collective_messaging.sql
 git commit -m "feat(db): add admin_broadcasts table and send_broadcast RPC"
 ```
 
