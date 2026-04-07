@@ -40,6 +40,35 @@ const associationAreas = [
   },
 ];
 
+const engagementOptions = [
+  {
+    title: "Adhérer",
+    description:
+      "Rejoignez l'association et laissez l'équipe vous recontacter dans l'application.",
+    href: "/association/engagement?kind=membership" as Route,
+    cta: "Envoyer une demande",
+    icon: HeartHandshake,
+    tone: "primary" as const,
+  },
+  {
+    title: "Faire un don",
+    description: "Soutenez les programmes d'accompagnement et les ateliers.",
+    href: "/association/engagement?kind=donation" as Route,
+    cta: "Signaler mon soutien",
+    icon: Gift,
+    tone: "secondary" as const,
+  },
+  {
+    title: "Devenir bénévole",
+    description:
+      "Offrez votre temps et vos compétences pour accompagner les patientes.",
+    href: "/association/engagement?kind=volunteer" as Route,
+    cta: "Proposer mon aide",
+    icon: Users,
+    tone: "primary" as const,
+  },
+];
+
 export const revalidate = 300;
 
 export default async function AssociationPage() {
@@ -61,86 +90,83 @@ export default async function AssociationPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          {associationAreas.map(({ title, description, icon: Icon }) => (
-            <div key={title} className="surface-card">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <section className="grid gap-6 border-y border-outline-variant/25 py-8 lg:grid-cols-3">
+          {associationAreas.map(({ title, description, icon: Icon }, index) => (
+            <div
+              key={title}
+              className={`${index === 0 ? "" : "lg:border-l lg:border-outline-variant/20 lg:pl-6"} space-y-3`}
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
               </div>
-              <h2 className="mt-5 font-headline text-lg font-semibold text-on-surface">
-                {title}
-              </h2>
-              <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                {description}
-              </p>
+              <h2 className="font-headline text-lg font-semibold text-on-surface">{title}</h2>
+              <p className="text-sm leading-7 text-on-surface-variant">{description}</p>
             </div>
           ))}
-        </div>
+        </section>
 
-        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="surface-section">
-            <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
-                <HeartHandshake aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-              </div>
-              <div className="space-y-2">
-                <p className="font-headline text-lg font-semibold text-on-surface">
-                  Gouvernance éditoriale
-                </p>
-                <p className="text-sm leading-7 text-on-surface-variant">
-                  Le site public porte la mission institutionnelle, les dons et les
-                  appels à engagement. L'application reprend uniquement les contenus et
-                  événements déjà publiés dans le flux éditorial validé.
-                </p>
-                <Link
-                  href="https://rosesein.org/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-full bg-surface-container-lowest px-5 py-3 font-label text-sm font-semibold text-primary shadow-ambient"
-                >
-                  Voir le site actuel
-                </Link>
-              </div>
-            </div>
+        <section className="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)] lg:items-start">
+          <div className="space-y-4">
+            <div className="eyebrow">Repère institutionnel</div>
+            <h2 className="font-headline text-2xl font-bold text-on-surface">
+              Une gouvernance éditoriale lisible, sans bruit supplémentaire.
+            </h2>
+            <p className="max-w-2xl text-base leading-8 text-on-surface-variant">
+              Le site public porte la mission institutionnelle, les dons et les appels à
+              engagement. L'application reprend uniquement les contenus et événements déjà
+              publiés dans le flux éditorial validé.
+            </p>
+            <p className="max-w-2xl text-sm leading-7 text-on-surface-variant">
+              Cette continuité évite d'exposer des informations divergentes entre les
+              surfaces publiques et l'espace privé.
+            </p>
+            <Link
+              href="https://rosesein.org/"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full bg-surface-container-low px-5 py-3 font-label text-sm font-semibold text-primary transition-colors hover:bg-surface-container"
+            >
+              Voir le site actuel
+            </Link>
           </div>
 
-          <div className="surface-card">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <aside className="surface-card space-y-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Newspaper aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
             </div>
-            <p className="mt-5 font-headline text-lg font-semibold text-on-surface">
+            <p className="font-headline text-lg font-semibold text-on-surface">
               Repère éditorial récent
             </p>
             {latestArticle ? (
               <>
-                <p className="mt-2 text-sm font-semibold uppercase tracking-[0.16em] text-primary">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">
                   {latestArticle.category}
                 </p>
-                <p className="mt-2 font-headline text-lg font-semibold text-on-surface">
+                <p className="font-headline text-lg font-semibold text-on-surface">
                   {latestArticle.title}
                 </p>
-                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                <p className="text-sm leading-7 text-on-surface-variant">
                   {latestArticle.summary}
                 </p>
-                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-outline">
+                <p className="text-xs uppercase tracking-[0.16em] text-outline">
                   Publié le {formatPublishedDate(latestArticle.publishedAt)}
                 </p>
                 <Link
                   href={`/actualites/${latestArticle.slug}`}
-                  className="mt-4 inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                  className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
                 >
                   Lire l'article
                   <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
                 </Link>
               </>
             ) : (
-              <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+              <p className="text-sm leading-7 text-on-surface-variant">
                 {configured
                   ? "Aucun article publié n'est encore visible sur cette surface."
                   : "Connectez Supabase pour alimenter cette section avec du contenu publié."}
               </p>
             )}
-          </div>
+          </aside>
         </section>
 
         <section className="space-y-4">
@@ -152,26 +178,31 @@ export default async function AssociationPage() {
           </div>
 
           {upcomingEvents.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="divide-y divide-outline-variant/25 border-y border-outline-variant/30">
               {upcomingEvents.map((event) => (
-                <article key={event.id} className="surface-card">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
+                <article
+                  key={event.id}
+                  className="grid gap-4 py-5 md:grid-cols-[auto_minmax(0,1fr)] md:items-start"
+                >
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
                     <CalendarRange aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
                   </div>
-                  <h3 className="mt-5 font-headline text-lg font-semibold text-on-surface">
-                    {event.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                    {event.description}
-                  </p>
-                  <p className="mt-4 text-sm font-semibold text-on-surface">
-                    {formatEventSchedule(event)}
-                  </p>
-                  {event.locationLabel ? (
-                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-outline">
-                      {event.locationLabel}
+                  <div className="space-y-2">
+                    <h3 className="font-headline text-lg font-semibold text-on-surface">
+                      {event.title}
+                    </h3>
+                    <p className="text-sm leading-7 text-on-surface-variant">
+                      {event.description}
                     </p>
-                  ) : null}
+                    <p className="text-sm font-semibold text-on-surface">
+                      {formatEventSchedule(event)}
+                    </p>
+                    {event.locationLabel ? (
+                      <p className="text-xs uppercase tracking-[0.16em] text-outline">
+                        {event.locationLabel}
+                      </p>
+                    ) : null}
+                  </div>
                 </article>
               ))}
             </div>
@@ -189,71 +220,47 @@ export default async function AssociationPage() {
           )}
         </section>
 
-        <section className="space-y-4">
-          <div>
+        <section className="grid gap-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:items-start">
+          <div className="space-y-3">
             <div className="eyebrow">Rejoindre la communauté</div>
             <h2 className="font-headline text-2xl font-bold text-on-surface">
               S&apos;engager avec ROSE-SEIN
             </h2>
+            <p className="max-w-lg text-base leading-8 text-on-surface-variant">
+              Chaque forme d&apos;engagement ouvre ensuite un échange humain. L&apos;objectif
+              n&apos;est pas de multiplier les démarches, mais de rendre la première prise
+              de contact claire.
+            </p>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Link
-              href={"/association/engagement?kind=membership" as Route}
-              className="surface-card block space-y-4"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <HeartHandshake aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-              </div>
-              <div>
-                <h3 className="font-headline text-lg font-semibold text-on-surface">Adhérer</h3>
-                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                  Rejoignez l&apos;association et laissez l&apos;equipe vous recontacter dans l&apos;app.
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary">
-                Envoyer une demande
-                <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-              </span>
-            </Link>
-
-            <Link
-              href={"/association/engagement?kind=donation" as Route}
-              className="surface-card block space-y-4"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
-                <Gift aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-              </div>
-              <div>
-                <h3 className="font-headline text-lg font-semibold text-on-surface">Faire un don</h3>
-                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                  Soutenez les programmes d&apos;accompagnement et les ateliers.
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary">
-                Signaler mon soutien
-                <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-              </span>
-            </Link>
-
-            <Link
-              href={"/association/engagement?kind=volunteer" as Route}
-              className="surface-card block space-y-4"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Users aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-              </div>
-              <div>
-                <h3 className="font-headline text-lg font-semibold text-on-surface">Devenir bénévole</h3>
-                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                  Offrez votre temps et vos compétences pour accompagner les patientes.
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary">
-                Proposer mon aide
-                <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-              </span>
-            </Link>
+          <div className="divide-y divide-outline-variant/25 border-y border-outline-variant/30">
+            {engagementOptions.map(({ title, description, href, cta, icon: Icon, tone }) => (
+              <Link
+                key={title}
+                href={href}
+                className="group grid gap-4 py-5 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-start"
+              >
+                <div
+                  className={`flex h-11 w-11 items-center justify-center rounded-full ${
+                    tone === "secondary"
+                      ? "bg-secondary-container text-on-secondary-container"
+                      : "bg-primary/10 text-primary"
+                  }`}
+                >
+                  <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+                </div>
+                <div>
+                  <h3 className="font-headline text-lg font-semibold text-on-surface">{title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                    {description}
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary transition-transform group-hover:translate-x-1">
+                  {cta}
+                  <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+                </span>
+              </Link>
+            ))}
           </div>
         </section>
       </section>

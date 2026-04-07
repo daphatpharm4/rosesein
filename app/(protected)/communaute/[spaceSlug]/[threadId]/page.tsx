@@ -77,6 +77,8 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
             className={`surface-card ${
               error ? "bg-primary/10 text-on-primary-container" : "bg-secondary-container text-on-secondary-container"
             }`}
+            role={error ? "alert" : "status"}
+            aria-live={error ? "assertive" : "polite"}
           >
             <p className="font-headline text-base font-semibold">Communauté</p>
             <p className="mt-2 text-sm leading-7">{feedbackMap[(error ?? status) as string]}</p>

@@ -13,10 +13,10 @@ type AdminUsersPageProps = {
 };
 
 const feedbackMap: Record<string, string> = {
-  "role-updated": "Le role a ete mis a jour.",
-  "role-invalid": "Le role demande est invalide.",
-  "role-update-failed": "La mise a jour du role a echoue.",
-  "self-admin-lock": "Vous ne pouvez pas retirer votre propre role admin.",
+  "role-updated": "Le rôle a été mis à jour.",
+  "role-invalid": "Le rôle demandé est invalide.",
+  "role-update-failed": "La mise à jour du rôle a échoué.",
+  "self-admin-lock": "Vous ne pouvez pas retirer votre propre rôle admin.",
 };
 
 function firstValue(value: string | string[] | undefined) {
@@ -44,20 +44,24 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
           className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
         >
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Retour a l'administration
+          Retour à l'administration
         </Link>
 
         <div className="space-y-3">
           <div className="eyebrow">Gouvernance</div>
-          <h1 className="editorial-title">Gerer les acces et les roles.</h1>
+          <h1 className="editorial-title">Gérer les accès et les rôles.</h1>
           <p className="max-w-2xl text-base leading-7 text-on-surface-variant">
             Consultez les membres actifs, identifiez les profils pseudonymes et ajustez
-            les roles staff lorsque vous avez les droits admin.
+            les rôles staff lorsque vous avez les droits admin.
           </p>
         </div>
 
         {feedback ? (
-          <div className={`surface-card ${feedbackTone}`}>
+          <div
+            className={`surface-card ${feedbackTone}`}
+            role={error ? "alert" : "status"}
+            aria-live={error ? "assertive" : "polite"}
+          >
             <p className="font-headline text-base font-semibold">Utilisateurs</p>
             <p className="mt-2 text-sm leading-7">{feedback}</p>
           </div>
@@ -78,7 +82,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                 type="search"
                 name="q"
                 defaultValue={q}
-                placeholder="Prenom d'usage ou pseudonyme"
+                placeholder="Prénom d'usage ou pseudonyme"
                 className="w-full rounded-brand bg-surface-container-high py-4 pl-11 pr-4 text-sm text-on-surface placeholder:text-outline"
               />
             </div>
@@ -88,11 +92,11 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
         {!canManageRoles ? (
           <div className="surface-card">
             <p className="font-headline text-base font-semibold text-on-surface">
-              Acces lecture seule
+              Accès lecture seule
             </p>
             <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-              Votre role staff permet de consulter les profils, mais seul un compte admin
-              peut modifier les roles.
+              Votre rôle staff permet de consulter les profils, mais seul un compte admin
+              peut modifier les rôles.
             </p>
           </div>
         ) : null}
@@ -118,7 +122,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                         {managedUser.profileKind === "patient" ? "Patiente" : "Aidant"}
                         {managedUser.pseudonym ? ` · pseudo public ${managedUser.pseudonym}` : ""}
                         {managedUser.isAnonymous ? " · mode pseudonyme" : ""}
-                        {managedUser.difficultDayMode ? " · mode journee difficile" : ""}
+                        {managedUser.difficultDayMode ? " · mode journée difficile" : ""}
                       </p>
                     </div>
                   </div>
@@ -150,7 +154,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                         ) : (
                           <ShieldPlus aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
                         )}
-                        {hasModerator ? "Retirer moderateur" : "Donner moderateur"}
+                        {hasModerator ? "Retirer modérateur" : "Donner modérateur"}
                       </button>
                     </form>
 

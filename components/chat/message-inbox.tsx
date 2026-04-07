@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { useState } from "react";
-import { MessageSquarePlus } from "lucide-react";
+import { useRef, useState, type KeyboardEvent } from "react";
+import { ArrowRight, MessageSquarePlus } from "lucide-react";
 import { ConversationList } from "@/components/chat/conversation-list";
 import { SearchField } from "@/components/chat/search-field";
 import type { Conversation, ConversationScope } from "@/lib/messages";
@@ -20,9 +20,10 @@ type MessageInboxProps = {
 export function MessageInbox({ conversations }: MessageInboxProps) {
   const [scope, setScope] = useState<ConversationScope>("association");
   const [query, setQuery] = useState("");
-  const featuredConversation =
-    conversations.find((conversation) => conversation.scope === "association") ??
-    conversations[0];
+  const tabRefs = useRef<Record<ConversationScope, HTMLButtonElement | null>>({
+    association: null,
+    private: null,
+  });
 
   const visibleConversations = conversations.filter((conversation) => {
     const matchesScope = conversation.scope === scope;
@@ -40,65 +41,108 @@ export function MessageInbox({ conversations }: MessageInboxProps) {
     );
   });
 
-  return (
-    <>
-      <Link
-        href={"/messages/nouveau" as Route}
-        aria-label="Démarrer une nouvelle conversation"
-        className="fixed bottom-32 right-6 z-40 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-primary text-on-primary shadow-ambient transition-transform active:scale-95"
-      >
-        <MessageSquarePlus aria-hidden="true" className="h-7 w-7" strokeWidth={2} />
-      </Link>
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, currentScope: ConversationScope) {
+    const currentIndex = tabs.findIndex((tab) => tab.value === currentScope);
 
-      <section className="space-y-8">
-        <div className="space-y-4">
-          <div className="eyebrow">Messagerie calme et privée</div>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-xl">
-              <h1 className="editorial-title">Rester en lien, sans bruit.</h1>
-              <p className="mt-3 max-w-lg text-base leading-7 text-on-surface-variant">
-                Une messagerie pensée pour les échanges utiles avec l’association,
-                vos groupes de parole et vos contacts de confiance.
-              </p>
-            </div>
-            <div className="surface-card max-w-sm bg-surface-container-lowest/90">
-              <p className="font-headline text-base font-semibold text-on-surface">
-                Priorité aujourd&apos;hui
-              </p>
-              {featuredConversation ? (
-                <>
-                  <p className="mt-2 text-sm font-semibold text-on-surface">
-                    {featuredConversation.name}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-                    {featuredConversation.preview}
-                  </p>
-                </>
-              ) : (
-                <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-                  Vos fils privés et associatifs apparaîtront ici dès qu&apos;un
-                  échange existera. Le bouton flottant permet maintenant d&apos;écrire
-                  librement à un autre membre.
-                </p>
-              )}
-            </div>
+    if (currentIndex === -1) {
+      return;
+    }
+
+    let nextIndex: number | null = null;
+
+    if (event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % tabs.length;
+    } else if (event.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabs.length - 1;
+    }
+
+    if (nextIndex === null) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const nextScope = tabs[nextIndex]?.value;
+    if (!nextScope) {
+      return;
+    }
+
+    setScope(nextScope);
+    tabRefs.current[nextScope]?.focus();
+  }
+
+  const activeTabId = `messages-tab-${scope}`;
+  const activePanelId = `messages-panel-${scope}`;
+
+  return (
+    <section className="space-y-6">
+      <div className="space-y-4">
+        <div className="eyebrow">Messagerie calme et privée</div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-xl">
+            <h1 className="editorial-title">Rester en lien, sans bruit.</h1>
+            <p className="mt-3 max-w-lg text-base leading-7 text-on-surface-variant">
+              Commencez par le bon canal, retrouvez un échange en quelques secondes,
+              puis écrivez seulement si vous en avez besoin.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href={"/messages/nouveau" as Route}
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+            >
+              <MessageSquarePlus aria-hidden="true" className="h-4 w-4" strokeWidth={2} />
+              Nouvelle conversation
+            </Link>
+            <Link
+              href={"/aide" as Route}
+              className="inline-flex items-center gap-2 rounded-full bg-surface-container-lowest px-5 py-3 font-label text-sm font-semibold text-primary shadow-ambient"
+            >
+              Besoin d&apos;un repère
+              <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2} />
+            </Link>
           </div>
         </div>
+      </div>
 
-        <SearchField value={query} onChange={setQuery} />
+      <div className="space-y-4 rounded-brand-xl border border-outline-variant/40 bg-surface-container-lowest px-4 py-4 shadow-ambient">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm leading-6 text-on-surface-variant">
+            {scope === "association"
+              ? "Retrouvez les échanges avec l'association et les espaces de coordination."
+              : "Retrouvez les conversations directes avec vos contacts de confiance."}
+          </p>
+          <p className="font-label text-xs uppercase tracking-[0.16em] text-outline">
+            {visibleConversations.length} conversation
+            {visibleConversations.length > 1 ? "s" : ""}
+          </p>
+        </div>
 
-        <div className="rounded-full bg-surface-container-low p-1.5" role="tablist" aria-label="Filtres de conversation">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-full bg-surface-container-low p-1.5">
+          <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Filtres de conversation">
             {tabs.map((tab) => {
               const isActive = tab.value === scope;
+              const tabId = `messages-tab-${tab.value}`;
+              const panelId = `messages-panel-${tab.value}`;
 
               return (
                 <button
                   key={tab.value}
+                  ref={(node) => {
+                    tabRefs.current[tab.value] = node;
+                  }}
+                  id={tabId}
                   type="button"
                   role="tab"
                   aria-selected={isActive}
+                  aria-controls={panelId}
+                  tabIndex={isActive ? 0 : -1}
                   onClick={() => setScope(tab.value)}
+                  onKeyDown={(event) => handleTabKeyDown(event, tab.value)}
                   className={`rounded-full px-4 py-3 text-sm font-semibold transition-colors ${
                     isActive
                       ? "bg-surface-container-lowest text-primary shadow-ambient"
@@ -111,9 +155,18 @@ export function MessageInbox({ conversations }: MessageInboxProps) {
             })}
           </div>
         </div>
+      </div>
 
+      <SearchField value={query} onChange={setQuery} />
+
+      <div
+        id={activePanelId}
+        role="tabpanel"
+        aria-labelledby={activeTabId}
+        tabIndex={0}
+      >
         <ConversationList conversations={visibleConversations} />
-      </section>
-    </>
+      </div>
+    </section>
   );
 }

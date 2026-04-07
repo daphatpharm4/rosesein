@@ -12,9 +12,9 @@ type AssociationEngagementPageProps = {
 };
 
 const feedbackMap: Record<string, string> = {
-  "engagement-sent": "Votre demande a ete transmise a l'association.",
+  "engagement-sent": "Votre demande a été transmise à l'association.",
   "engagement-invalid": "Choisissez un type de demande et indiquez votre nom d'usage.",
-  "engagement-failed": "La demande n'a pas pu etre enregistree.",
+  "engagement-failed": "La demande n'a pas pu être enregistrée.",
 };
 
 function firstValue(value: string | string[] | undefined) {
@@ -22,9 +22,9 @@ function firstValue(value: string | string[] | undefined) {
 }
 
 const requestLabels: Record<string, string> = {
-  membership: "Adhesion",
+  membership: "Adhésion",
   donation: "Don ou soutien financier",
-  volunteer: "Benevolat",
+  volunteer: "Bénévolat",
   mentorship: "Mentorat",
   support: "Demande d'accompagnement",
 };
@@ -50,21 +50,25 @@ export default async function AssociationEngagementPage({
           className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
         >
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Retour a l'association
+          Retour à l'association
         </Link>
 
         <div className="space-y-3">
           <div className="eyebrow">Engagement ROSE-SEIN</div>
-          <h1 className="editorial-title">Adherer, soutenir, aider ou demander un lien direct.</h1>
+          <h1 className="editorial-title">Adhérer, soutenir, aider ou demander un lien direct.</h1>
           <p className="max-w-2xl text-base leading-7 text-on-surface-variant">
-            Cette page internalise les demandes principales a l'association. Le suivi
-            reste humain: une membre de l'equipe revient vers vous depuis l'application
-            ou par email selon votre preference.
+            Cette page internalise les demandes principales à l'association. Le suivi
+            reste humain: une membre de l'équipe revient vers vous depuis l'application
+            ou par email selon votre préférence.
           </p>
         </div>
 
         {feedback ? (
-          <div className={`surface-card ${feedbackTone}`}>
+          <div
+            className={`surface-card ${feedbackTone}`}
+            role={error ? "alert" : "status"}
+            aria-live={error ? "assertive" : "polite"}
+          >
             <p className="font-headline text-base font-semibold">Association</p>
             <p className="mt-2 text-sm leading-7">{feedback}</p>
           </div>
@@ -75,7 +79,7 @@ export default async function AssociationEngagementPage({
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
               <HeartHandshake aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
             </div>
-            <p className="mt-5 font-headline text-lg font-semibold text-on-surface">Adhesion & don</p>
+            <p className="mt-5 font-headline text-lg font-semibold text-on-surface">Adhésion & don</p>
             <p className="mt-2 text-sm leading-7 text-on-surface-variant">
               Formalisez votre envie de soutenir l'association sans quitter l'application.
             </p>
@@ -84,9 +88,9 @@ export default async function AssociationEngagementPage({
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
               <UsersRound aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
             </div>
-            <p className="mt-5 font-headline text-lg font-semibold text-on-surface">Benevolat & mentorat</p>
+            <p className="mt-5 font-headline text-lg font-semibold text-on-surface">Bénévolat & mentorat</p>
             <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-              Signalez votre disponibilite ou demandez une mise en relation utile.
+              Signalez votre disponibilité ou demandez une mise en relation utile.
             </p>
           </div>
           <div className="surface-card">
@@ -95,7 +99,7 @@ export default async function AssociationEngagementPage({
             </div>
             <p className="mt-5 font-headline text-lg font-semibold text-on-surface">Suivi simple</p>
             <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-              La demande reste tracable et l'association peut la traiter proprement.
+              La demande reste traçable et l'association peut la traiter proprement.
             </p>
           </div>
         </div>
@@ -149,7 +153,7 @@ export default async function AssociationEngagementPage({
 
             <label className="block space-y-2">
               <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                Telephone
+                Téléphone
               </span>
               <input
                 type="tel"
@@ -167,7 +171,7 @@ export default async function AssociationEngagementPage({
                 name="message"
                 rows={6}
                 className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface placeholder:text-outline"
-                placeholder="Expliquez votre besoin, votre disponibilite ou la forme d'engagement souhaitee."
+                placeholder="Expliquez votre besoin, votre disponibilité ou la forme d'engagement souhaitée."
               />
             </label>
 

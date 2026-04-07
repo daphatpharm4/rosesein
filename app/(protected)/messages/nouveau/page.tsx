@@ -48,7 +48,11 @@ export default async function NewConversationPage({ searchParams }: NewConversat
         </div>
 
         {error && feedbackMap[error] ? (
-          <div className="surface-card bg-primary/10 text-on-primary-container">
+          <div
+            className="surface-card bg-primary/10 text-on-primary-container"
+            role="alert"
+            aria-live="assertive"
+          >
             <p className="font-headline text-base font-semibold">Nouvelle conversation</p>
             <p className="mt-2 text-sm leading-7">{feedbackMap[error]}</p>
           </div>

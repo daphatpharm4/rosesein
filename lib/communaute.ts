@@ -412,3 +412,13 @@ export async function getReplyReactionsMap(
 
   return result;
 }
+
+export async function getThreadReactionPayload(threadId: string): Promise<ReactionsPayload> {
+  const reactionsMap = await getThreadReactionsMap([threadId]);
+  return reactionsMap[threadId] ?? makeEmptyPayload();
+}
+
+export async function getReplyReactionPayload(replyId: string): Promise<ReactionsPayload> {
+  const reactionsMap = await getReplyReactionsMap([replyId]);
+  return reactionsMap[replyId] ?? makeEmptyPayload();
+}

@@ -79,7 +79,11 @@ export default async function ModerationPage({ searchParams }: ModerationPagePro
         </div>
 
         {feedback ? (
-          <div className={`surface-card ${feedbackTone}`}>
+          <div
+            className={`surface-card ${feedbackTone}`}
+            role={error ? "alert" : "status"}
+            aria-live={error ? "assertive" : "polite"}
+          >
             <p className="font-headline text-base font-semibold">Modération</p>
             <p className="mt-2 text-sm leading-7">{feedback}</p>
           </div>

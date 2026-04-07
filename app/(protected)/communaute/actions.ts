@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireCompletedProfile } from "@/lib/auth";
-import type { ReactionKind } from "@/lib/community-reactions";
+import type { ReactionKind, ReactionsPayload } from "@/lib/community-reactions";
+import { getReplyReactionPayload, getThreadReactionPayload } from "@/lib/communaute";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const VALID_KINDS = new Set<string>(["touche", "pense", "courage", "merci"]);
@@ -16,7 +17,7 @@ function normalizeText(value: FormDataEntryValue | null) {
 export async function toggleThreadReaction(
   threadId: string,
   kind: ReactionKind
-): Promise<void> {
+): Promise<ReactionsPayload> {
   if (!VALID_KINDS.has(kind)) throw new Error("Invalid reaction kind");
   const { user } = await requireCompletedProfile("/communaute");
   const supabase = await createSupabaseServerClient();
@@ -54,14 +55,14 @@ export async function toggleThreadReaction(
     }
   }
 
-  revalidatePath("/communaute");
-  revalidatePath(`/communaute/${threadId}`);
+  revalidatePath("/communaute", "layout");
+  return getThreadReactionPayload(threadId);
 }
 
 export async function toggleReplyReaction(
   replyId: string,
   kind: ReactionKind
-): Promise<void> {
+): Promise<ReactionsPayload> {
   if (!VALID_KINDS.has(kind)) throw new Error("Invalid reaction kind");
   const { user } = await requireCompletedProfile("/communaute");
   const supabase = await createSupabaseServerClient();
@@ -99,7 +100,8 @@ export async function toggleReplyReaction(
     }
   }
 
-  revalidatePath("/communaute");
+  revalidatePath("/communaute", "layout");
+  return getReplyReactionPayload(replyId);
 }
 
 export async function createCommunityThread(formData: FormData) {

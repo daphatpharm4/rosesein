@@ -39,12 +39,23 @@ export function ArticleContent({ blocks }: Props) {
 
         if (block.type === "image") {
           return (
-            <img
+            <figure
               key={index}
-              src={block.src}
-              alt={block.alt}
-              className="w-full rounded-brand-md object-cover"
-            />
+              className="overflow-hidden rounded-brand-md bg-surface-container-low"
+            >
+              <img
+                src={block.src}
+                alt={block.alt || ""}
+                aria-hidden={block.alt ? undefined : true}
+                loading={index === 0 ? undefined : "lazy"}
+                fetchPriority={index === 0 ? "high" : "auto"}
+                decoding="async"
+                width={1200}
+                height={675}
+                className="h-auto w-full object-cover"
+                style={{ aspectRatio: "16 / 9" }}
+              />
+            </figure>
           );
         }
 

@@ -56,7 +56,11 @@ export default async function NewCommunityThreadPage({
         </div>
 
         {error && feedbackMap[error] ? (
-          <div className="surface-card bg-primary/10 text-on-primary-container">
+          <div
+            className="surface-card bg-primary/10 text-on-primary-container"
+            role="alert"
+            aria-live="assertive"
+          >
             <p className="font-headline text-base font-semibold">Publication du sujet</p>
             <p className="mt-2 text-sm leading-7">{feedbackMap[error]}</p>
           </div>

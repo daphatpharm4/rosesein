@@ -5,16 +5,9 @@ import { redirect } from "next/navigation";
 
 import { requireUser, type ProfileKind } from "@/lib/auth";
 import { hasSupabaseBrowserEnv } from "@/lib/env";
+import { normalizeInternalPath } from "@/lib/internal-path";
 import { getRequestSiteUrl } from "@/lib/request-site-url";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-function normalizeRedirectTarget(value: FormDataEntryValue | null) {
-  if (typeof value !== "string") {
-    return "/messages";
-  }
-
-  return value.startsWith("/") ? value : "/messages";
-}
 
 function normalizeProfileKind(value: FormDataEntryValue | null): ProfileKind | null {
   if (value === "patient" || value === "caregiver") {
@@ -46,7 +39,9 @@ function appendStatus(targetPath: string, key: "status" | "error", value: string
 export async function signInWithMagicLink(formData: FormData) {
   const rawEmail = formData.get("email");
   const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
-  const redirectTo = normalizeRedirectTarget(formData.get("redirectTo"));
+  const redirectTo = normalizeInternalPath(
+    typeof formData.get("redirectTo") === "string" ? (formData.get("redirectTo") as string) : null,
+  );
 
   if (!email) {
     redirect(`/account?error=email-required&redirectTo=${encodeURIComponent(redirectTo)}`);
@@ -86,7 +81,9 @@ export async function signOut() {
 }
 
 export async function saveProfileSetup(formData: FormData) {
-  const redirectTo = normalizeRedirectTarget(formData.get("redirectTo"));
+  const redirectTo = normalizeInternalPath(
+    typeof formData.get("redirectTo") === "string" ? (formData.get("redirectTo") as string) : null,
+  );
   const profileKind = normalizeProfileKind(formData.get("profileKind"));
   const displayName = normalizeDisplayName(formData.get("displayName"));
   const pseudonym = normalizeOptionalText(formData.get("pseudonym"));

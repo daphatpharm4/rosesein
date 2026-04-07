@@ -1,20 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { hasSupabaseBrowserEnv } from "@/lib/env";
+import { normalizeInternalPath } from "@/lib/internal-path";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-function normalizeNext(value: string | null) {
-  if (!value || !value.startsWith("/")) {
-    return "/messages";
-  }
-
-  return value;
-}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = normalizeNext(searchParams.get("next"));
+  const next = normalizeInternalPath(searchParams.get("next"));
 
   if (!hasSupabaseBrowserEnv()) {
     return NextResponse.redirect(new URL("/account?error=missing-supabase-env", request.url));

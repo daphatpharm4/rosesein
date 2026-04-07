@@ -14,15 +14,15 @@ type AdminMessagingPageProps = {
 };
 
 const feedbackMap: Record<string, string> = {
-  "broadcast-sent": "La diffusion a ete envoyee et les notifications ont ete declenchees.",
-  "group-created": "Le groupe officiel a ete cree et ses membres ont ete prevenus.",
+  "broadcast-sent": "La diffusion a été envoyée et les notifications ont été déclenchées.",
+  "group-created": "Le groupe officiel a été créé et ses membres ont été prévenus.",
   "subject-required": "Ajoutez un sujet pour la diffusion.",
   "title-required": "Ajoutez un titre pour le groupe.",
-  "body-too-short": "Le message doit contenir au moins 10 caracteres.",
+  "body-too-short": "Le message doit contenir au moins 10 caractères.",
   "segment-invalid": "Le segment choisi est invalide.",
-  "no-members": "Selectionnez au moins un membre pour le groupe.",
-  "broadcast-failed": "La diffusion n'a pas pu etre envoyee.",
-  "group-failed": "Le groupe n'a pas pu etre cree.",
+  "no-members": "Sélectionnez au moins un membre pour le groupe.",
+  "broadcast-failed": "La diffusion n'a pas pu être envoyée.",
+  "group-failed": "Le groupe n'a pas pu être créé.",
 };
 
 function firstValue(value: string | string[] | undefined) {
@@ -60,11 +60,11 @@ export default async function AdminMessagingPage({
           className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
         >
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Retour a l'administration
+          Retour à l'administration
         </Link>
 
         <div className="space-y-3">
-          <div className="eyebrow">Diffusions equipe</div>
+          <div className="eyebrow">Diffusions équipe</div>
           <h1 className="editorial-title">Informer largement sans perdre le cadre.</h1>
           <p className="max-w-2xl text-base leading-7 text-on-surface-variant">
             Envoyez un message collectif par segment ou ouvrez un groupe officiel pour un
@@ -73,8 +73,12 @@ export default async function AdminMessagingPage({
         </div>
 
         {feedback ? (
-          <div className={`surface-card ${feedbackTone}`}>
-            <p className="font-headline text-base font-semibold">Messagerie equipe</p>
+          <div
+            className={`surface-card ${feedbackTone}`}
+            role={error ? "alert" : "status"}
+            aria-live={error ? "assertive" : "polite"}
+          >
+            <p className="font-headline text-base font-semibold">Messagerie équipe</p>
             <p className="mt-2 text-sm leading-7">{feedback}</p>
           </div>
         ) : null}
@@ -90,7 +94,7 @@ export default async function AdminMessagingPage({
                   Diffusion par segment
                 </p>
                 <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                  Cree un fil officiel pour chaque destinataire et complete les canaux
+                  Crée un fil officiel pour chaque destinataire et complète les canaux
                   in-app, email et push quand ils sont actifs.
                 </p>
               </div>
@@ -134,7 +138,7 @@ export default async function AdminMessagingPage({
                 required
                 minLength={10}
                 className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface placeholder:text-outline"
-                placeholder="Ecrivez un message simple, concret et actionnable."
+                placeholder="Écrivez un message simple, concret et actionnable."
               />
             </label>
 
@@ -157,8 +161,8 @@ export default async function AdminMessagingPage({
                   Groupe officiel
                 </p>
                 <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                  Ideal pour un atelier ferme, une preparation benevole ou un groupe de
-                  parole a effectif choisi.
+                  Idéal pour un atelier fermé, une préparation bénévole ou un groupe de
+                  parole à effectif choisi.
                 </p>
               </div>
             </div>
@@ -186,13 +190,13 @@ export default async function AdminMessagingPage({
                 required
                 minLength={10}
                 className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface placeholder:text-outline"
-                placeholder="Bonjour, voici le cadre et le premier repere pour ce groupe..."
+                placeholder="Bonjour, voici le cadre et le premier repère pour ce groupe..."
               />
             </label>
 
             <div className="space-y-3">
               <p className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                Membres a inclure
+                Membres à inclure
               </p>
               <MemberPicker members={members} />
             </div>
@@ -212,7 +216,7 @@ export default async function AdminMessagingPage({
             <div>
               <div className="eyebrow">Historique</div>
               <h2 className="font-headline text-xl font-semibold text-on-surface">
-                Dernieres diffusions
+                Dernières diffusions
               </h2>
             </div>
             {broadcasts.length > 0 ? (
@@ -231,7 +235,7 @@ export default async function AdminMessagingPage({
               ))
             ) : (
               <p className="text-sm leading-7 text-on-surface-variant">
-                Aucune diffusion enregistree pour le moment.
+                Aucune diffusion enregistrée pour le moment.
               </p>
             )}
           </div>

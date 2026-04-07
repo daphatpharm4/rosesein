@@ -5,6 +5,40 @@
 @layer base {
   :root {
     color-scheme: light;
+    --color-background: 248 249 250;
+    --color-surface: 248 249 250;
+    --color-surface-container: 235 238 240;
+    --color-surface-container-low: 241 244 245;
+    --color-surface-container-high: 229 233 235;
+    --color-surface-container-lowest: 255 255 255;
+    --color-surface-container-highest: 222 227 230;
+    --color-surface-tint: 178 37 79;
+    --color-primary: 178 37 79;
+    --color-primary-container: 252 94 132;
+    --color-primary-fixed-dim: 235 81 120;
+    --color-secondary: 87 96 104;
+    --color-secondary-container: 219 228 237;
+    --color-tertiary: 138 77 91;
+    --color-on-surface: 45 51 53;
+    --color-on-surface-variant: 90 96 98;
+    --color-on-primary: 255 247 247;
+    --color-on-primary-container: 55 0 17;
+    --color-on-secondary-container: 74 83 90;
+    --color-outline: 118 124 126;
+    --color-outline-variant: 173 179 181;
+    --gradient-primary: linear-gradient(
+      135deg,
+      rgb(var(--color-primary)) 0%,
+      rgb(var(--color-primary-container)) 100%
+    );
+    --shadow-ambient: 0 10px 30px rgba(45, 51, 53, 0.05);
+    --surface-border: rgba(173, 179, 181, 0.34);
+    --glass-background: rgba(248, 249, 250, 0.92);
+    --glass-border: rgba(173, 179, 181, 0.16);
+    --ambient-glow-soft: rgba(252, 94, 132, 0.12);
+    --ambient-glow-deep: rgba(178, 37, 79, 0.08);
+    --focus-ring-inner: rgba(255, 247, 247, 0.96);
+    --focus-ring-outer: rgba(178, 37, 79, 0.32);
   }
 
   html {
@@ -15,11 +49,11 @@
   body {
     min-height: 100vh;
     background:
-      radial-gradient(circle at top left, rgba(252, 94, 132, 0.14), transparent 28%),
-      radial-gradient(circle at top right, rgba(178, 37, 79, 0.09), transparent 24%),
-      #f8f9fa;
-    color: #2d3335;
-    font-family: "Be Vietnam Pro", system-ui, sans-serif;
+      radial-gradient(circle at top left, var(--ambient-glow-soft), transparent 28%),
+      radial-gradient(circle at top right, var(--ambient-glow-deep), transparent 24%),
+      rgb(var(--color-background));
+    color: rgb(var(--color-on-surface));
+    font-family: var(--font-be-vietnam-pro), system-ui, sans-serif;
   }
 
   h1,
@@ -28,28 +62,56 @@
   h4,
   h5,
   h6 {
-    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+    font-family: var(--font-plus-jakarta-sans), system-ui, sans-serif;
     letter-spacing: -0.03em;
   }
 
   *:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(178, 37, 79, 0.15);
+    box-shadow:
+      0 0 0 2px var(--focus-ring-inner),
+      0 0 0 5px var(--focus-ring-outer);
+  }
+
+  @media (forced-colors: active) {
+    *:focus-visible {
+      outline: 2px solid CanvasText;
+      outline-offset: 3px;
+      box-shadow: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
 @layer components {
   .glass-panel {
-    background: rgba(248, 249, 250, 0.82);
-    backdrop-filter: blur(18px);
+    background: var(--glass-background);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(10px);
   }
 
   .surface-section {
-    @apply rounded-brand-xl bg-surface-container-low px-6 py-7;
+    @apply rounded-brand-xl bg-surface-container-low/80 px-6 py-7;
+    border: 1px solid var(--surface-border);
   }
 
   .surface-card {
-    @apply rounded-brand-md bg-surface-container-lowest px-5 py-5 shadow-ambient;
+    @apply rounded-brand-md bg-surface-container-lowest/95 px-5 py-5 shadow-ambient;
+    border: 1px solid var(--surface-border);
   }
 
   .eyebrow {

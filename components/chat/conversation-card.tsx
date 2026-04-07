@@ -28,20 +28,20 @@ export function ConversationCard({ conversation }: ConversationCardProps) {
   return (
     <Link
       href={conversation.href as Route}
-      className={`block w-full rounded-brand-md p-5 text-left transition-transform duration-200 hover:-translate-y-0.5 ${
+      className={`block w-full rounded-brand-xl border p-4 text-left transition-colors duration-200 ${
         conversation.active
-          ? "bg-surface-container-lowest shadow-ambient"
-          : "bg-surface-container-low"
+          ? "border-primary/30 bg-primary/5 shadow-ambient"
+          : "border-outline-variant/40 bg-surface-container-lowest hover:bg-surface-container-low"
       }`}
       aria-label={`Ouvrir la conversation ${conversation.name}`}
     >
       <div className="flex items-start gap-4">
         <div className="relative shrink-0">
           <div
-            className={`flex h-14 w-14 items-center justify-center rounded-full ${accentClass}`}
+            className={`flex h-12 w-12 items-center justify-center rounded-full ${accentClass}`}
           >
             {conversation.kind === "direct" ? (
-              <span className="font-headline text-base font-bold">
+              <span className="font-headline text-sm font-bold">
                 {conversation.initials}
               </span>
             ) : (
@@ -58,10 +58,15 @@ export function ConversationCard({ conversation }: ConversationCardProps) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-start justify-between gap-3">
-            <h3 className="font-headline text-base font-semibold text-on-surface">
-              {conversation.name}
-            </h3>
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-headline text-base font-semibold text-on-surface">
+                {conversation.name}
+              </h3>
+              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-outline">
+                {conversation.scope === "association" ? "Association" : "Prive"}
+              </p>
+            </div>
             <span
               className={`whitespace-nowrap font-label text-xs ${
                 conversation.active ? "text-primary" : "text-on-surface-variant"
@@ -70,8 +75,8 @@ export function ConversationCard({ conversation }: ConversationCardProps) {
               {conversation.timestamp}
             </span>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <p className="truncate text-sm text-on-surface-variant">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm leading-6 text-on-surface-variant">
               {conversation.preview}
             </p>
             {conversation.unreadCount ? (

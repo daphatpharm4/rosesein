@@ -16,6 +16,7 @@ function urlBase64ToUint8Array(base64String: string) {
 export function PushChannelManager({ vapidPublicKey }: PushChannelManagerProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const liveMessage = status ?? (busy ? "Mise à jour du canal de notification…" : "");
 
   const enablePush = async () => {
     if (!vapidPublicKey) {
@@ -116,7 +117,15 @@ export function PushChannelManager({ vapidPublicKey }: PushChannelManagerProps) 
           Retirer cet appareil
         </button>
       </div>
-      {status ? <p className="text-sm leading-7 text-on-surface-variant">{status}</p> : null}
+      <p
+        role="status"
+        aria-live="polite"
+        className={`min-h-[1.75rem] text-sm leading-7 text-on-surface-variant ${
+          liveMessage ? "" : "sr-only"
+        }`}
+      >
+        {liveMessage}
+      </p>
     </div>
   );
 }

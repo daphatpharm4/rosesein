@@ -8,7 +8,7 @@ type ConversationListProps = {
 export function ConversationList({ conversations }: ConversationListProps) {
   if (conversations.length === 0) {
     return (
-      <div className="surface-card">
+      <div className="rounded-brand-xl border border-outline-variant/40 bg-surface-container-lowest px-5 py-5 shadow-ambient">
         <p className="font-headline text-lg font-semibold text-on-surface">
           Aucun résultat pour cette recherche
         </p>
@@ -20,7 +20,7 @@ export function ConversationList({ conversations }: ConversationListProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {conversations.map((conversation) => (
         <ConversationCard key={conversation.id} conversation={conversation} />
       ))}

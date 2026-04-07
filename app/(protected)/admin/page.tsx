@@ -66,7 +66,7 @@ export default async function AdminPage() {
                 Utilisateurs
               </p>
               <p className="mt-1 text-sm leading-6 text-on-surface-variant">
-                Roles staff, profils pseudonymes et gestion des acces.
+                Rôles staff, profils pseudonymes et gestion des accès.
               </p>
             </div>
           </Link>

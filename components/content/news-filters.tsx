@@ -35,12 +35,16 @@ export function NewsFilters({ articles, events, configured }: Props) {
     <div className="space-y-6">
       {/* Search */}
       <div className="relative">
+        <label htmlFor="news-search" className="sr-only">
+          Rechercher dans les actualités
+        </label>
         <Search
           aria-hidden="true"
           className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"
           strokeWidth={1.8}
         />
         <input
+          id="news-search"
           type="search"
           placeholder="Rechercher un sujet..."
           value={search}
@@ -62,6 +66,7 @@ export function NewsFilters({ articles, events, configured }: Props) {
         {allCategories.map((cat) => (
           <button
             key={cat}
+            type="button"
             onClick={() => {
               const params = new URLSearchParams(searchParams.toString());
               if (cat === "Tout") {
