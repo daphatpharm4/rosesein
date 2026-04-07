@@ -100,7 +100,7 @@ export function MessageInbox({ conversations }: MessageInboxProps) {
                 className="motion-cta inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
               >
                 <MessageSquarePlus aria-hidden="true" className="h-4 w-4" strokeWidth={2} />
-                Nouvelle conversation
+                Nouveau message ou groupe
               </Link>
               <Link
                 href={"/aide" as Route}
@@ -121,8 +121,8 @@ export function MessageInbox({ conversations }: MessageInboxProps) {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm leading-6 text-on-surface-variant">
               {scope === "association"
-                ? "Retrouvez les échanges avec l'association et les espaces de coordination."
-                : "Retrouvez les conversations directes avec vos contacts de confiance."}
+                ? "Retrouvez les échanges officiels avec l'association."
+                : "Retrouvez les conversations directes et les groupes privés entre membres."}
             </p>
             <p className="font-label text-xs uppercase tracking-[0.16em] text-outline">
               {visibleConversations.length} conversation

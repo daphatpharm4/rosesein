@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireCompletedProfile } from "@/lib/auth";
-import { notifyUser } from "@/lib/app-notifications";
+import { notifyManyUsers, notifyUser } from "@/lib/app-notifications";
 import type { ReportReason } from "@/lib/moderation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -41,6 +41,17 @@ function normalizeOptionalText(value: FormDataEntryValue | null) {
 
 function normalizeMessageId(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeIdList(values: FormDataEntryValue[]) {
+  return Array.from(
+    new Set(
+      values
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 export async function sendMessage(formData: FormData) {
@@ -140,6 +151,59 @@ export async function startDirectConversation(formData: FormData) {
     body: body.slice(0, 140),
     href: `/messages/${threadId}`,
   });
+
+  revalidatePath("/messages");
+  revalidatePath(`/messages/${threadId}`);
+  redirect(`/messages/${threadId}?status=message-sent`);
+}
+
+export async function createGroupConversation(formData: FormData) {
+  const title = normalizeBody(formData.get("title"));
+  const body = normalizeBody(formData.get("body"));
+  const memberIds = normalizeIdList(formData.getAll("memberIds"));
+
+  if (!title) {
+    redirect("/messages/nouveau?error=group-title-required");
+  }
+
+  if (!body) {
+    redirect("/messages/nouveau?error=message-required");
+  }
+
+  if (memberIds.length < 2) {
+    redirect("/messages/nouveau?error=group-members-required");
+  }
+
+  const { user } = await requireCompletedProfile("/messages/nouveau");
+  const supabase = await createSupabaseServerClient();
+  const { data: threadId, error: threadError } = await supabase.rpc("open_group_conversation", {
+    candidate_group_title: title,
+    candidate_member_ids: memberIds,
+  });
+
+  if (threadError || !threadId) {
+    redirect("/messages/nouveau?error=group-create-failed");
+  }
+
+  const { error: insertError } = await supabase.from("messages").insert({
+    thread_id: threadId,
+    sender_id: user.id,
+    body,
+  });
+
+  if (insertError) {
+    redirect("/messages/nouveau?error=message-send-failed");
+  }
+
+  await notifyManyUsers(
+    memberIds.map((memberId) => ({
+      userId: memberId,
+      kind: "message",
+      title: `Nouveau groupe : ${title}`,
+      body: body.slice(0, 140),
+      href: `/messages/${threadId}`,
+    })),
+  );
 
   revalidatePath("/messages");
   revalidatePath(`/messages/${threadId}`);
