@@ -79,7 +79,7 @@ export function NotificationBellClient({
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="relative flex h-11 w-11 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant transition-colors hover:bg-surface-container"
+        className="shell-action relative flex h-11 w-11 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant hover:bg-surface-container"
         aria-label={`Notifications${unreadCount > 0 ? ` — ${unreadCount} non lues` : ""}`}
         aria-expanded={open}
         aria-controls="notification-panel"
@@ -87,7 +87,7 @@ export function NotificationBellClient({
       >
         <Bell aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
         {unreadCount > 0 ? (
-          <span className="absolute right-2 top-2 flex h-2.5 w-2.5 rounded-full bg-primary" />
+          <span className="notification-unread-dot absolute right-2 top-2 flex h-2.5 w-2.5 rounded-full bg-primary" />
         ) : null}
       </button>
 
@@ -97,7 +97,7 @@ export function NotificationBellClient({
           role="dialog"
           aria-modal="false"
           aria-label="Notifications"
-          className="glass-panel absolute right-0 top-14 z-50 w-[min(20rem,calc(100vw-2rem))] rounded-brand-md shadow-ambient sm:w-80"
+          className="notification-panel glass-panel absolute right-0 top-14 z-50 w-[min(20rem,calc(100vw-2rem))] rounded-brand-md shadow-ambient sm:w-80"
         >
           <div className="flex items-center justify-between gap-4 px-4 py-3">
             <p className="font-headline text-sm font-semibold text-on-surface">Notifications</p>

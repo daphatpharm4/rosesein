@@ -1,10 +1,12 @@
 import Link from "next/link";
 import type { Route } from "next";
+import type { CSSProperties } from "react";
 import { Building2, Circle, MessageCircleHeart, Users } from "lucide-react";
 import type { Conversation } from "@/lib/messages";
 
 type ConversationCardProps = {
   conversation: Conversation;
+  index?: number;
 };
 
 function ConversationIcon({ conversation }: ConversationCardProps) {
@@ -19,20 +21,24 @@ function ConversationIcon({ conversation }: ConversationCardProps) {
   return <MessageCircleHeart aria-hidden="true" className="h-6 w-6" strokeWidth={1.8} />;
 }
 
-export function ConversationCard({ conversation }: ConversationCardProps) {
+export function ConversationCard({ conversation, index = 0 }: ConversationCardProps) {
   const accentClass =
     conversation.accent === "secondary"
       ? "bg-secondary-container text-on-secondary-container"
       : "bg-primary/10 text-primary";
+  const animationStyle: CSSProperties = {
+    ["--conversation-delay" as string]: `${Math.min(index * 44, 220)}ms`,
+  };
 
   return (
     <Link
       href={conversation.href as Route}
-      className={`block w-full rounded-brand-xl border p-4 text-left transition-colors duration-200 ${
+      className={`message-list-card block w-full rounded-brand-xl border p-4 text-left transition-colors duration-200 ${
         conversation.active
           ? "border-primary/30 bg-primary/5 shadow-ambient"
           : "border-outline-variant/40 bg-surface-container-lowest hover:bg-surface-container-low"
       }`}
+      style={animationStyle}
       aria-label={`Ouvrir la conversation ${conversation.name}`}
     >
       <div className="flex items-start gap-4">

@@ -39,13 +39,13 @@ export function BottomNav({ currentPath }: BottomNavProps) {
       aria-label="Navigation principale"
       className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-screen-md px-4 pb-4"
     >
-      <div className="flex items-center justify-around rounded-brand-xl border border-outline-variant/25 bg-background/92 px-3 py-3 shadow-ambient backdrop-blur-sm">
+      <div className="shell-bar flex items-center justify-around rounded-brand-xl border border-outline-variant/25 bg-background/92 px-3 py-3 shadow-ambient backdrop-blur-sm">
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
             aria-current={isActive(href) ? "page" : undefined}
-            className={`flex min-w-16 flex-col items-center gap-1 rounded-full px-4 py-2 text-center transition-colors duration-200 ${
+            className={`bottom-nav-item flex min-w-16 flex-col items-center gap-1 rounded-full px-4 py-2 text-center ${
               isActive(href)
                 ? "bg-surface-container-low text-primary"
                 : "text-on-surface-variant hover:bg-surface-container-low/70 hover:text-on-surface"

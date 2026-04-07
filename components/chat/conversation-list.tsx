@@ -21,8 +21,8 @@ export function ConversationList({ conversations }: ConversationListProps) {
 
   return (
     <div className="space-y-3">
-      {conversations.map((conversation) => (
-        <ConversationCard key={conversation.id} conversation={conversation} />
+      {conversations.map((conversation, index) => (
+        <ConversationCard key={conversation.id} conversation={conversation} index={index} />
       ))}
     </div>
   );

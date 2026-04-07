@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
+import type { CSSProperties } from "react";
 import {
   ArrowRight,
   CalendarHeart,
@@ -10,6 +11,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { HomeExperience } from "@/components/home/home-experience";
 import { AppShell } from "@/components/shell/app-shell";
 import { getCurrentUserContext } from "@/lib/auth";
 import type { ProfileKind, UserProfile } from "@/lib/auth";
@@ -157,6 +159,10 @@ function formatExpiryDate(value: string) {
   );
 }
 
+function revealDelay(value: string): CSSProperties {
+  return { ["--reveal-delay" as string]: value };
+}
+
 export default async function HomePage() {
   const [{ configured, latestArticle, nextEvent }, { user, profile }, associationMessage] =
     await Promise.all([
@@ -173,188 +179,253 @@ export default async function HomePage() {
 
   return (
     <AppShell currentPath="/">
-      <section className="space-y-10">
-        <div className="max-w-3xl space-y-3">
-          <div className="eyebrow">Accueil</div>
-          <div className="space-y-4 border-b border-outline-variant/40 pb-8">
-            {displayName ? (
-              <p className="font-headline text-lg font-semibold text-on-surface">
-                Bonjour, {displayName}
+      <HomeExperience>
+        <section className="space-y-10">
+          <div
+            className="max-w-3xl space-y-3"
+            data-reveal="hero"
+            style={revealDelay("40ms")}
+          >
+            <div className="eyebrow">Accueil</div>
+            <div className="space-y-4 border-b border-outline-variant/40 pb-8">
+              {displayName ? (
+                <p className="font-headline text-lg font-semibold text-on-surface">
+                  Bonjour, {displayName}
+                </p>
+              ) : null}
+              <h1 className="editorial-title max-w-2xl">
+                {difficultDayMode
+                  ? "Un repère simple pour aujourd'hui."
+                  : "Un seul prochain pas, puis le reste quand vous serez prête."}
+              </h1>
+              <p className="max-w-2xl text-base leading-8 text-on-surface-variant">
+                {profile
+                  ? todayTip
+                  : "ROSE-SEIN rassemble information validée, soutien humain et organisation personnelle dans un espace plus calme qu'un outil médical classique."}
               </p>
-            ) : null}
-            <h1 className="editorial-title max-w-2xl">
-              {difficultDayMode
-                ? "Un repère simple pour aujourd'hui."
-                : "Un seul prochain pas, puis le reste quand vous serez prête."}
-            </h1>
-            <p className="max-w-2xl text-base leading-8 text-on-surface-variant">
-              {profile
-                ? todayTip
-                : "ROSE-SEIN rassemble information validée, soutien humain et organisation personnelle dans un espace plus calme qu'un outil médical classique."}
-            </p>
-          </div>
-        </div>
-
-        <section className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:items-start">
-          <div className="surface-section space-y-5">
-            <div className="eyebrow">Votre prochain pas</div>
-            <div className="space-y-3">
-              <h2 className="max-w-2xl font-headline text-3xl font-bold text-on-surface sm:text-4xl">
-                {nextStep.title}
-              </h2>
-              <p className="max-w-xl text-base leading-8 text-on-surface-variant">
-                {nextStep.description}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href={nextStep.href}
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
-              >
-                {nextStep.cta}
-                <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2} />
-              </Link>
-              <Link
-                href={"/aide" as Route}
-                className="inline-flex items-center gap-2 rounded-full bg-surface-container-low px-5 py-3 font-label text-sm font-semibold text-primary"
-              >
-                Trouver un repère ou une aide
-              </Link>
             </div>
           </div>
 
-          <aside className="border-t border-outline-variant/30 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-            <div className="flex items-center gap-3 text-primary">
-              <Sparkles aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-              <p className="font-headline text-lg font-semibold text-on-surface">
-                En ce moment
-              </p>
-            </div>
+          <section className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:items-start">
+            <div
+              className="home-hero-shell surface-section space-y-6"
+              data-home-hero
+              data-reveal="hero"
+              style={revealDelay("160ms")}
+            >
+              <div aria-hidden="true" className="home-hero-orbit" />
+              <div
+                aria-hidden="true"
+                className="home-hero-orbit home-hero-orbit-secondary"
+              />
 
-            {associationMessage ? (
-              <div className="mt-4 space-y-3">
-                <p className="font-headline text-xl font-semibold text-on-surface">
-                  {associationMessage.title}
-                </p>
-                <p className="text-sm leading-7 text-on-surface-variant">
-                  {associationMessage.body}
-                </p>
-                <p className="font-label text-xs uppercase tracking-[0.16em] text-outline">
-                  Jusqu&apos;au {formatExpiryDate(associationMessage.expiresAt)}
-                </p>
-              </div>
-            ) : latestArticle ? (
-              <div className="mt-4 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                  {latestArticle.category}
-                </p>
-                <p className="font-headline text-xl font-semibold text-on-surface">
-                  {latestArticle.title}
-                </p>
-                <p className="text-sm leading-7 text-on-surface-variant">
-                  {latestArticle.summary}
-                </p>
-                <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-[0.16em] text-outline">
-                    Publié le {formatPublishedDate(latestArticle.publishedAt)}
+              <div className="relative z-10 space-y-5">
+                <div className="home-hero-accent">
+                  <Sparkles aria-hidden="true" className="h-4 w-4 text-primary" strokeWidth={1.8} />
+                  <span className="font-label text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                    Votre prochain pas
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  <h2 className="max-w-2xl font-headline text-3xl font-bold text-on-surface sm:text-4xl">
+                    {nextStep.title}
+                  </h2>
+                  <p className="max-w-xl text-base leading-8 text-on-surface-variant">
+                    {nextStep.description}
                   </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
                   <Link
-                    href={`/actualites/${latestArticle.slug}`}
-                    className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                    href={nextStep.href}
+                    className="motion-cta inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
                   >
-                    Lire l&apos;article
-                    <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2} />
+                    {nextStep.cta}
+                    <ArrowRight
+                      aria-hidden="true"
+                      className="motion-link-arrow h-4 w-4"
+                      strokeWidth={2}
+                    />
+                  </Link>
+                  <Link
+                    href={"/aide" as Route}
+                    className="motion-cta inline-flex items-center gap-2 rounded-full bg-surface-container-low px-5 py-3 font-label text-sm font-semibold text-primary"
+                  >
+                    Trouver un repère ou une aide
                   </Link>
                 </div>
               </div>
-            ) : nextEvent ? (
-              <div className="mt-4 space-y-3">
-                <p className="font-headline text-xl font-semibold text-on-surface">
-                  {nextEvent.title}
-                </p>
-                <p className="text-sm leading-7 text-on-surface-variant">
-                  {formatEventSchedule(nextEvent)}
-                </p>
-                {nextEvent.locationLabel ? (
-                  <p className="text-xs uppercase tracking-[0.16em] text-outline">
-                    {nextEvent.locationLabel}
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm leading-7 text-on-surface-variant">
-                {configured
-                  ? "Aucun contenu mis en avant pour le moment. L'accueil reste volontairement léger."
-                  : "Configurez Supabase pour afficher ici les contenus publics et les événements à venir."}
-              </p>
-            )}
-          </aside>
-        </section>
-
-        <section className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(16rem,0.9fr)]">
-          <div className="space-y-4">
-            <div>
-              <div className="eyebrow">Autres accès</div>
-              <h2 className="font-headline text-2xl font-bold text-on-surface">
-                Quand vous en avez besoin, tout le reste reste à portée.
-              </h2>
             </div>
 
-            <div className="divide-y divide-outline-variant/25 border-y border-outline-variant/30">
-              {shortcuts.map(({ title, description, href, icon: Icon }) => (
+            <aside
+              className="home-rail border-t border-outline-variant/30 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"
+              data-reveal="hero"
+              style={revealDelay("280ms")}
+            >
+              <div className="flex items-center gap-3 text-primary">
+                <Sparkles aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+                <p className="font-headline text-lg font-semibold text-on-surface">
+                  En ce moment
+                </p>
+              </div>
+
+              {associationMessage ? (
+                <div className="mt-4 space-y-3">
+                  <p className="font-headline text-xl font-semibold text-on-surface">
+                    {associationMessage.title}
+                  </p>
+                  <p className="text-sm leading-7 text-on-surface-variant">
+                    {associationMessage.body}
+                  </p>
+                  <p className="font-label text-xs uppercase tracking-[0.16em] text-outline">
+                    Jusqu&apos;au {formatExpiryDate(associationMessage.expiresAt)}
+                  </p>
+                </div>
+              ) : latestArticle ? (
+                <div className="mt-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                    {latestArticle.category}
+                  </p>
+                  <p className="font-headline text-xl font-semibold text-on-surface">
+                    {latestArticle.title}
+                  </p>
+                  <p className="text-sm leading-7 text-on-surface-variant">
+                    {latestArticle.summary}
+                  </p>
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.16em] text-outline">
+                      Publié le {formatPublishedDate(latestArticle.publishedAt)}
+                    </p>
+                    <Link
+                      href={`/actualites/${latestArticle.slug}`}
+                      className="motion-link-row inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                    >
+                      Lire l&apos;article
+                      <ArrowRight
+                        aria-hidden="true"
+                        className="motion-link-arrow h-4 w-4"
+                        strokeWidth={2}
+                      />
+                    </Link>
+                  </div>
+                </div>
+              ) : nextEvent ? (
+                <div className="mt-4 space-y-3">
+                  <p className="font-headline text-xl font-semibold text-on-surface">
+                    {nextEvent.title}
+                  </p>
+                  <p className="text-sm leading-7 text-on-surface-variant">
+                    {formatEventSchedule(nextEvent)}
+                  </p>
+                  {nextEvent.locationLabel ? (
+                    <p className="text-xs uppercase tracking-[0.16em] text-outline">
+                      {nextEvent.locationLabel}
+                    </p>
+                  ) : null}
+                  <Link
+                    href={`/actualites/evenements/${nextEvent.id}` as Route}
+                    className="motion-link-row inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                  >
+                    Voir l&apos;événement
+                    <ArrowRight
+                      aria-hidden="true"
+                      className="motion-link-arrow h-4 w-4"
+                      strokeWidth={2}
+                    />
+                  </Link>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm leading-7 text-on-surface-variant">
+                  {configured
+                    ? "Aucun contenu mis en avant pour le moment. L'accueil reste volontairement léger."
+                    : "Configurez Supabase pour afficher ici les contenus publics et les événements à venir."}
+                </p>
+              )}
+            </aside>
+          </section>
+
+          <section className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(16rem,0.9fr)]">
+            <div
+              className="space-y-4"
+              data-reveal="section"
+              style={revealDelay("120ms")}
+            >
+              <div>
+                <div className="eyebrow">Autres accès</div>
+                <h2 className="font-headline text-2xl font-bold text-on-surface">
+                  Quand vous en avez besoin, tout le reste reste à portée.
+                </h2>
+              </div>
+
+              <div className="home-list divide-y divide-outline-variant/25 border-b border-outline-variant/30 pt-px">
+                {shortcuts.map(({ title, description, href, icon: Icon }) => (
+                  <Link
+                    key={title}
+                    href={href}
+                    className="motion-link-row group flex items-start gap-4 py-5 hover:text-on-surface"
+                  >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-headline text-lg font-semibold text-on-surface">
+                        {title}
+                      </p>
+                      <p className="mt-1 text-sm leading-7 text-on-surface-variant">
+                        {description}
+                      </p>
+                    </div>
+                    <ArrowRight
+                      aria-hidden="true"
+                      className="motion-link-arrow mt-1 h-4 w-4 shrink-0 text-primary"
+                      strokeWidth={2}
+                    />
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <aside
+              className="space-y-4 border-t border-outline-variant/30 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"
+              data-reveal="section"
+              style={revealDelay("220ms")}
+            >
+              <div className="eyebrow">Repère rapide</div>
+              <p className="font-headline text-xl font-semibold text-on-surface">
+                Si l&apos;énergie manque, gardez seulement deux chemins en tête.
+              </p>
+              <div className="space-y-3">
                 <Link
-                  key={title}
-                  href={href}
-                  className="group flex items-start gap-4 py-5 transition-colors hover:text-on-surface"
+                  href={"/messages" as Route}
+                  className="motion-link-row home-quick-link flex items-center justify-between rounded-brand bg-surface-container-low px-4 py-4 font-label text-sm font-semibold text-on-surface hover:bg-surface-container"
                 >
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-headline text-lg font-semibold text-on-surface">
-                      {title}
-                    </p>
-                    <p className="mt-1 text-sm leading-7 text-on-surface-variant">
-                      {description}
-                    </p>
-                  </div>
+                  Lire mes messages
                   <ArrowRight
                     aria-hidden="true"
-                    className="mt-1 h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-1"
+                    className="motion-link-arrow h-4 w-4 text-primary"
                     strokeWidth={2}
                   />
                 </Link>
-              ))}
-            </div>
-          </div>
-
-          <aside className="space-y-4 border-t border-outline-variant/30 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-            <div className="eyebrow">Repère rapide</div>
-            <p className="font-headline text-xl font-semibold text-on-surface">
-              Si l&apos;énergie manque, gardez seulement deux chemins en tête.
-            </p>
-            <div className="space-y-3">
-              <Link
-                href={"/messages" as Route}
-                className="flex items-center justify-between rounded-brand bg-surface-container-low px-4 py-4 font-label text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container"
-              >
-                Lire mes messages
-                <ArrowRight aria-hidden="true" className="h-4 w-4 text-primary" strokeWidth={2} />
-              </Link>
-              <Link
-                href={"/parcours" as Route}
-                className="flex items-center justify-between rounded-brand bg-surface-container-low px-4 py-4 font-label text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container"
-              >
-                Reprendre mon parcours
-                <ArrowRight aria-hidden="true" className="h-4 w-4 text-primary" strokeWidth={2} />
-              </Link>
-            </div>
-            <p className="text-sm leading-7 text-on-surface-variant">
-              Le reste peut attendre. Revenez ici quand vous voulez un autre point de départ.
-            </p>
-          </aside>
+                <Link
+                  href={"/parcours" as Route}
+                  className="motion-link-row home-quick-link flex items-center justify-between rounded-brand bg-surface-container-low px-4 py-4 font-label text-sm font-semibold text-on-surface hover:bg-surface-container"
+                >
+                  Reprendre mon parcours
+                  <ArrowRight
+                    aria-hidden="true"
+                    className="motion-link-arrow h-4 w-4 text-primary"
+                    strokeWidth={2}
+                  />
+                </Link>
+              </div>
+              <p className="text-sm leading-7 text-on-surface-variant">
+                Le reste peut attendre. Revenez ici quand vous voulez un autre point de départ.
+              </p>
+            </aside>
+          </section>
         </section>
-      </section>
+      </HomeExperience>
     </AppShell>
   );
 }

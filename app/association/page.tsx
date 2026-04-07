@@ -202,6 +202,13 @@ export default async function AssociationPage() {
                         {event.locationLabel}
                       </p>
                     ) : null}
+                    <Link
+                      href={`/actualites/evenements/${event.id}` as Route}
+                      className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                    >
+                      Voir et s&apos;inscrire
+                      <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+                    </Link>
                   </div>
                 </article>
               ))}

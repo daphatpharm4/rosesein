@@ -1,6 +1,8 @@
 import { hasSupabaseBrowserEnv } from "@/lib/env";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 
+export const EVENT_TIME_ZONE = "Europe/Paris";
+
 export type PublishedArticle = {
   id: string;
   slug: string;
@@ -201,16 +203,19 @@ export function formatEventSchedule(event: PublishedEvent) {
       weekday: "long",
       day: "numeric",
       month: "long",
+      timeZone: EVENT_TIME_ZONE,
     }).format(startsAt);
 
     const startTime = new Intl.DateTimeFormat("fr-FR", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: EVENT_TIME_ZONE,
     }).format(startsAt);
 
     const endTime = new Intl.DateTimeFormat("fr-FR", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: EVENT_TIME_ZONE,
     }).format(endsAt);
 
     return `${dateLabel} · ${startTime} - ${endTime}`;
@@ -219,5 +224,6 @@ export function formatEventSchedule(event: PublishedEvent) {
   return new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "full",
     timeStyle: "short",
+    timeZone: EVENT_TIME_ZONE,
   }).format(startsAt);
 }

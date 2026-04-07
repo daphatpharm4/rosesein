@@ -18,19 +18,18 @@ export async function AppShell({
   floatingAction,
   children,
 }: AppShellProps) {
-  const shouldLoadUserContext =
-    currentPath === "/" ||
-    currentPath === "/messages" ||
-    currentPath === "/parcours" ||
-    currentPath === "/communaute" ||
-    currentPath === "/admin" ||
-    currentPath === "/parametres";
-  const context = shouldLoadUserContext ? await getCurrentUserContext() : null;
+  const context = await getCurrentUserContext();
   const difficultDayMode = context?.profile?.difficultDayMode ?? false;
+  const hasStaffAccess =
+    context?.roles.some((role) => role === "moderator" || role === "admin") ?? false;
 
   return (
     <div className={`min-h-screen ${difficultDayMode ? "bg-primary/5" : ""}`}>
-      <TopAppBar title={title} />
+      <TopAppBar
+        title={title}
+        showAdminLink={hasStaffAccess}
+        adminActive={currentPath.startsWith("/admin")}
+      />
       <main
         id="main-content"
         className={`mx-auto flex min-h-screen w-full flex-col pb-32 ${
