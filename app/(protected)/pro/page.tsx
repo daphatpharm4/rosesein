@@ -14,13 +14,14 @@ import type { Route } from "next";
 import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { SubscriptionBadge } from "@/components/pro/subscription-badge";
-import { requireProfessional } from "@/lib/auth";
+import { requireProfessionalProfile } from "@/lib/auth";
 import { getProfessionalAgendaSnapshot } from "@/lib/professional-agenda";
 import {
   SUBSCRIPTION_TIER_DEFINITIONS,
   getProfessionalCategoryLabel,
   getProfessionalPerformanceStats,
-  getProfessionalProfileByUserId,
+  tierIncludesAgenda,
+  tierIncludesCollectiveFormats,
 } from "@/lib/professional";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,10 @@ type ProDashboardPageProps = {
 const feedbackMap: Record<string, string> = {
   "profile-ready":
     "Votre espace professionnel est prêt. Vous pouvez maintenant publier votre fiche et organiser vos créneaux.",
+  "agenda-tier-locked":
+    "L'agenda intégré est réservé aux offres Visibilité + agenda et Partenaire.",
+  "events-tier-locked":
+    "Les ateliers et webinaires sont réservés à l'offre Partenaire.",
 };
 
 function firstValue(value: string | string[] | undefined) {
@@ -41,12 +46,12 @@ function firstValue(value: string | string[] | undefined) {
 export default async function ProDashboardPage({ searchParams }: ProDashboardPageProps) {
   const query = (await searchParams) ?? {};
   const status = firstValue(query.status);
-  const { user } = await requireProfessional("/pro");
-  const professionalProfile = await getProfessionalProfileByUserId(user.id);
-
-  if (!professionalProfile) {
-    return null;
-  }
+  const error = firstValue(query.error);
+  const { user, professionalProfile } = await requireProfessionalProfile("/pro");
+  const hasAgendaAccess = tierIncludesAgenda(professionalProfile.subscriptionTier);
+  const hasCollectiveFormatsAccess = tierIncludesCollectiveFormats(
+    professionalProfile.subscriptionTier,
+  );
 
   const [
     { upcomingAvailabilities, appointments },
@@ -62,16 +67,52 @@ export default async function ProDashboardPage({ searchParams }: ProDashboardPag
   const needsFirstStep = upcomingAvailabilities.length === 0 && appointments.length === 0;
   const publicHref = `/professionnels/${professionalProfile.slug}`;
   const tierDefinition = SUBSCRIPTION_TIER_DEFINITIONS[professionalProfile.subscriptionTier];
+  const feedbackKey = error ?? status;
+  const feedback = feedbackKey ? feedbackMap[feedbackKey] : null;
+  const feedbackTone = error
+    ? "bg-primary/10 text-on-primary-container"
+    : "bg-secondary-container/70 text-on-secondary-container";
+
+  const quickActions = [
+    ...(hasAgendaAccess
+      ? [{
+          href: "/pro/agenda" as Route,
+          title: "Agenda professionnel",
+          description:
+            "Publier des créneaux, surveiller les demandes et garder une vue nette sur les rendez-vous.",
+          icon: CalendarDays,
+          iconClassName: "bg-primary/10 text-primary",
+        }]
+      : []),
+    {
+      href: "/pro/profil" as Route,
+      title: "Fiche publique",
+      description:
+        "Mettre à jour votre présentation, vos modalités de consultation et votre visibilité.",
+      icon: UserRound,
+      iconClassName: "bg-secondary-container text-on-secondary-container",
+    },
+    ...(hasCollectiveFormatsAccess
+      ? [{
+          href: "/pro/ateliers" as Route,
+          title: "Ateliers et webinaires",
+          description:
+            "Créer une page d'inscription dédiée pour vos formats collectifs et suivre les participantes.",
+          icon: CalendarRange,
+          iconClassName: "bg-surface-container-low text-primary",
+        }]
+      : []),
+  ];
 
   return (
     <AppShell title="Espace pro" currentPath="/pro">
       <section className="space-y-6">
         <BackLink href="/account" label="Retour au compte" />
 
-        {status && feedbackMap[status] ? (
-          <div className="surface-card bg-secondary-container/70 text-on-secondary-container" role="status">
+        {feedback ? (
+          <div className={`surface-card ${feedbackTone}`} role={error ? "alert" : "status"}>
             <p className="font-headline text-base font-semibold">Espace professionnel</p>
-            <p className="mt-2 text-sm leading-7">{feedbackMap[status]}</p>
+            <p className="mt-2 text-sm leading-7">{feedback}</p>
           </div>
         ) : null}
 
@@ -82,8 +123,9 @@ export default async function ProDashboardPage({ searchParams }: ProDashboardPag
               <div className="space-y-2">
                 <h1 className="editorial-title">Piloter votre présence sans bruit ni surcharge.</h1>
                 <p className="max-w-2xl text-base leading-8 text-on-surface-variant">
-                  Votre espace pro centralise la visibilité publique, l&apos;agenda et les
-                  demandes reçues pour vous laisser une lecture simple de l&apos;essentiel.
+                  {hasAgendaAccess
+                    ? "Votre espace pro centralise la visibilité publique, l'agenda et les demandes reçues pour vous laisser une lecture simple de l'essentiel."
+                    : "Votre espace pro centralise la fiche publique, le cadre de présentation et les repères utiles sans ouvrir d'outils qui ne sont pas inclus dans votre offre."}
                 </p>
               </div>
             </div>
@@ -99,31 +141,59 @@ export default async function ProDashboardPage({ searchParams }: ProDashboardPag
             </div>
           </div>
 
-          <div className="grid gap-3 xl:grid-cols-12">
-            <div className="rounded-brand-xl bg-surface-container-lowest/95 px-5 py-5 shadow-ambient xl:col-span-5">
-              <p className="text-xs uppercase tracking-[0.16em] text-outline">Demandes à traiter</p>
-              <p className="mt-2 font-headline text-4xl font-bold text-on-surface">{pendingCount}</p>
-              <p className="mt-2 max-w-sm text-sm leading-7 text-on-surface-variant">
-                Les demandes en attente demandent une réponse claire pour libérer ou confirmer le créneau.
-              </p>
+          {hasAgendaAccess ? (
+            <div className="grid gap-3 xl:grid-cols-12">
+              <div className="rounded-brand-xl bg-surface-container-lowest/95 px-5 py-5 shadow-ambient xl:col-span-5">
+                <p className="text-xs uppercase tracking-[0.16em] text-outline">Demandes à traiter</p>
+                <p className="mt-2 font-headline text-4xl font-bold text-on-surface">{pendingCount}</p>
+                <p className="mt-2 max-w-sm text-sm leading-7 text-on-surface-variant">
+                  Les demandes en attente demandent une réponse claire pour libérer ou confirmer le créneau.
+                </p>
+              </div>
+              <div className="rounded-brand-xl bg-surface-container-lowest/95 px-5 py-5 shadow-ambient xl:col-span-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-outline">Créneaux publiés</p>
+                <p className="mt-2 font-headline text-4xl font-bold text-on-surface">
+                  {upcomingAvailabilities.length}
+                </p>
+                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                  Disponibilités déjà préparées dans votre agenda.
+                </p>
+              </div>
+              <div className="rounded-brand-xl bg-surface-container-lowest/95 px-5 py-5 shadow-ambient xl:col-span-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-outline">Rendez-vous confirmés</p>
+                <p className="mt-2 font-headline text-4xl font-bold text-on-surface">{confirmedCount}</p>
+                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                  Consultations validées et déjà actées dans le parcours patient.
+                </p>
+              </div>
             </div>
-            <div className="rounded-brand-xl bg-surface-container-lowest/95 px-5 py-5 shadow-ambient xl:col-span-3">
-              <p className="text-xs uppercase tracking-[0.16em] text-outline">Créneaux publiés</p>
-              <p className="mt-2 font-headline text-4xl font-bold text-on-surface">
-                {upcomingAvailabilities.length}
-              </p>
-              <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                Disponibilités déjà préparées dans votre agenda.
-              </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-brand-xl bg-surface-container-lowest/95 px-5 py-5 shadow-ambient">
+                <p className="text-xs uppercase tracking-[0.16em] text-outline">Offre active</p>
+                <p className="mt-2 font-headline text-3xl font-bold text-on-surface">
+                  {tierDefinition.label}
+                </p>
+                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                  {tierDefinition.summary}
+                </p>
+              </div>
+              <div className="rounded-brand-xl bg-surface-container-lowest/95 px-5 py-5 shadow-ambient">
+                <p className="text-xs uppercase tracking-[0.16em] text-outline">Fiche publique</p>
+                <p className="mt-2 font-headline text-3xl font-bold text-on-surface">Active</p>
+                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                  Votre présence reste visible dans l'annuaire avec contact direct depuis la fiche.
+                </p>
+              </div>
+              <div className="rounded-brand-xl bg-surface-container-lowest/95 px-5 py-5 shadow-ambient">
+                <p className="text-xs uppercase tracking-[0.16em] text-outline">Agenda intégré</p>
+                <p className="mt-2 font-headline text-3xl font-bold text-on-surface">Non inclus</p>
+                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                  Cette offre n'ouvre ni créneaux publiés ni demandes de rendez-vous dans ROSE-SEIN.
+                </p>
+              </div>
             </div>
-            <div className="rounded-brand-xl bg-surface-container-lowest/95 px-5 py-5 shadow-ambient xl:col-span-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-outline">Rendez-vous confirmés</p>
-              <p className="mt-2 font-headline text-4xl font-bold text-on-surface">{confirmedCount}</p>
-              <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                Consultations validées et déjà actées dans le parcours patient.
-              </p>
-            </div>
-          </div>
+          )}
         </div>
 
         {needsFirstStep ? (
@@ -132,82 +202,51 @@ export default async function ProDashboardPage({ searchParams }: ProDashboardPag
               <div className="max-w-2xl space-y-2">
                 <div className="eyebrow">Premier pas conseillé</div>
                 <p className="font-headline text-xl font-semibold text-on-surface">
-                  Commencez par publier un premier créneau.
+                  {hasAgendaAccess
+                    ? "Commencez par publier un premier créneau."
+                    : "Commencez par finaliser votre fiche publique."}
                 </p>
                 <p className="text-base leading-8 text-on-surface-variant">
-                  Tant qu&apos;aucun créneau n&apos;est visible, la fiche reste consultable mais ne peut pas ouvrir une vraie demande de rendez-vous.
+                  {hasAgendaAccess
+                    ? "Tant qu'aucun créneau n'est visible, la fiche reste consultable mais ne peut pas ouvrir une vraie demande de rendez-vous."
+                    : "Avec l'offre Solidaire, l'essentiel est de rendre votre présentation claire et rassurante pour un contact direct depuis l'annuaire."}
                 </p>
               </div>
               <Link
-                href={"/pro/agenda" as Route}
+                href={(hasAgendaAccess ? "/pro/agenda" : "/pro/profil") as Route}
                 className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-surface-container-lowest px-4 py-2.5 font-label text-sm font-semibold text-primary shadow-ambient"
               >
-                Ouvrir l&apos;agenda
+                {hasAgendaAccess ? "Ouvrir l'agenda" : "Ouvrir la fiche"}
                 <ArrowUpRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
               </Link>
             </div>
           </div>
         ) : null}
 
-        <div
-          className={`grid gap-4 ${
-            professionalProfile.subscriptionTier === "partenaire"
-              ? "md:grid-cols-2 xl:grid-cols-3"
-              : "sm:grid-cols-2"
-          }`}
-        >
-          <Link
-            href={"/pro/agenda" as Route}
-            className="surface-card group flex items-start gap-4 transition-colors hover:border-primary/20 hover:bg-white"
-          >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <CalendarDays aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-            </div>
-            <div className="space-y-2">
-              <p className="font-headline text-lg font-semibold text-on-surface group-hover:text-primary">
-                Agenda professionnel
-              </p>
-              <p className="text-base leading-8 text-on-surface-variant">
-                Publier des créneaux, surveiller les demandes et garder une vue nette sur les rendez-vous.
-              </p>
-            </div>
-          </Link>
+        <div className={`grid gap-4 ${quickActions.length >= 3 ? "md:grid-cols-2 xl:grid-cols-3" : "sm:grid-cols-2"}`}>
+          {quickActions.map((action) => {
+            const Icon = action.icon;
 
-          <Link
-            href={"/pro/profil" as Route}
-            className="surface-card group flex items-start gap-4 transition-colors hover:border-primary/20 hover:bg-white"
-          >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
-              <UserRound aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-            </div>
-            <div className="space-y-2">
-              <p className="font-headline text-lg font-semibold text-on-surface group-hover:text-primary">
-                Fiche publique
-              </p>
-              <p className="text-base leading-8 text-on-surface-variant">
-                Mettre à jour votre présentation, vos modalités de consultation et votre visibilité.
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href={"/pro/ateliers" as Route}
-            className="surface-card group flex items-start gap-4 transition-colors hover:border-primary/20 hover:bg-white"
-          >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-container-low text-primary">
-              <CalendarRange aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-            </div>
-            <div className="space-y-2">
-              <p className="font-headline text-lg font-semibold text-on-surface group-hover:text-primary">
-                Ateliers et webinaires
-              </p>
-              <p className="text-base leading-8 text-on-surface-variant">
-                {professionalProfile.subscriptionTier === "partenaire"
-                  ? "Créer une page d'inscription dédiée pour vos formats collectifs et suivre les participantes."
-                  : "Voir ce que débloque l'offre Partenaire pour publier des formats collectifs."}
-              </p>
-            </div>
-          </Link>
+            return (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="surface-card group flex items-start gap-4 transition-colors hover:border-primary/20 hover:bg-white"
+              >
+                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${action.iconClassName}`}>
+                  <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+                </div>
+                <div className="space-y-2">
+                  <p className="font-headline text-lg font-semibold text-on-surface group-hover:text-primary">
+                    {action.title}
+                  </p>
+                  <p className="text-base leading-8 text-on-surface-variant">
+                    {action.description}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -232,9 +271,15 @@ export default async function ProDashboardPage({ searchParams }: ProDashboardPag
               <p className="font-headline text-base font-semibold text-on-surface">À garder en tête</p>
             </div>
             <ul className="space-y-3 text-base leading-8 text-on-surface-variant">
-              <li>Un créneau publié apparaît sur votre fiche publique.</li>
-              <li>Les demandes restent en attente tant qu&apos;elles ne sont pas confirmées.</li>
-              <li>Les annulations exigent désormais un motif, et les désistements tardifs sont tracés.</li>
+              <li>Votre fiche publique reste le socle de visibilité de votre offre actuelle.</li>
+              {hasAgendaAccess ? (
+                <li>Un créneau publié apparaît sur votre fiche publique et ouvre une demande de rendez-vous.</li>
+              ) : (
+                <li>L'offre Solidaire fonctionne sur contact direct, sans agenda intégré dans la plateforme.</li>
+              )}
+              {hasAgendaAccess ? (
+                <li>Les annulations exigent désormais un motif, et les désistements tardifs sont tracés.</li>
+              ) : null}
             </ul>
           </div>
         </div>

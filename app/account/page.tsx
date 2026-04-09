@@ -1,10 +1,16 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { ArrowRight, MailCheck, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 
 import { AppShell } from "@/components/shell/app-shell";
 import { getCurrentUserContext, PROFILE_KIND_LABELS } from "@/lib/auth";
 import { hasSupabaseBrowserEnv } from "@/lib/env";
 import { normalizeInternalPath } from "@/lib/internal-path";
+import {
+  getProfessionalProfileByUserId,
+  tierIncludesAgenda,
+  tierIncludesCollectiveFormats,
+} from "@/lib/professional";
 
 import { saveProfileSetup, signInWithMagicLink, signOut } from "./actions";
 
@@ -59,6 +65,41 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
     ? "bg-primary/10 text-on-primary-container"
     : "bg-secondary-container text-on-secondary-container";
   const isProfessional = profile?.profileKind === "professional";
+  const professionalProfile = isProfessional && user
+    ? await getProfessionalProfileByUserId(user.id)
+    : null;
+  const hasAgendaAccess = professionalProfile
+    ? tierIncludesAgenda(professionalProfile.subscriptionTier)
+    : false;
+  const hasCollectiveFormatsAccess = professionalProfile
+    ? tierIncludesCollectiveFormats(professionalProfile.subscriptionTier)
+    : false;
+  const professionalActions = [
+    {
+      href: (isProfessional && redirectTo === "/messages" ? "/pro" : redirectTo) as Route,
+      title: "Ouvrir mon espace pro",
+      description: "Retrouver le tableau de bord professionnel et vos repères essentiels.",
+    },
+    ...(hasAgendaAccess
+      ? [{
+          href: "/pro/agenda" as Route,
+          title: "Gérer mon agenda",
+          description: "Voir les créneaux publiés, les demandes en attente et les confirmations.",
+        }]
+      : []),
+    ...(hasCollectiveFormatsAccess
+      ? [{
+          href: "/pro/ateliers" as Route,
+          title: "Gérer mes ateliers et webinaires",
+          description: "Publier et suivre vos formats collectifs depuis l'espace partenaire.",
+        }]
+      : []),
+    {
+      href: "/pro/profil" as Route,
+      title: "Mettre à jour ma fiche publique",
+      description: "Ajuster votre présentation, vos modes de consultation et votre présence dans l'annuaire.",
+    },
+  ];
 
   return (
     <AppShell title="Compte" currentPath="/account">
@@ -120,73 +161,93 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
 
                 <p className="text-sm leading-7 text-on-surface-variant">
                   {isProfessional
-                    ? "Retrouvez votre espace pro, vos créneaux et votre visibilité publique depuis une seule surface calme."
+                    ? hasAgendaAccess
+                      ? "Retrouvez votre espace pro, vos créneaux et votre visibilité publique depuis une seule surface calme."
+                      : "Retrouvez votre espace pro et votre visibilité publique depuis une seule surface calme, sans options qui ne sont pas incluses dans votre offre."
                     : "Choisissez simplement la suite la plus utile maintenant. Le reste restera accessible depuis la navigation."}
                 </p>
 
                 <div className="divide-y divide-outline-variant/30 rounded-brand-xl border border-outline-variant/40 bg-surface-container-lowest">
-                  <a
-                    href={isProfessional && redirectTo === "/messages" ? "/pro" : redirectTo}
-                    className="flex items-center justify-between px-5 py-5 transition-colors hover:bg-surface-container-low"
-                  >
-                    <div>
-                      <p className="font-headline text-lg font-semibold text-on-surface">
-                        {isProfessional ? "Ouvrir mon espace pro" : "Continuer là où vous en étiez"}
-                      </p>
-                      <p className="mt-1 text-sm leading-7 text-on-surface-variant">
-                        {isProfessional
-                          ? "Retrouver le tableau de bord professionnel, vos rendez-vous et vos repères essentiels."
-                          : "Reprendre le chemin qui vous a amené ici sans repartir de zéro."}
-                      </p>
-                    </div>
-                    <ArrowRight
-                      aria-hidden="true"
-                      className="h-4 w-4 shrink-0 text-primary"
-                      strokeWidth={2}
-                    />
-                  </a>
+                  {isProfessional ? professionalActions.map((action) => (
+                    <Link
+                      key={action.href}
+                      href={action.href}
+                      className="flex items-center justify-between px-5 py-5 transition-colors hover:bg-surface-container-low"
+                    >
+                      <div>
+                        <p className="font-headline text-lg font-semibold text-on-surface">
+                          {action.title}
+                        </p>
+                        <p className="mt-1 text-sm leading-7 text-on-surface-variant">
+                          {action.description}
+                        </p>
+                      </div>
+                      <ArrowRight
+                        aria-hidden="true"
+                        className="h-4 w-4 shrink-0 text-primary"
+                        strokeWidth={2}
+                      />
+                    </Link>
+                  )) : (
+                    <>
+                      <a
+                        href={redirectTo}
+                        className="flex items-center justify-between px-5 py-5 transition-colors hover:bg-surface-container-low"
+                      >
+                        <div>
+                          <p className="font-headline text-lg font-semibold text-on-surface">
+                            Continuer là où vous en étiez
+                          </p>
+                          <p className="mt-1 text-sm leading-7 text-on-surface-variant">
+                            Reprendre le chemin qui vous a amené ici sans repartir de zéro.
+                          </p>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0 text-primary"
+                          strokeWidth={2}
+                        />
+                      </a>
 
-                  <Link
-                    href={isProfessional ? "/pro/agenda" : "/messages"}
-                    className="flex items-center justify-between px-5 py-5 transition-colors hover:bg-surface-container-low"
-                  >
-                    <div>
-                      <p className="font-headline text-lg font-semibold text-on-surface">
-                        {isProfessional ? "Gérer mon agenda" : "Ouvrir la messagerie"}
-                      </p>
-                      <p className="mt-1 text-sm leading-7 text-on-surface-variant">
-                        {isProfessional
-                          ? "Voir les créneaux publiés, les demandes en attente et les confirmations."
-                          : "Retrouver l'association, vos groupes et vos contacts de confiance."}
-                      </p>
-                    </div>
-                    <ArrowRight
-                      aria-hidden="true"
-                      className="h-4 w-4 shrink-0 text-primary"
-                      strokeWidth={2}
-                    />
-                  </Link>
+                      <Link
+                        href={"/messages"}
+                        className="flex items-center justify-between px-5 py-5 transition-colors hover:bg-surface-container-low"
+                      >
+                        <div>
+                          <p className="font-headline text-lg font-semibold text-on-surface">
+                            Ouvrir la messagerie
+                          </p>
+                          <p className="mt-1 text-sm leading-7 text-on-surface-variant">
+                            Retrouver l'association, vos groupes et vos contacts de confiance.
+                          </p>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0 text-primary"
+                          strokeWidth={2}
+                        />
+                      </Link>
 
-                  <Link
-                    href={isProfessional ? "/pro/profil" : "/parcours"}
-                    className="flex items-center justify-between px-5 py-5 transition-colors hover:bg-surface-container-low"
-                  >
-                    <div>
-                      <p className="font-headline text-lg font-semibold text-on-surface">
-                        {isProfessional ? "Mettre à jour ma fiche publique" : "Reprendre mon parcours"}
-                      </p>
-                      <p className="mt-1 text-sm leading-7 text-on-surface-variant">
-                        {isProfessional
-                          ? "Ajuster votre présentation, vos modes de consultation et votre présence dans l'annuaire."
-                          : "Retrouver rendez-vous, notes et documents privés sans vous disperser."}
-                      </p>
-                    </div>
-                    <ArrowRight
-                      aria-hidden="true"
-                      className="h-4 w-4 shrink-0 text-primary"
-                      strokeWidth={2}
-                    />
-                  </Link>
+                      <Link
+                        href={"/parcours"}
+                        className="flex items-center justify-between px-5 py-5 transition-colors hover:bg-surface-container-low"
+                      >
+                        <div>
+                          <p className="font-headline text-lg font-semibold text-on-surface">
+                            Reprendre mon parcours
+                          </p>
+                          <p className="mt-1 text-sm leading-7 text-on-surface-variant">
+                            Retrouver rendez-vous, notes et documents privés sans vous disperser.
+                          </p>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0 text-primary"
+                          strokeWidth={2}
+                        />
+                      </Link>
+                    </>
+                  )}
                 </div>
               </div>
 

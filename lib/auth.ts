@@ -1,7 +1,12 @@
 import { cache } from "react";
+import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { hasSupabaseBrowserEnv } from "@/lib/env";
+import {
+  getProfessionalProfileByUserId,
+  type SubscriptionTier,
+} from "@/lib/professional";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ProfileKind = "patient" | "caregiver" | "professional";
@@ -139,6 +144,46 @@ export async function requireProfessional(redirectTo = "/pro") {
 
   if (context.profile?.profileKind !== "professional") {
     notFound();
+  }
+
+  return context;
+}
+
+export async function requireProfessionalProfile(redirectTo = "/pro") {
+  const context = await requireProfessional(redirectTo);
+  const professionalProfile = await getProfessionalProfileByUserId(context.user.id);
+
+  if (!professionalProfile) {
+    redirect(
+      `/account/pro-onboarding?status=complete-pro-profile&redirectTo=${encodeURIComponent(redirectTo)}`,
+    );
+  }
+
+  return {
+    ...context,
+    professionalProfile,
+  };
+}
+
+export async function requireProfessionalTier(
+  allowedTiers: SubscriptionTier[],
+  options?: {
+    redirectTo?: string;
+    fallbackPath?: string;
+    error?: string;
+  },
+) {
+  const redirectTo = options?.redirectTo ?? "/pro";
+  const fallbackPath = options?.fallbackPath ?? "/pro";
+  const context = await requireProfessionalProfile(redirectTo);
+
+  if (!allowedTiers.includes(context.professionalProfile.subscriptionTier)) {
+    if (options?.error) {
+      const separator = fallbackPath.includes("?") ? "&" : "?";
+      redirect(`${fallbackPath}${separator}error=${encodeURIComponent(options.error)}` as Route);
+    }
+
+    redirect(fallbackPath as Route);
   }
 
   return context;

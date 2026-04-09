@@ -6,13 +6,9 @@ import { EventKindBadge } from "@/components/content/event-kind-badge";
 import { BackLink } from "@/components/navigation/back-link";
 import { SubscriptionBadge } from "@/components/pro/subscription-badge";
 import { AppShell } from "@/components/shell/app-shell";
-import { requireProfessional } from "@/lib/auth";
+import { requireProfessionalTier } from "@/lib/auth";
 import { formatEventSchedule } from "@/lib/content";
 import { formatEventDateTimeInput, getProfessionalEventsSnapshot } from "@/lib/events";
-import {
-  SUBSCRIPTION_TIER_DEFINITIONS,
-  getProfessionalProfileByUserId,
-} from "@/lib/professional";
 
 import { saveProfessionalEvent, toggleProfessionalEventPublish } from "./actions";
 
@@ -33,8 +29,6 @@ const feedbackMap: Record<string, string> = {
   "event-not-found": "Le format demandé est introuvable.",
   "event-save-failed": "L'enregistrement n'a pas pu aboutir.",
   "event-publish-failed": "Le changement de publication a échoué.",
-  "partner-required":
-    "Les ateliers et webinaires sont disponibles avec l'offre Partenaire. L'équipe ROSE-SEIN peut activer ce niveau si vous souhaitez proposer un format collectif.",
 };
 
 function firstValue(value: string | string[] | undefined) {
@@ -57,15 +51,12 @@ export default async function ProEventsPage({ searchParams }: ProEventsPageProps
   const feedbackTone = error
     ? "bg-primary/10 text-on-primary-container"
     : "bg-secondary-container text-on-secondary-container";
-  const { user } = await requireProfessional("/pro/ateliers");
-  const professionalProfile = await getProfessionalProfileByUserId(user.id);
-
-  if (!professionalProfile) {
-    return null;
-  }
-
-  const isPartner = professionalProfile.subscriptionTier === "partenaire";
-  const managedEvents = isPartner ? await getProfessionalEventsSnapshot(user.id) : [];
+  const { user, professionalProfile } = await requireProfessionalTier(["partenaire"], {
+    redirectTo: "/pro/ateliers",
+    fallbackPath: "/pro",
+    error: "events-tier-locked",
+  });
+  const managedEvents = await getProfessionalEventsSnapshot(user.id);
   const eventToEdit = edit ? managedEvents.find((event) => event.id === edit) ?? null : null;
   const publishedCount = managedEvents.filter((event) => event.isPublished).length;
   const activeRegistrationCount = managedEvents.reduce(
@@ -100,65 +91,41 @@ export default async function ProEventsPage({ searchParams }: ProEventsPageProps
             <SubscriptionBadge tier={professionalProfile.subscriptionTier} />
           </div>
 
-          {isPartner ? (
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-brand bg-surface-container-lowest px-4 py-4 shadow-ambient">
-                <p className="text-xs uppercase tracking-[0.16em] text-outline">
-                  Formats publiés
-                </p>
-                <p className="mt-2 font-headline text-3xl font-bold text-on-surface">
-                  {publishedCount}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-on-surface-variant">
-                  Pages visibles dans les actualités et sur votre fiche.
-                </p>
-              </div>
-              <div className="rounded-brand bg-surface-container-lowest px-4 py-4 shadow-ambient">
-                <p className="text-xs uppercase tracking-[0.16em] text-outline">
-                  Inscriptions actives
-                </p>
-                <p className="mt-2 font-headline text-3xl font-bold text-on-surface">
-                  {activeRegistrationCount}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-on-surface-variant">
-                  Participations confirmées sur l&apos;ensemble des formats.
-                </p>
-              </div>
-              <div className="rounded-brand bg-surface-container-lowest px-4 py-4 shadow-ambient">
-                <p className="text-xs uppercase tracking-[0.16em] text-outline">
-                  Formats à venir
-                </p>
-                <p className="mt-2 font-headline text-3xl font-bold text-on-surface">
-                  {upcomingCount}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-on-surface-variant">
-                  Sessions déjà planifiées dans les prochains jours.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-brand-xl bg-secondary-container/35 px-5 py-5">
-              <p className="font-headline text-lg font-semibold text-on-surface">
-                Les formats collectifs s&apos;activent avec Partenaire
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-brand bg-surface-container-lowest px-4 py-4 shadow-ambient">
+              <p className="text-xs uppercase tracking-[0.16em] text-outline">
+                Formats publiés
               </p>
-              <p className="mt-3 max-w-2xl text-base leading-8 text-on-surface-variant">
-                L&apos;offre partenaire ajoute la publication d&apos;ateliers et de
-                webinaires, en plus de la mise en avant éditoriale et des repères
-                d&apos;activité. L&apos;objectif reste sobre: rendre vos propositions
-                collectives visibles, sans les confondre avec une consultation individuelle.
+              <p className="mt-2 font-headline text-3xl font-bold text-on-surface">
+                {publishedCount}
               </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {SUBSCRIPTION_TIER_DEFINITIONS.partenaire.benefits.map((benefit) => (
-                  <div
-                    key={benefit}
-                    className="rounded-brand bg-surface-container-lowest px-4 py-4 text-sm leading-7 text-on-surface-variant shadow-ambient"
-                  >
-                    {benefit}
-                  </div>
-                ))}
-              </div>
+              <p className="mt-1 text-sm leading-6 text-on-surface-variant">
+                Pages visibles dans les actualités et sur votre fiche.
+              </p>
             </div>
-          )}
+            <div className="rounded-brand bg-surface-container-lowest px-4 py-4 shadow-ambient">
+              <p className="text-xs uppercase tracking-[0.16em] text-outline">
+                Inscriptions actives
+              </p>
+              <p className="mt-2 font-headline text-3xl font-bold text-on-surface">
+                {activeRegistrationCount}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-on-surface-variant">
+                Participations confirmées sur l&apos;ensemble des formats.
+              </p>
+            </div>
+            <div className="rounded-brand bg-surface-container-lowest px-4 py-4 shadow-ambient">
+              <p className="text-xs uppercase tracking-[0.16em] text-outline">
+                Formats à venir
+              </p>
+              <p className="mt-2 font-headline text-3xl font-bold text-on-surface">
+                {upcomingCount}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-on-surface-variant">
+                Sessions déjà planifiées dans les prochains jours.
+              </p>
+            </div>
+          </div>
         </div>
 
         {feedback ? (
@@ -168,9 +135,8 @@ export default async function ProEventsPage({ searchParams }: ProEventsPageProps
           </div>
         ) : null}
 
-        {isPartner ? (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,0.9fr)]">
-            <section className="space-y-6">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,0.9fr)]">
+          <section className="space-y-6">
               <div className="surface-section space-y-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-2">
@@ -528,7 +494,6 @@ export default async function ProEventsPage({ searchParams }: ProEventsPageProps
               </div>
             </aside>
           </div>
-        ) : null}
       </section>
     </AppShell>
   );

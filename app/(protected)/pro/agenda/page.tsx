@@ -2,7 +2,7 @@ import { CircleAlert, Clock3, MessageSquareText, Plus, Sparkles } from "lucide-r
 
 import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
-import { requireProfessional } from "@/lib/auth";
+import { requireProfessionalTier } from "@/lib/auth";
 import { PROFESSIONAL_APPOINTMENT_STATUS_LABELS } from "@/lib/parcours";
 import {
   getProfessionalAgendaSnapshot,
@@ -56,7 +56,14 @@ export default async function ProAgendaPage({ searchParams }: ProAgendaPageProps
   const query = (await searchParams) ?? {};
   const status = firstValue(query.status);
   const error = firstValue(query.error);
-  const { user } = await requireProfessional("/pro/agenda");
+  const { user } = await requireProfessionalTier(
+    ["visibilite_agenda", "partenaire"],
+    {
+      redirectTo: "/pro/agenda",
+      fallbackPath: "/pro",
+      error: "agenda-tier-locked",
+    },
+  );
   const { upcomingAvailabilities, appointments } = await getProfessionalAgendaSnapshot(user.id);
   const feedbackKey = error ?? status;
   const feedback = feedbackKey ? feedbackMap[feedbackKey] : null;

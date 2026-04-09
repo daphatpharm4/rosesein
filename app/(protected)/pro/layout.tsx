@@ -1,7 +1,4 @@
-import { redirect } from "next/navigation";
-
-import { requireProfessional } from "@/lib/auth";
-import { getProfessionalProfileByUserId } from "@/lib/professional";
+import { requireProfessionalProfile } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +7,7 @@ export default async function ProLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { user } = await requireProfessional("/pro");
-  const professionalProfile = await getProfessionalProfileByUserId(user.id);
-
-  if (!professionalProfile) {
-    redirect("/account/pro-onboarding?status=complete-pro-profile&redirectTo=/pro");
-  }
+  await requireProfessionalProfile("/pro");
 
   return children;
 }

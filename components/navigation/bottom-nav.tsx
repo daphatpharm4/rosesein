@@ -21,11 +21,6 @@ const baseNavItems = [
     label: "Messages",
     icon: MessageCircleMore,
   },
-  {
-    href: "/parcours" as Route,
-    label: "Parcours",
-    icon: CalendarDays,
-  },
 ];
 
 type BottomNavProps = {
@@ -44,7 +39,13 @@ export function BottomNav({ currentPath, profileKind }: BottomNavProps) {
             icon: BriefcaseMedical,
           },
         ]
-      : []),
+      : [
+          {
+            href: "/parcours" as Route,
+            label: "Parcours",
+            icon: CalendarDays,
+          },
+        ]),
   ];
   const isActive = (href: string) =>
     currentPath === href || (href !== "/" && currentPath.startsWith(href));

@@ -4,9 +4,8 @@ import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { requireProfessional } from "@/lib/auth";
+import { requireProfessionalTier } from "@/lib/auth";
 import { parseEventDateTimeInput } from "@/lib/events";
-import { getProfessionalProfileByUserId } from "@/lib/professional";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function normalizeText(value: FormDataEntryValue | null) {
@@ -36,18 +35,11 @@ function appendFeedback(
 }
 
 async function requirePartnerProfessional() {
-  const { user } = await requireProfessional("/pro/ateliers");
-  const professionalProfile = await getProfessionalProfileByUserId(user.id);
-
-  if (!professionalProfile) {
-    redirect("/account/pro-onboarding?status=complete-pro-profile&redirectTo=/pro/ateliers");
-  }
-
-  if (professionalProfile.subscriptionTier !== "partenaire") {
-    redirect(appendFeedback("error", "partner-required"));
-  }
-
-  return { user, professionalProfile };
+  return requireProfessionalTier(["partenaire"], {
+    redirectTo: "/pro/ateliers",
+    fallbackPath: "/pro",
+    error: "events-tier-locked",
+  });
 }
 
 async function revalidateProfessionalEventSurfaces(eventId: string, professionalSlug: string) {
@@ -190,4 +182,3 @@ export async function toggleProfessionalEventPublish(formData: FormData): Promis
     ),
   );
 }
-

@@ -180,6 +180,14 @@ export const SUBSCRIPTION_TIER_DEFINITIONS: Record<SubscriptionTier, Subscriptio
   },
 };
 
+export function tierIncludesAgenda(tier: SubscriptionTier) {
+  return tier === "visibilite_agenda" || tier === "partenaire";
+}
+
+export function tierIncludesCollectiveFormats(tier: SubscriptionTier) {
+  return tier === "partenaire";
+}
+
 export const CONSULTATION_MODE_LABELS: Record<ConsultationMode, string> = {
   presentiel: "Présentiel",
   telephone: "Téléphone",

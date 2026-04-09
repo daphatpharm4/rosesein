@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import type { Route } from "next";
 
 import { parseEventDateTimeInput } from "@/lib/events";
-import { requireProfessional } from "@/lib/auth";
+import { requireProfessionalTier } from "@/lib/auth";
 import {
   cancelAppointment,
   createAvailability,
@@ -14,7 +14,7 @@ import {
   updateAppointmentStatus,
   type AppointmentStatus,
 } from "@/lib/professional-agenda";
-import { getProfessionalProfileByUserId, type ConsultationMode } from "@/lib/professional";
+import type { ConsultationMode } from "@/lib/professional";
 
 function appendFeedback(targetPath: string, key: "status" | "error", value: string) {
   const url = new URL(targetPath, "http://localhost");
@@ -33,11 +33,17 @@ function normalizeAppointmentStatus(value: AppointmentStatus): AppointmentStatus
 }
 
 export async function createAvailabilitySlot(formData: FormData) {
-  const { user } = await requireProfessional("/pro/agenda");
+  const { user, professionalProfile } = await requireProfessionalTier(
+    ["visibilite_agenda", "partenaire"],
+    {
+      redirectTo: "/pro/agenda",
+      fallbackPath: "/pro",
+      error: "agenda-tier-locked",
+    },
+  );
   const startsAt = parseEventDateTimeInput(String(formData.get("startsAt") ?? ""));
   const endsAt = parseEventDateTimeInput(String(formData.get("endsAt") ?? ""));
   const consultationMode = normalizeConsultationMode(formData.get("consultationMode"));
-  const professionalProfile = await getProfessionalProfileByUserId(user.id);
 
   if (!startsAt || !endsAt || !consultationMode) {
     redirect("/pro/agenda?error=slot-invalid");
@@ -70,7 +76,11 @@ export async function respondToAppointment(
   status: AppointmentStatus,
   formData: FormData,
 ) {
-  await requireProfessional("/pro/agenda");
+  await requireProfessionalTier(["visibilite_agenda", "partenaire"], {
+    redirectTo: "/pro/agenda",
+    fallbackPath: "/pro",
+    error: "agenda-tier-locked",
+  });
   const normalizedStatus = normalizeAppointmentStatus(status);
 
   if (!appointmentId || !normalizedStatus || normalizedStatus === "pending") {
@@ -103,8 +113,14 @@ export async function cancelAppointmentAsProfessional(
   appointmentId: string,
   formData: FormData,
 ) {
-  const { user } = await requireProfessional("/pro/agenda");
-  const professionalProfile = await getProfessionalProfileByUserId(user.id);
+  const { professionalProfile } = await requireProfessionalTier(
+    ["visibilite_agenda", "partenaire"],
+    {
+      redirectTo: "/pro/agenda",
+      fallbackPath: "/pro",
+      error: "agenda-tier-locked",
+    },
+  );
   const cancellationReasonValue = formData.get("cancellationReason");
   const cancellationReason =
     typeof cancellationReasonValue === "string" ? cancellationReasonValue.trim() : "";

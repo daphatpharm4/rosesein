@@ -3,6 +3,7 @@ import Link from "next/link";
 import { LifeBuoy, Shield, UserRound } from "lucide-react";
 import { Suspense } from "react";
 
+import { RoseSeinLogo } from "@/components/branding/rose-sein-logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 
 type TopAppBarProps = {
@@ -20,12 +21,16 @@ export function TopAppBar({
     <header className="fixed inset-x-0 top-0 z-50 mx-auto w-full max-w-screen-md px-3 pt-[max(var(--safe-area-top),0.75rem)] sm:px-4">
       <div className="shell-bar flex items-center justify-between gap-3 rounded-[2rem] border border-outline-variant/25 bg-background/90 px-3 py-2.5 shadow-ambient backdrop-blur-sm sm:rounded-brand-xl sm:px-5 sm:py-3">
         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-primary font-headline text-sm font-bold text-on-primary sm:h-11 sm:w-11">
-            RS
-          </div>
+          <Link
+            href="/"
+            aria-label="Retour à l'accueil ROSE-SEIN"
+            className="shrink-0 rounded-full"
+          >
+            <RoseSeinLogo compact />
+          </Link>
           <div className="min-w-0">
-            <p className="hidden font-label text-xs uppercase tracking-[0.16em] text-primary sm:block">
-              ROSE-SEIN
+            <p className="hidden font-label text-[0.63rem] uppercase tracking-[0.18em] text-secondary sm:block">
+              Association de lutte contre le cancer du sein
             </p>
             <p className="truncate font-headline text-[0.95rem] font-semibold text-on-surface sm:text-sm">
               {title ?? "Accueil"}
