@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Building2, Globe, MapPin, Phone, Video } from "lucide-react";
+import { Building2, Globe, MapPin, Phone, ShieldCheck, Video } from "lucide-react";
 
 import {
   CONSULTATION_MODE_LABELS,
+  SUBSCRIPTION_TIER_DEFINITIONS,
   getProfessionalCategoryLabel,
   type ProfessionalProfile,
 } from "@/lib/professional";
@@ -13,15 +14,33 @@ export function ProfessionalCard({ profile }: { profile: ProfessionalProfile }) 
   const categoryLabel = getProfessionalCategoryLabel(profile);
   const primaryLabel = profile.structureName ?? `${profile.title ? `${profile.title} ` : ""}${profile.displayName}`.trim();
   const hasRemoteModes = profile.consultationModes.filter((mode) => mode !== "presentiel");
+  const tierDefinition = SUBSCRIPTION_TIER_DEFINITIONS[profile.subscriptionTier];
+  const cardToneClass =
+    profile.subscriptionTier === "partenaire"
+      ? "border-primary/15 bg-[radial-gradient(circle_at_top_left,rgba(226,105,142,0.12),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(252,248,250,0.92))]"
+      : "";
+  const footerLabel =
+    profile.subscriptionTier === "solidaire"
+      ? "Contact direct"
+      : profile.subscriptionTier === "partenaire"
+        ? "Partenaire mis en avant"
+        : "Agenda disponible";
 
   return (
     <Link
       href={`/professionnels/${profile.slug}`}
-      className="surface-card group block overflow-hidden transition-colors hover:border-primary/20 hover:bg-white"
+      className={`surface-card group block overflow-hidden transition-colors hover:border-primary/20 hover:bg-white ${cardToneClass}`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-3">
           <div className="space-y-2">
+            {profile.subscriptionTier === "partenaire" ? (
+              <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-primary">
+                <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
+                Mise en avant ROSE-SEIN
+              </div>
+            ) : null}
+
             {profile.structureName ? (
               <div className="inline-flex items-center gap-2 rounded-full bg-secondary-container/50 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-on-secondary-container">
                 <Building2 aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -48,6 +67,10 @@ export function ProfessionalCard({ profile }: { profile: ProfessionalProfile }) 
               {profile.bio}
             </p>
           ) : null}
+
+          <p className="max-w-2xl text-sm leading-7 text-on-surface-variant">
+            {tierDefinition.publicDescription}
+          </p>
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-on-surface-variant">
             {profile.city ? (
@@ -88,7 +111,7 @@ export function ProfessionalCard({ profile }: { profile: ProfessionalProfile }) 
 
       <div className="mt-5 flex items-center justify-between border-t border-outline-variant/20 pt-4">
         <p className="text-xs uppercase tracking-[0.16em] text-outline">
-          {profile.subscriptionTier === "solidaire" ? "Contact direct" : "Agenda disponible"}
+          {footerLabel}
         </p>
         <span className="font-label text-sm font-semibold text-primary">Voir la fiche</span>
       </div>

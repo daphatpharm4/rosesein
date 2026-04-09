@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 
+import { ProfessionalTaxonomyFields } from "@/components/pro/professional-taxonomy-fields";
 import { AppShell } from "@/components/shell/app-shell";
 import { getCurrentUserContext, requireUser } from "@/lib/auth";
 import { normalizeInternalPath } from "@/lib/internal-path";
 import {
   MEDICAL_CATEGORY_LABELS,
+  SUBSCRIPTION_TIER_DEFINITIONS,
   SUPPORT_CATEGORY_LABELS,
   getProfessionalProfileByUserId,
 } from "@/lib/professional";
@@ -19,7 +21,9 @@ type ProOnboardingPageProps = {
 
 const messageMap: Record<string, string> = {
   "missing-fields": "Complétez au minimum votre nom d'usage et votre parcours professionnel.",
-  "category-required": "Choisissez une catégorie cohérente avec le parcours sélectionné.",
+  "category-required": "Choisissez une seule famille d'exercice, puis la catégorie correspondante.",
+  "category-exclusive":
+    "Une fiche professionnelle ne peut relever que d'une seule famille d'exercice: catégorie médicale ou soins de support.",
   "price-invalid": "Le tarif de consultation doit être un nombre valide.",
   "profile-save-failed":
     "Le compte professionnel n'a pas pu être préparé. Vérifiez la configuration Supabase.",
@@ -57,6 +61,14 @@ export default async function ProOnboardingPage({ searchParams }: ProOnboardingP
   const redirectTo = normalizeInternalPath(firstValue(params.redirectTo));
   const error = firstValue(params.error);
   const feedback = error ? messageMap[error] : firstValue(params.status) ? messageMap[firstValue(params.status) ?? ""] : null;
+  const medicalOptions = Object.entries(MEDICAL_CATEGORY_LABELS).map(([value, label]) => ({
+    value,
+    label,
+  }));
+  const supportOptions = Object.entries(SUPPORT_CATEGORY_LABELS).map(([value, label]) => ({
+    value,
+    label,
+  }));
 
   return (
     <AppShell title="Compte" currentPath="/account">
@@ -70,6 +82,7 @@ export default async function ProOnboardingPage({ searchParams }: ProOnboardingP
             <p className="max-w-2xl text-base leading-7 text-on-surface-variant">
               Votre espace pro sert à publier votre présence dans l&apos;annuaire, exposer vos
               modes de consultation et gérer vos demandes de rendez-vous sans lourdeur inutile.
+              La fiche doit rester lisible: une seule famille d&apos;exercice, une seule catégorie visible.
             </p>
           </div>
 
@@ -122,20 +135,6 @@ export default async function ProOnboardingPage({ searchParams }: ProOnboardingP
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block space-y-2">
               <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                Parcours
-              </span>
-              <select
-                name="professionalKind"
-                defaultValue="medical"
-                className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
-              >
-                <option value="medical">Parcours médical</option>
-                <option value="support_care">Soins de support</option>
-              </select>
-            </label>
-
-            <label className="block space-y-2">
-              <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
                 Ville
               </span>
               <input
@@ -147,41 +146,11 @@ export default async function ProOnboardingPage({ searchParams }: ProOnboardingP
             </label>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="block space-y-2">
-              <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                Catégorie médicale
-              </span>
-              <select
-                name="medicalCategory"
-                className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
-              >
-                <option value="">Sélectionner si parcours médical</option>
-                {Object.entries(MEDICAL_CATEGORY_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block space-y-2">
-              <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                Soins de support
-              </span>
-              <select
-                name="supportCategory"
-                className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
-              >
-                <option value="">Sélectionner si soins de support</option>
-                {Object.entries(SUPPORT_CATEGORY_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <ProfessionalTaxonomyFields
+            defaultKind="medical"
+            medicalOptions={medicalOptions}
+            supportOptions={supportOptions}
+          />
 
           <label className="block space-y-2">
             <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
@@ -272,18 +241,27 @@ export default async function ProOnboardingPage({ searchParams }: ProOnboardingP
         <aside className="space-y-4">
           <div className="rounded-brand-xl border border-outline-variant/40 bg-surface-container-low px-5 py-5">
             <p className="font-headline text-lg font-semibold text-on-surface">
-              Ce que vous obtenez en V1
+              Niveaux d&apos;offre
             </p>
-            <ul className="mt-4 space-y-3 text-sm leading-7 text-on-surface-variant">
-              <li>Une fiche publique dans l&apos;annuaire professionnel.</li>
-              <li>Un agenda simple pour publier des créneaux.</li>
-              <li>Un tableau de bord dédié pour gérer vos demandes.</li>
-            </ul>
+            <div className="mt-4 space-y-3">
+              {Object.entries(SUBSCRIPTION_TIER_DEFINITIONS).map(([tier, definition]) => (
+                <div
+                  key={tier}
+                  className="rounded-brand border border-outline-variant/25 bg-surface-container-lowest px-4 py-4"
+                >
+                  <p className="font-headline text-base font-semibold text-on-surface">
+                    {definition.label}
+                  </p>
+                  <p className="mt-1 text-sm leading-7 text-on-surface-variant">
+                    {definition.summary}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="rounded-brand-xl border border-outline-variant/40 bg-secondary-container/40 px-5 py-5 text-sm leading-7 text-on-surface-variant">
-            L&apos;expérience reste volontairement calme: moins d&apos;outils visibles, plus de
-            lisibilité sur vos disponibilités, votre présence publique et les demandes reçues.
+            L&apos;activation démarre avec le socle de base. L&apos;équipe ROSE-SEIN peut ensuite ajuster l&apos;offre active selon le niveau de visibilité souhaité.
           </div>
         </aside>
       </section>

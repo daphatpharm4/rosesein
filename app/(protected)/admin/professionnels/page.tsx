@@ -4,7 +4,7 @@ import { BackLink } from "@/components/navigation/back-link";
 import { SubscriptionBadge } from "@/components/pro/subscription-badge";
 import { AppShell } from "@/components/shell/app-shell";
 import { requireAdmin } from "@/lib/auth";
-import { getManagedProfessionals } from "@/lib/professional";
+import { SUBSCRIPTION_TIER_DEFINITIONS, getManagedProfessionals } from "@/lib/professional";
 
 import { toggleProfessionalActive, updateSubscriptionTier } from "./actions";
 
@@ -157,11 +157,11 @@ export default async function AdminProfessionalsPage({
                     <div className="flex items-center gap-2 text-primary">
                       <ShieldCheck aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
                       <span className="font-label text-xs font-semibold uppercase tracking-[0.16em]">
-                        Repère
+                        Repère d&apos;offre
                       </span>
                     </div>
                     <p className="mt-2">
-                      {professional.slug}
+                      {SUBSCRIPTION_TIER_DEFINITIONS[professional.subscriptionTier].summary}
                     </p>
                   </div>
                 </div>

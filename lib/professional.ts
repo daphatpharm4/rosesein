@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export type ProfessionalKind = "medical" | "support_care";
 export type SubscriptionTier = "solidaire" | "visibilite_agenda" | "partenaire";
 export type ConsultationMode = "presentiel" | "telephone" | "visio";
+type ProfessionalAppointmentStatus = "pending" | "confirmed" | "declined" | "cancelled" | "completed";
 
 export type MedicalCategory =
   | "oncologue"
@@ -55,6 +56,23 @@ export type ProfessionalProfile = {
 
 export type AdminManagedProfessional = ProfessionalProfile & {
   categoryLabel: string;
+};
+
+export type SubscriptionTierDefinition = {
+  label: string;
+  summary: string;
+  publicHeadline: string;
+  publicDescription: string;
+  dashboardHeadline: string;
+  dashboardDescription: string;
+  benefits: string[];
+};
+
+export type ProfessionalPerformanceStats = {
+  profileViews30d: number;
+  appointmentRequests30d: number;
+  confirmedAppointments30d: number;
+  confirmationRate: number;
 };
 
 type ProfessionalRow = {
@@ -110,6 +128,56 @@ export const SUBSCRIPTION_TIER_LABELS: Record<SubscriptionTier, string> = {
   solidaire: "Solidaire",
   visibilite_agenda: "Visibilité + agenda",
   partenaire: "Partenaire",
+};
+
+export const SUBSCRIPTION_TIER_DEFINITIONS: Record<SubscriptionTier, SubscriptionTierDefinition> = {
+  solidaire: {
+    label: "Solidaire",
+    summary: "Présence simple dans l'annuaire avec contact direct.",
+    publicHeadline: "Présence solidaire dans l'annuaire",
+    publicDescription:
+      "La fiche rend le professionnel visible et joignable, sans agenda intégré dans la plateforme.",
+    dashboardHeadline: "Présence de base",
+    dashboardDescription:
+      "Une fiche claire, un contact direct et une visibilité simple pour rester trouvable sans ajouter de charge outil.",
+    benefits: [
+      "Fiche publique dans l'annuaire professionnel",
+      "Contact direct depuis la fiche",
+      "Visibilité de base dans les résultats",
+    ],
+  },
+  visibilite_agenda: {
+    label: "Visibilité + agenda",
+    summary: "Annuaire, créneaux publiés et demandes de rendez-vous intégrées.",
+    publicHeadline: "Agenda intégré ROSE-SEIN",
+    publicDescription:
+      "La fiche permet de consulter les disponibilités et d'envoyer une demande de rendez-vous directement depuis l'application.",
+    dashboardHeadline: "Visibilité active",
+    dashboardDescription:
+      "La fiche devient un point d'entrée opérationnel: créneaux publiés, demandes reçues et suivi simple des confirmations.",
+    benefits: [
+      "Tout le socle Solidaire",
+      "Créneaux publiés sur la fiche publique",
+      "Demandes de rendez-vous depuis ROSE-SEIN",
+    ],
+  },
+  partenaire: {
+    label: "Partenaire",
+    summary:
+      "Mise en avant éditoriale, agenda intégré, ateliers/webinaires et lecture des indicateurs clés.",
+    publicHeadline: "Professionnel partenaire ROSE-SEIN",
+    publicDescription:
+      "La fiche bénéficie d'une mise en avant éditoriale dans l'écosystème ROSE-SEIN, sans constituer une recommandation médicale personnalisée.",
+    dashboardHeadline: "Visibilité partenaire",
+    dashboardDescription:
+      "En plus de l'agenda intégré, l'offre partenaire active une mise en avant sur l'accueil, l'animation d'ateliers ou webinaires, et des indicateurs simples sur la visibilité et les demandes.",
+    benefits: [
+      "Tout ce qui est inclus dans Visibilité + agenda",
+      "Mise en avant dédiée sur l'accueil",
+      "Publication d'ateliers et de webinaires depuis l'espace pro",
+      "Indicateurs 30 jours sur la fiche et les demandes",
+    ],
+  },
 };
 
 export const CONSULTATION_MODE_LABELS: Record<ConsultationMode, string> = {
@@ -184,6 +252,149 @@ export function slugifyProfessionalName(displayName: string, userId: string) {
     .replace(/^-+|-+$/g, "");
 
   return `${base || "professionnel"}-${userId.slice(0, 8)}`;
+}
+
+export async function getFeaturedPartnerProfessionals(limit = 3): Promise<ProfessionalProfile[]> {
+  if (!hasSupabaseBrowserEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("professional_profiles")
+    .select(
+      `
+        id,
+        slug,
+        professional_kind,
+        medical_category,
+        support_category,
+        title,
+        bio,
+        city,
+        country,
+        consultation_modes,
+        consultation_price_eur,
+        website,
+        phone,
+        structure_id,
+        subscription_tier,
+        is_active,
+        created_at,
+        updated_at,
+        profiles!inner(display_name),
+        professional_structures(name)
+      `,
+    )
+    .eq("is_active", true)
+    .eq("subscription_tier", "partenaire")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as ProfessionalRow[]).map(mapProfessionalRow);
+}
+
+export async function trackProfessionalProfileView(
+  professionalId: string,
+  viewerId?: string | null,
+) {
+  if (!hasSupabaseBrowserEnv()) {
+    return;
+  }
+
+  if (viewerId && viewerId === professionalId) {
+    return;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const viewedOn = new Date().toISOString().slice(0, 10);
+  const payload = viewerId
+    ? {
+        professional_id: professionalId,
+        viewer_id: viewerId,
+        viewed_on: viewedOn,
+      }
+    : {
+        professional_id: professionalId,
+        viewed_on: viewedOn,
+      };
+
+  const { error } = viewerId
+    ? await supabase
+        .from("professional_profile_views")
+        .upsert(payload, {
+          onConflict: "professional_id,viewer_id,viewed_on",
+          ignoreDuplicates: true,
+        })
+    : await supabase.from("professional_profile_views").insert(payload);
+
+  if (error) {
+    console.error("Failed to track professional profile view", error);
+  }
+}
+
+export async function getProfessionalPerformanceStats(
+  professionalId: string,
+): Promise<ProfessionalPerformanceStats> {
+  if (!hasSupabaseBrowserEnv()) {
+    return {
+      profileViews30d: 0,
+      appointmentRequests30d: 0,
+      confirmedAppointments30d: 0,
+      confirmationRate: 0,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const since = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000)).toISOString();
+
+  const [
+    { count: profileViews30d, error: viewError },
+    { data: appointmentRows, error: appointmentError },
+  ] = await Promise.all([
+    supabase
+      .from("professional_profile_views")
+      .select("id", { count: "exact", head: true })
+      .eq("professional_id", professionalId)
+      .gte("created_at", since),
+    supabase
+      .from("professional_appointments")
+      .select("status")
+      .eq("professional_id", professionalId)
+      .gte("created_at", since),
+  ]);
+
+  if (viewError) {
+    console.error("Failed to load professional profile views", viewError);
+  }
+
+  if (appointmentError) {
+    console.error("Failed to load professional appointment stats", appointmentError);
+  }
+
+  const appointments = appointmentError
+    ? []
+    : ((appointmentRows ?? []) as Array<{ status: ProfessionalAppointmentStatus }>).map(
+        (row) => row.status,
+      );
+  const appointmentRequests30d = appointments.length;
+  const confirmedAppointments30d = appointments.filter(
+    (status) => status === "confirmed" || status === "completed",
+  ).length;
+
+  return {
+    profileViews30d: viewError ? 0 : (profileViews30d ?? 0),
+    appointmentRequests30d,
+    confirmedAppointments30d,
+    confirmationRate:
+      appointmentRequests30d > 0
+        ? Math.round((confirmedAppointments30d / appointmentRequests30d) * 100)
+        : 0,
+  };
 }
 
 export async function getProfessionalDirectory(options?: {

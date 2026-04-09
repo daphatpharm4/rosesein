@@ -85,13 +85,8 @@ export async function registerForEvent(formData: FormData): Promise<void> {
     kind: "event",
     title: `Inscription enregistrée: ${event.title}`,
     body: `Votre demande est bien prise en compte pour ${formatEventSchedule({
-      id: event.id,
-      title: event.title,
-      description: "",
       startsAt: event.starts_at,
       endsAt: null,
-      locationLabel: null,
-      publishedAt: event.published_at,
     })}.`,
     href: eventPath(eventId),
   });

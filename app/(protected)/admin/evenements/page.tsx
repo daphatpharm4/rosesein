@@ -3,6 +3,7 @@ import { CalendarRange, Eye, EyeOff, PencilLine, UsersRound } from "lucide-react
 import type { Metadata } from "next";
 import type { Route } from "next";
 
+import { EventKindBadge } from "@/components/content/event-kind-badge";
 import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { requireStaff } from "@/lib/auth";
@@ -63,10 +64,10 @@ export default async function AdminEventsPage({ searchParams }: Props) {
 
         <div className="space-y-3">
           <div className="eyebrow">Programmation</div>
-          <h1 className="editorial-title">Créer, publier et suivre les événements.</h1>
+          <h1 className="editorial-title">Créer, publier et suivre les événements, ateliers et webinaires.</h1>
           <p className="max-w-2xl text-base leading-7 text-on-surface-variant">
-            Les modérateurs et admins peuvent préparer un brouillon, le publier quand il
-            est prêt, puis suivre les inscriptions directement depuis cette surface.
+            Les modérateurs et admins peuvent préparer un brouillon associatif, suivre les
+            formats collectifs partenaires et relire les inscriptions depuis cette même surface.
           </p>
         </div>
 
@@ -211,9 +212,7 @@ export default async function AdminEventsPage({ searchParams }: Props) {
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-headline text-lg font-semibold text-on-surface">
-                          {event.title}
-                        </h3>
+                        <EventKindBadge kind={event.eventKind} />
                         <span
                           className={`rounded-full px-3 py-1 font-label text-xs font-semibold ${
                             event.isPublished
@@ -224,6 +223,15 @@ export default async function AdminEventsPage({ searchParams }: Props) {
                           {event.isPublished ? "Publié" : "Brouillon"}
                         </span>
                       </div>
+                      <h3 className="font-headline text-lg font-semibold text-on-surface">
+                        {event.title}
+                      </h3>
+                      {event.hostProfessionalName ? (
+                        <p className="text-xs uppercase tracking-[0.16em] text-outline">
+                          Porté par {event.hostProfessionalTitle ? `${event.hostProfessionalTitle} ` : ""}
+                          {event.hostProfessionalName}
+                        </p>
+                      ) : null}
                       <p className="text-sm leading-7 text-on-surface-variant">
                         {event.description}
                       </p>

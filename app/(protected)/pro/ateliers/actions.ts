@@ -4,9 +4,9 @@ import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { requireStaff } from "@/lib/auth";
-import { recordAdminAudit } from "@/lib/admin-audit";
-import { formatEventDateTimeInput, parseEventDateTimeInput } from "@/lib/events";
+import { requireProfessional } from "@/lib/auth";
+import { parseEventDateTimeInput } from "@/lib/events";
+import { getProfessionalProfileByUserId } from "@/lib/professional";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function normalizeText(value: FormDataEntryValue | null) {
@@ -18,12 +18,8 @@ function normalizeOptionalText(value: FormDataEntryValue | null) {
   return normalized || null;
 }
 
-function getRelationObject<T extends object>(relation: T | T[] | null | undefined): T | null {
-  if (!relation) {
-    return null;
-  }
-
-  return Array.isArray(relation) ? relation[0] ?? null : relation;
+function normalizeEventKind(value: FormDataEntryValue | null) {
+  return value === "atelier" || value === "webinaire" ? value : null;
 }
 
 function appendFeedback(
@@ -31,7 +27,7 @@ function appendFeedback(
   value: string,
   eventId?: string | null,
 ) {
-  const url = new URL("/admin/evenements", "http://localhost");
+  const url = new URL("/pro/ateliers", "http://localhost");
   url.searchParams.set(key, value);
   if (eventId) {
     url.searchParams.set("edit", eventId);
@@ -39,21 +35,34 @@ function appendFeedback(
   return `${url.pathname}${url.search}` as Route;
 }
 
-async function revalidateEventSurfaces(eventId: string, professionalSlug?: string | null) {
+async function requirePartnerProfessional() {
+  const { user } = await requireProfessional("/pro/ateliers");
+  const professionalProfile = await getProfessionalProfileByUserId(user.id);
+
+  if (!professionalProfile) {
+    redirect("/account/pro-onboarding?status=complete-pro-profile&redirectTo=/pro/ateliers");
+  }
+
+  if (professionalProfile.subscriptionTier !== "partenaire") {
+    redirect(appendFeedback("error", "partner-required"));
+  }
+
+  return { user, professionalProfile };
+}
+
+async function revalidateProfessionalEventSurfaces(eventId: string, professionalSlug: string) {
   revalidatePath("/", "layout");
   revalidatePath("/actualites");
   revalidatePath("/association");
-  revalidatePath("/admin/evenements");
   revalidatePath("/pro");
   revalidatePath("/pro/ateliers");
   revalidatePath(`/actualites/evenements/${eventId}`);
-  if (professionalSlug) {
-    revalidatePath(`/professionnels/${professionalSlug}`);
-  }
+  revalidatePath(`/professionnels/${professionalSlug}`);
 }
 
-export async function saveAdminEvent(formData: FormData): Promise<void> {
+export async function saveProfessionalEvent(formData: FormData): Promise<void> {
   const eventId = normalizeOptionalText(formData.get("eventId"));
+  const eventKind = normalizeEventKind(formData.get("eventKind"));
   const title = normalizeText(formData.get("title"));
   const description = normalizeText(formData.get("description"));
   const startsAtRaw = normalizeText(formData.get("startsAt"));
@@ -61,7 +70,7 @@ export async function saveAdminEvent(formData: FormData): Promise<void> {
   const locationLabel = normalizeOptionalText(formData.get("locationLabel"));
   const publishNow = formData.get("publishNow") === "on";
 
-  if (title.length < 4 || description.length < 10 || !startsAtRaw) {
+  if (!eventKind || title.length < 4 || description.length < 10 || !startsAtRaw) {
     redirect(appendFeedback("error", "event-invalid", eventId));
   }
 
@@ -76,14 +85,15 @@ export async function saveAdminEvent(formData: FormData): Promise<void> {
     redirect(appendFeedback("error", "event-end-before-start", eventId));
   }
 
-  const { user } = await requireStaff("/admin/evenements");
+  const { user, professionalProfile } = await requirePartnerProfessional();
   const supabase = await createSupabaseServerClient();
 
   if (eventId) {
     const { data: existing } = await supabase
       .from("events")
-      .select("id, published_at, professional_profiles(slug)")
+      .select("id, published_at")
       .eq("id", eventId)
+      .eq("professional_id", user.id)
       .maybeSingle();
 
     if (!existing) {
@@ -103,32 +113,16 @@ export async function saveAdminEvent(formData: FormData): Promise<void> {
         ends_at: endsAt,
         location_label: locationLabel,
         published_at: nextPublishedAt,
+        event_kind: eventKind,
       })
-      .eq("id", eventId);
+      .eq("id", eventId)
+      .eq("professional_id", user.id);
 
     if (error) {
       redirect(appendFeedback("error", "event-save-failed", eventId));
     }
 
-    await recordAdminAudit({
-      actionType: "event.updated",
-      targetKind: "event",
-      targetId: eventId,
-      summary: `Événement mis à jour: ${title}`,
-      metadata: {
-        startsAt,
-        endsAt,
-        locationLabel,
-        published: Boolean(nextPublishedAt),
-      },
-    });
-
-    const professionalRelation = getRelationObject(
-      (existing as { professional_profiles?: { slug?: string | null } | Array<{ slug?: string | null }> | null })
-        .professional_profiles,
-    );
-
-    await revalidateEventSurfaces(eventId, professionalRelation?.slug ?? null);
+    await revalidateProfessionalEventSurfaces(eventId, professionalProfile.slug);
     redirect(appendFeedback("status", "event-updated", eventId));
   }
 
@@ -143,6 +137,8 @@ export async function saveAdminEvent(formData: FormData): Promise<void> {
       location_label: locationLabel,
       created_by: user.id,
       published_at: publishedAt,
+      event_kind: eventKind,
+      professional_id: user.id,
     })
     .select("id")
     .maybeSingle();
@@ -151,35 +147,23 @@ export async function saveAdminEvent(formData: FormData): Promise<void> {
     redirect(appendFeedback("error", "event-save-failed"));
   }
 
-  await recordAdminAudit({
-    actionType: "event.created",
-    targetKind: "event",
-    targetId: created.id,
-    summary: `Événement créé: ${title}`,
-    metadata: {
-      startsAt,
-      endsAt,
-      locationLabel,
-      published: Boolean(publishedAt),
-    },
-  });
-
-  await revalidateEventSurfaces(created.id);
+  await revalidateProfessionalEventSurfaces(created.id, professionalProfile.slug);
   redirect(appendFeedback("status", "event-created", created.id));
 }
 
-export async function toggleAdminEventPublish(formData: FormData): Promise<void> {
+export async function toggleProfessionalEventPublish(formData: FormData): Promise<void> {
   const eventId = normalizeText(formData.get("eventId"));
   if (!eventId) {
     redirect(appendFeedback("error", "event-not-found"));
   }
 
-  await requireStaff("/admin/evenements");
+  const { user, professionalProfile } = await requirePartnerProfessional();
   const supabase = await createSupabaseServerClient();
   const { data: existing } = await supabase
     .from("events")
-    .select("id, title, published_at, professional_profiles(slug)")
+    .select("id, published_at")
     .eq("id", eventId)
+    .eq("professional_id", user.id)
     .maybeSingle();
 
   if (!existing) {
@@ -190,25 +174,14 @@ export async function toggleAdminEventPublish(formData: FormData): Promise<void>
   const { error } = await supabase
     .from("events")
     .update({ published_at: nextPublishedAt })
-    .eq("id", eventId);
+    .eq("id", eventId)
+    .eq("professional_id", user.id);
 
   if (error) {
     redirect(appendFeedback("error", "event-publish-failed", eventId));
   }
 
-  await recordAdminAudit({
-    actionType: nextPublishedAt ? "event.published" : "event.unpublished",
-    targetKind: "event",
-    targetId: eventId,
-    summary: `${nextPublishedAt ? "Publication" : "Retrait"} de l'événement ${existing.title}`,
-  });
-
-  const professionalRelation = getRelationObject(
-    (existing as { professional_profiles?: { slug?: string | null } | Array<{ slug?: string | null }> | null })
-      .professional_profiles,
-  );
-
-  await revalidateEventSurfaces(eventId, professionalRelation?.slug ?? null);
+  await revalidateProfessionalEventSurfaces(eventId, professionalProfile.slug);
   redirect(
     appendFeedback(
       "status",
@@ -218,4 +191,3 @@ export async function toggleAdminEventPublish(formData: FormData): Promise<void>
   );
 }
 
-export { formatEventDateTimeInput };

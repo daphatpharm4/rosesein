@@ -1,7 +1,11 @@
 import "server-only";
 
 import { getCurrentUserContext } from "@/lib/auth";
-import { EVENT_TIME_ZONE, type PublishedEvent } from "@/lib/content";
+import {
+  EVENT_TIME_ZONE,
+  type EventKind,
+  type PublishedEvent,
+} from "@/lib/content";
 import { hasSupabaseBrowserEnv } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -26,6 +30,8 @@ export type AdminManagedEvent = PublishedEvent & {
   registrations: EventRegistrationRecord[];
 };
 
+export type ProfessionalManagedEvent = AdminManagedEvent;
+
 type EventRow = {
   id: string;
   title: string;
@@ -35,6 +41,20 @@ type EventRow = {
   location_label: string | null;
   published_at: string | null;
   created_at: string;
+  event_kind: EventKind | null;
+  professional_id: string | null;
+  professional_profiles?:
+    | {
+        slug?: string | null;
+        title?: string | null;
+        profiles?: { display_name?: string | null } | Array<{ display_name?: string | null }> | null;
+      }
+    | Array<{
+        slug?: string | null;
+        title?: string | null;
+        profiles?: { display_name?: string | null } | Array<{ display_name?: string | null }> | null;
+      }>
+    | null;
 };
 
 type EventRegistrationRow = {
@@ -48,7 +68,18 @@ type EventRegistrationRow = {
   created_at: string;
 };
 
+function getRelationObject<T extends object>(relation: T | T[] | null | undefined): T | null {
+  if (!relation) {
+    return null;
+  }
+
+  return Array.isArray(relation) ? relation[0] ?? null : relation;
+}
+
 function toPublishedEvent(row: EventRow): PublishedEvent {
+  const professionalRelation = getRelationObject(row.professional_profiles);
+  const hostProfileRelation = getRelationObject(professionalRelation?.profiles);
+
   return {
     id: row.id,
     title: row.title,
@@ -57,6 +88,11 @@ function toPublishedEvent(row: EventRow): PublishedEvent {
     endsAt: row.ends_at,
     locationLabel: row.location_label,
     publishedAt: row.published_at ?? row.created_at,
+    eventKind: row.event_kind ?? "evenement",
+    professionalId: row.professional_id,
+    hostProfessionalName: hostProfileRelation?.display_name ?? null,
+    hostProfessionalSlug: professionalRelation?.slug ?? null,
+    hostProfessionalTitle: professionalRelation?.title ?? null,
   };
 }
 
@@ -136,7 +172,19 @@ export async function getPublishedEventById(eventId: string): Promise<PublishedE
   const { data } = await supabase
     .from("events")
     .select(
-      "id, title, description, starts_at, ends_at, location_label, published_at, created_at",
+      `
+        id,
+        title,
+        description,
+        starts_at,
+        ends_at,
+        location_label,
+        published_at,
+        created_at,
+        event_kind,
+        professional_id,
+        professional_profiles(slug, title, profiles(display_name))
+      `,
     )
     .eq("id", eventId)
     .not("published_at", "is", null)
@@ -147,6 +195,45 @@ export async function getPublishedEventById(eventId: string): Promise<PublishedE
   }
 
   return toPublishedEvent(data as EventRow);
+}
+
+export async function getPublishedEventsByProfessional(
+  professionalId: string,
+  limit = 3,
+): Promise<PublishedEvent[]> {
+  if (!hasSupabaseBrowserEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select(
+      `
+        id,
+        title,
+        description,
+        starts_at,
+        ends_at,
+        location_label,
+        published_at,
+        created_at,
+        event_kind,
+        professional_id,
+        professional_profiles(slug, title, profiles(display_name))
+      `,
+    )
+    .eq("professional_id", professionalId)
+    .not("published_at", "is", null)
+    .gte("starts_at", new Date().toISOString())
+    .order("starts_at", { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as EventRow[]).map(toPublishedEvent);
 }
 
 export async function getCurrentUserEventRegistration(
@@ -195,7 +282,19 @@ export async function getAdminEventsSnapshot(): Promise<AdminManagedEvent[]> {
   const { data: events } = await supabase
     .from("events")
     .select(
-      "id, title, description, starts_at, ends_at, location_label, published_at, created_at",
+      `
+        id,
+        title,
+        description,
+        starts_at,
+        ends_at,
+        location_label,
+        published_at,
+        created_at,
+        event_kind,
+        professional_id,
+        professional_profiles(slug, title, profiles(display_name))
+      `,
     )
     .order("starts_at", { ascending: true });
 
@@ -222,6 +321,121 @@ export async function getAdminEventsSnapshot(): Promise<AdminManagedEvent[]> {
           .select("id, display_name, pseudonym")
           .in("id", userIds)
       : { data: [] };
+
+  const profileMap = new Map(
+    (profiles ?? []).map((profile) => [
+      profile.id as string,
+      {
+        displayName: profile.display_name as string,
+        pseudonym: profile.pseudonym as string | null,
+      },
+    ]),
+  );
+
+  const registrationsByEvent = registrationRows.reduce<Record<string, EventRegistrationRecord[]>>(
+    (accumulator, registration) => {
+      const profile = profileMap.get(registration.user_id);
+      const displayName =
+        profile?.displayName ??
+        profile?.pseudonym ??
+        registration.contact_email ??
+        "Membre";
+
+      (accumulator[registration.event_id] ??= []).push({
+        id: registration.id,
+        eventId: registration.event_id,
+        userId: registration.user_id,
+        displayName,
+        contactEmail: registration.contact_email,
+        contactPhone: registration.contact_phone,
+        note: registration.note,
+        status: registration.status,
+        createdAt: registration.created_at,
+      });
+
+      return accumulator;
+    },
+    {},
+  );
+
+  return eventRows.map((event) => {
+    const eventRegistrations = registrationsByEvent[event.id] ?? [];
+
+    return {
+      ...toPublishedEvent(event),
+      createdAt: event.created_at,
+      isPublished: Boolean(event.published_at),
+      registrationCount: eventRegistrations.filter(
+        (registration) => registration.status === "registered",
+      ).length,
+      registrations: eventRegistrations,
+    };
+  });
+}
+
+export async function getProfessionalEventsSnapshot(
+  professionalId: string,
+): Promise<ProfessionalManagedEvent[]> {
+  if (!hasSupabaseBrowserEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: events, error: eventError } = await supabase
+    .from("events")
+    .select(
+      `
+        id,
+        title,
+        description,
+        starts_at,
+        ends_at,
+        location_label,
+        published_at,
+        created_at,
+        event_kind,
+        professional_id,
+        professional_profiles(slug, title, profiles(display_name))
+      `,
+    )
+    .eq("professional_id", professionalId)
+    .order("starts_at", { ascending: true });
+
+  if (eventError) {
+    throw eventError;
+  }
+
+  const eventRows = (events ?? []) as EventRow[];
+  const eventIds = eventRows.map((event) => event.id);
+
+  const { data: registrations, error: registrationError } =
+    eventIds.length > 0
+      ? await supabase
+          .from("event_registrations")
+          .select(
+            "id, event_id, user_id, contact_email, contact_phone, note, status, created_at",
+          )
+          .in("event_id", eventIds)
+          .order("created_at", { ascending: false })
+      : { data: [], error: null };
+
+  if (registrationError) {
+    throw registrationError;
+  }
+
+  const registrationRows = (registrations ?? []) as EventRegistrationRow[];
+  const userIds = Array.from(new Set(registrationRows.map((registration) => registration.user_id)));
+  const { data: profiles, error: profileError } =
+    userIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, display_name, pseudonym")
+          .in("id", userIds)
+      : { data: [], error: null };
+
+  if (profileError) {
+    throw profileError;
+  }
 
   const profileMap = new Map(
     (profiles ?? []).map((profile) => [

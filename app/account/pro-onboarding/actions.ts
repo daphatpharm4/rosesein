@@ -33,6 +33,43 @@ function normalizeProfessionalKind(value: FormDataEntryValue | null): Profession
   return value === "medical" || value === "support_care" ? value : null;
 }
 
+const MEDICAL_CATEGORY_VALUES = new Set<MedicalCategory>([
+  "oncologue",
+  "chirurgien_senologue",
+  "radiotherapeute",
+  "medecin_generaliste",
+  "infirmier_coordinateur",
+  "kinesitherapeute",
+  "pharmacien",
+  "radiologue",
+]);
+
+const SUPPORT_CATEGORY_VALUES = new Set<SupportCategory>([
+  "psychologue",
+  "nutritionniste",
+  "socio_estheticien",
+  "sophrologue",
+  "coach_apa",
+  "assistant_social",
+  "acupuncteur",
+  "osteopathe",
+  "praticien_yoga",
+]);
+
+function normalizeMedicalCategory(value: FormDataEntryValue | null): MedicalCategory | null {
+  const normalized = normalizeOptionalText(value);
+  return normalized && MEDICAL_CATEGORY_VALUES.has(normalized as MedicalCategory)
+    ? (normalized as MedicalCategory)
+    : null;
+}
+
+function normalizeSupportCategory(value: FormDataEntryValue | null): SupportCategory | null {
+  const normalized = normalizeOptionalText(value);
+  return normalized && SUPPORT_CATEGORY_VALUES.has(normalized as SupportCategory)
+    ? (normalized as SupportCategory)
+    : null;
+}
+
 function normalizeConsultationModes(values: FormDataEntryValue[]): ConsultationMode[] {
   return values.filter(
     (value): value is ConsultationMode =>
@@ -54,8 +91,10 @@ export async function createProfessionalAccount(formData: FormData) {
   const displayName = normalizeText(formData.get("displayName"));
   const title = normalizeOptionalText(formData.get("title"));
   const professionalKind = normalizeProfessionalKind(formData.get("professionalKind"));
-  const medicalCategory = normalizeOptionalText(formData.get("medicalCategory")) as MedicalCategory | null;
-  const supportCategory = normalizeOptionalText(formData.get("supportCategory")) as SupportCategory | null;
+  const rawMedicalCategory = normalizeOptionalText(formData.get("medicalCategory"));
+  const rawSupportCategory = normalizeOptionalText(formData.get("supportCategory"));
+  const medicalCategory = normalizeMedicalCategory(formData.get("medicalCategory"));
+  const supportCategory = normalizeSupportCategory(formData.get("supportCategory"));
   const city = normalizeOptionalText(formData.get("city"));
   const country = normalizeText(formData.get("country")).toUpperCase() || "FR";
   const bio = normalizeOptionalText(formData.get("bio"));
@@ -67,6 +106,13 @@ export async function createProfessionalAccount(formData: FormData) {
 
   if (displayName.length < 2 || !professionalKind) {
     redirect("/account/pro-onboarding?error=missing-fields");
+  }
+
+  if (
+    (professionalKind === "medical" && rawSupportCategory)
+    || (professionalKind === "support_care" && rawMedicalCategory)
+  ) {
+    redirect("/account/pro-onboarding?error=category-exclusive");
   }
 
   if (

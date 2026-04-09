@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { ArrowRight, CalendarRange, ExternalLink, Newspaper, Search, ShieldCheck } from "lucide-react";
 
+import { EventKindBadge } from "@/components/content/event-kind-badge";
 import type { PublishedArticle, PublishedEvent } from "@/lib/content";
 import { formatEventSchedule, formatPublishedDate } from "@/lib/content";
 
@@ -135,12 +136,24 @@ export function NewsFilters({ articles, events, configured }: Props) {
       {/* Events */}
       {events.length > 0 && (
         <div>
-          <div className="eyebrow mb-3">Événements à venir</div>
+          <div className="eyebrow mb-2">Rendez-vous publiés</div>
+          <p className="mb-4 max-w-2xl text-base leading-8 text-on-surface-variant">
+            Événements associatifs, ateliers et webinaires se retrouvent ici avec une page
+            de détail propre à chaque format.
+          </p>
           <div className="space-y-4">
             {events.map((event) => (
               <article key={event.id} className="surface-card space-y-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
                   <CalendarRange aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <EventKindBadge kind={event.eventKind} />
+                  {event.hostProfessionalName ? (
+                    <span className="text-sm text-on-surface-variant">
+                      Animé par {event.hostProfessionalName}
+                    </span>
+                  ) : null}
                 </div>
                 <h2 className="font-headline text-lg font-semibold text-on-surface">
                   {event.title}
@@ -155,7 +168,7 @@ export function NewsFilters({ articles, events, configured }: Props) {
                     href={`/actualites/evenements/${event.id}` as Route}
                     className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
                   >
-                    Voir et s&apos;inscrire
+                    Voir le détail
                     <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
                   </Link>
                 </div>

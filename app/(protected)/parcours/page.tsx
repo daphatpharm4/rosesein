@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   CalendarCheck2,
+  CalendarClock,
   FileText,
   LockKeyhole,
   NotebookPen,
@@ -13,9 +14,12 @@ import { AppShell } from "@/components/shell/app-shell";
 import {
   formatAppointmentSchedule,
   formatParcoursDate,
+  formatProfessionalAppointmentSchedule,
   getParcoursSnapshot,
+  PROFESSIONAL_APPOINTMENT_STATUS_LABELS,
   toDateTimeLocalValue,
 } from "@/lib/parcours";
+import { CONSULTATION_MODE_LABELS } from "@/lib/professional";
 
 import {
   deleteAppointment,
@@ -82,7 +86,14 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
   const feedbackTone = error
     ? "bg-primary/10 text-on-primary-container"
     : "bg-secondary-container text-on-secondary-container";
-  const { appointments, notes, documents } = await getParcoursSnapshot();
+  const { appointments, professionalAppointments, notes, documents } = await getParcoursSnapshot();
+  const professionalAppointmentStatusClasses = {
+    pending: "bg-primary/10 text-primary",
+    confirmed: "bg-secondary-container/70 text-on-secondary-container",
+    declined: "bg-surface-container-low text-on-surface-variant",
+    cancelled: "bg-surface-container-low text-on-surface-variant",
+    completed: "bg-primary-container/40 text-on-primary-container",
+  } as const;
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} o`;
@@ -429,6 +440,109 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
               <p className="mt-2 text-sm leading-7 text-on-surface-variant">
                 Ajoutez ici vos prochaines consultations, ateliers, appels ou rappels personnels.
               </p>
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-4">
+          <div className="space-y-2">
+            <div className="eyebrow">Rendez-vous ROSE-SEIN</div>
+            <h2 className="font-headline text-2xl font-bold text-on-surface">
+              Vos demandes auprès des professionnels
+            </h2>
+            <p className="max-w-2xl text-sm leading-7 text-on-surface-variant">
+              Les demandes envoyées depuis l&apos;annuaire apparaissent ici avec leur statut,
+              pour que la confirmation par le professionnel reste visible côté patiente.
+            </p>
+          </div>
+
+          {professionalAppointments.length > 0 ? (
+            <div className="space-y-4">
+              {professionalAppointments.map((appointment) => (
+                <article
+                  key={appointment.id}
+                  className="rounded-brand-xl border border-outline-variant/40 bg-surface-container-lowest px-5 py-5 shadow-ambient"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <div>
+                        <p className="font-headline text-lg font-semibold text-on-surface">
+                          {appointment.professionalTitle
+                            ? `${appointment.professionalTitle} ${appointment.professionalDisplayName}`
+                            : appointment.professionalDisplayName}
+                        </p>
+                        <p className="mt-1 text-sm leading-7 text-primary">
+                          {appointment.professionalCategoryLabel}
+                        </p>
+                      </div>
+                      <p className="text-sm leading-7 text-on-surface-variant">
+                        {formatProfessionalAppointmentSchedule(appointment.startsAt, appointment.endsAt)}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`rounded-full px-3 py-1 font-label text-xs font-semibold uppercase tracking-[0.14em] ${
+                        professionalAppointmentStatusClasses[appointment.status]
+                      }`}
+                    >
+                      {PROFESSIONAL_APPOINTMENT_STATUS_LABELS[appointment.status]}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-outline">
+                    <span className="rounded-full bg-surface-container-low px-3 py-1">
+                      {CONSULTATION_MODE_LABELS[appointment.consultationMode]}
+                    </span>
+                    {appointment.professionalSlug ? (
+                      <Link
+                        href={`/professionnels/${appointment.professionalSlug}`}
+                        className="rounded-full bg-surface-container-low px-3 py-1 font-semibold text-primary"
+                      >
+                        Voir la fiche
+                      </Link>
+                    ) : null}
+                  </div>
+
+                  {appointment.patientNote ? (
+                    <div className="mt-4 rounded-brand-lg bg-surface-container-low px-4 py-4">
+                      <p className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-outline">
+                        Votre message
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                        {appointment.patientNote}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {appointment.professionalNote ? (
+                    <div className="mt-4 rounded-brand-lg bg-secondary-container/40 px-4 py-4">
+                      <p className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-secondary-container">
+                        Message du professionnel
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                        {appointment.professionalNote}
+                      </p>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-brand-xl border border-outline-variant/40 bg-surface-container-lowest px-5 py-5 shadow-ambient">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <CalendarClock aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+                </div>
+                <div>
+                  <p className="font-headline text-lg font-semibold text-on-surface">
+                    Aucune demande professionnelle pour le moment
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                    Dès qu&apos;une demande est envoyée depuis une fiche professionnelle, elle
+                    sera visible ici avec son statut de confirmation.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </section>

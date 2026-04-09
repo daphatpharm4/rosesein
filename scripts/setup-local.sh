@@ -41,6 +41,9 @@ Next steps:
    - supabase/migrations/0017a_professional_role_enums.sql
    - supabase/migrations/0018_professional_foundation.sql
    - supabase/migrations/0019_professional_agenda.sql
+   - supabase/migrations/0020_patient_professional_appointment_visibility.sql
+   - supabase/migrations/0021_professional_profile_views.sql
+   - supabase/migrations/0022_partner_professional_events.sql
 4. Start the app:
    npm run dev
 5. Run the local verification pack:

@@ -12,6 +12,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { EventKindBadge } from "@/components/content/event-kind-badge";
+import { ProfessionalCard } from "@/components/pro/professional-card";
 import { HomeExperience } from "@/components/home/home-experience";
 import { AppShell } from "@/components/shell/app-shell";
 import { getCurrentUserContext } from "@/lib/auth";
@@ -22,6 +24,7 @@ import {
   formatPublishedDate,
   getPublicContentSnapshot,
 } from "@/lib/content";
+import { getFeaturedPartnerProfessionals } from "@/lib/professional";
 
 type Shortcut = {
   title: string;
@@ -172,11 +175,12 @@ function revealDelay(value: string): CSSProperties {
 }
 
 export default async function HomePage() {
-  const [{ configured, latestArticle, nextEvent }, { user, profile }, associationMessage] =
+  const [{ configured, latestArticle, nextEvent }, { user, profile }, associationMessage, featuredPartners] =
     await Promise.all([
       getPublicContentSnapshot(),
       getCurrentUserContext(),
       getActiveAssociationMessage(),
+      getFeaturedPartnerProfessionals(3),
     ]);
 
   const displayName = profile ? profile.pseudonym ?? profile.displayName : null;
@@ -320,6 +324,14 @@ export default async function HomePage() {
                 </div>
               ) : nextEvent ? (
                 <div className="mt-4 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <EventKindBadge kind={nextEvent.eventKind} />
+                    {nextEvent.hostProfessionalName ? (
+                      <span className="text-sm text-on-surface-variant">
+                        Animé par {nextEvent.hostProfessionalName}
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="font-headline text-xl font-semibold text-on-surface">
                     {nextEvent.title}
                   </p>
@@ -335,7 +347,7 @@ export default async function HomePage() {
                     href={`/actualites/evenements/${nextEvent.id}` as Route}
                     className="motion-link-row inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
                   >
-                    Voir l&apos;événement
+                    Voir le détail
                     <ArrowRight
                       aria-hidden="true"
                       className="motion-link-arrow h-4 w-4"
@@ -432,6 +444,29 @@ export default async function HomePage() {
               </p>
             </aside>
           </section>
+
+          {featuredPartners.length > 0 ? (
+            <section className="space-y-5" data-reveal="section" style={revealDelay("180ms")}>
+              <div className="space-y-3">
+                <div className="eyebrow">Professionnels partenaires</div>
+                <h2 className="font-headline text-2xl font-bold text-on-surface">
+                  Des fiches mises en avant pour rester faciles à retrouver.
+                </h2>
+                <p className="max-w-3xl text-sm leading-7 text-on-surface-variant">
+                  Ces professionnels disposent d&apos;une présence partenaire dans ROSE-SEIN:
+                  leur fiche peut être mise en avant sur l&apos;accueil et leur activité est suivie
+                  avec des indicateurs simples. Cette visibilité éditoriale n&apos;est pas un avis
+                  médical personnalisé.
+                </p>
+              </div>
+
+              <div className="grid gap-4">
+                {featuredPartners.map((professional) => (
+                  <ProfessionalCard key={professional.id} profile={professional} />
+                ))}
+              </div>
+            </section>
+          ) : null}
         </section>
       </HomeExperience>
     </AppShell>

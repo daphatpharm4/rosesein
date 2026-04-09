@@ -30,6 +30,7 @@ export default async function ProfessionalDirectoryPage({
   const kind: ProfessionalKind | undefined =
     parcours === "medical" || parcours === "support_care" ? parcours : undefined;
   const professionals = await getProfessionalDirectory({ kind });
+  const featuredCount = professionals.filter((professional) => professional.subscriptionTier === "partenaire").length;
 
   const filters = [
     { href: "/professionnels", label: "Tous", active: !kind },
@@ -69,6 +70,17 @@ export default async function ProfessionalDirectoryPage({
             </Link>
           ))}
         </div>
+
+        {featuredCount > 0 ? (
+          <div className="surface-card bg-secondary-container/25">
+            <p className="font-headline text-lg font-semibold text-on-surface">
+              {featuredCount} fiche(s) partenaire mise(s) en avant
+            </p>
+            <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+              Les comptes partenaires apparaissent en tête de l&apos;annuaire avec un signal visuel renforcé. Cette mise en avant reste éditoriale et ne constitue pas un avis médical individualisé.
+            </p>
+          </div>
+        ) : null}
 
         {professionals.length > 0 ? (
           <div className="grid gap-4">

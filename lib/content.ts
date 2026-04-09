@@ -3,6 +3,14 @@ import { createSupabasePublicClient } from "@/lib/supabase/public";
 
 export const EVENT_TIME_ZONE = "Europe/Paris";
 
+export type EventKind = "evenement" | "atelier" | "webinaire";
+
+export const EVENT_KIND_LABELS: Record<EventKind, string> = {
+  evenement: "Événement",
+  atelier: "Atelier",
+  webinaire: "Webinaire",
+};
+
 export type PublishedArticle = {
   id: string;
   slug: string;
@@ -20,6 +28,11 @@ export type PublishedEvent = {
   endsAt: string | null;
   locationLabel: string | null;
   publishedAt: string;
+  eventKind: EventKind;
+  professionalId: string | null;
+  hostProfessionalName: string | null;
+  hostProfessionalSlug: string | null;
+  hostProfessionalTitle: string | null;
 };
 
 export type PublicContentSnapshot = {
@@ -57,7 +70,29 @@ type EventRow = {
   ends_at: string | null;
   location_label: string | null;
   published_at: string;
+  event_kind: EventKind | null;
+  professional_id: string | null;
+  professional_profiles?:
+    | {
+        slug?: string | null;
+        title?: string | null;
+        profiles?: { display_name?: string | null } | Array<{ display_name?: string | null }> | null;
+      }
+    | Array<{
+        slug?: string | null;
+        title?: string | null;
+        profiles?: { display_name?: string | null } | Array<{ display_name?: string | null }> | null;
+      }>
+    | null;
 };
+
+function getRelationObject<T extends object>(relation: T | T[] | null | undefined): T | null {
+  if (!relation) {
+    return null;
+  }
+
+  return Array.isArray(relation) ? relation[0] ?? null : relation;
+}
 
 function toArticle(row: ArticleRow): PublishedArticle {
   return {
@@ -71,6 +106,9 @@ function toArticle(row: ArticleRow): PublishedArticle {
 }
 
 function toEvent(row: EventRow): PublishedEvent {
+  const professionalRelation = getRelationObject(row.professional_profiles);
+  const hostProfileRelation = getRelationObject(professionalRelation?.profiles);
+
   return {
     id: row.id,
     title: row.title,
@@ -79,6 +117,11 @@ function toEvent(row: EventRow): PublishedEvent {
     endsAt: row.ends_at,
     locationLabel: row.location_label,
     publishedAt: row.published_at,
+    eventKind: row.event_kind ?? "evenement",
+    professionalId: row.professional_id,
+    hostProfessionalName: hostProfileRelation?.display_name ?? null,
+    hostProfessionalSlug: professionalRelation?.slug ?? null,
+    hostProfessionalTitle: professionalRelation?.title ?? null,
   };
 }
 
@@ -105,7 +148,20 @@ export async function getPublicContentSnapshot(): Promise<PublicContentSnapshot>
       .limit(20),
     supabase
       .from("events")
-      .select("id, title, description, starts_at, ends_at, location_label, published_at")
+      .select(
+        `
+          id,
+          title,
+          description,
+          starts_at,
+          ends_at,
+          location_label,
+          published_at,
+          event_kind,
+          professional_id,
+          professional_profiles(slug, title, profiles(display_name))
+        `,
+      )
       .not("published_at", "is", null)
       .gte("starts_at", nowIso)
       .order("starts_at", { ascending: true })
@@ -188,7 +244,9 @@ export function formatPublishedDate(value: string) {
   }).format(new Date(value));
 }
 
-export function formatEventSchedule(event: PublishedEvent) {
+export function formatEventSchedule(
+  event: Pick<PublishedEvent, "startsAt" | "endsAt">,
+) {
   const startsAt = new Date(event.startsAt);
   const endsAt = event.endsAt ? new Date(event.endsAt) : null;
 

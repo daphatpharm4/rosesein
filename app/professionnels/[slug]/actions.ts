@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireCompletedProfile } from "@/lib/auth";
@@ -43,5 +44,6 @@ export async function requestAppointment(
     redirect(`/professionnels/${slug}?error=booking-unavailable`);
   }
 
+  revalidatePath("/parcours");
   redirect(`/professionnels/${slug}?status=booking-requested`);
 }

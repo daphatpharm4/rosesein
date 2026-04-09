@@ -4,10 +4,11 @@ import { ArrowLeft, CalendarRange, CheckCircle2, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import type { Route } from "next";
 
+import { EventKindBadge } from "@/components/content/event-kind-badge";
 import { RevealScene } from "@/components/motion/reveal-scene";
 import { AppShell } from "@/components/shell/app-shell";
 import { getCurrentUserContext } from "@/lib/auth";
-import { formatEventSchedule } from "@/lib/content";
+import { EVENT_KIND_LABELS, formatEventSchedule } from "@/lib/content";
 import { getCurrentUserEventRegistration, getPublishedEventById, isEventClosed } from "@/lib/events";
 
 import { cancelEventRegistration, registerForEvent } from "./actions";
@@ -74,6 +75,25 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
   ]);
   const closed = isEventClosed(event.startsAt);
   const hasActiveRegistration = registration?.status === "registered";
+  const isProfessionalFormat = event.eventKind !== "evenement" && Boolean(event.professionalId);
+  const registrationHeading =
+    event.eventKind === "atelier"
+      ? "S'inscrire à cet atelier"
+      : event.eventKind === "webinaire"
+        ? "S'inscrire à ce webinaire"
+        : "Réserver votre place";
+  const registrationHelper = isProfessionalFormat
+    ? "L'inscription concerne ce format collectif. Pour une consultation individuelle, repassez par la fiche du professionnel."
+    : "L'inscription vous réserve une place sur cet événement publié par l'association.";
+  const noteLabel = isProfessionalFormat ? "Message pour l'intervenant" : "Message pour l'équipe";
+  const statusHeading =
+    event.eventKind === "evenement" ? "Événement" : EVENT_KIND_LABELS[event.eventKind];
+  const registeredHeading =
+    event.eventKind === "atelier"
+      ? "Vous êtes inscrite à cet atelier"
+      : event.eventKind === "webinaire"
+        ? "Vous êtes inscrite à ce webinaire"
+        : "Vous êtes inscrite à cet événement";
 
   return (
     <AppShell title="Actualités" currentPath="/actualites">
@@ -98,7 +118,10 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
                 <CalendarRange aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
               </div>
-              <p className="eyebrow">Événement</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="eyebrow">{EVENT_KIND_LABELS[event.eventKind]}</p>
+                <EventKindBadge kind={event.eventKind} />
+              </div>
             </div>
             <h1 className="editorial-title">{event.title}</h1>
             <p className="text-base leading-8 text-on-surface-variant">{event.description}</p>
@@ -108,6 +131,24 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
                 <p className="text-on-surface-variant">{event.locationLabel}</p>
               ) : null}
             </div>
+            {event.hostProfessionalName && event.hostProfessionalSlug ? (
+              <div className="rounded-brand bg-surface-container-low px-4 py-4">
+                <p className="font-headline text-base font-semibold text-on-surface">
+                  Animé par {event.hostProfessionalTitle ? `${event.hostProfessionalTitle} ` : ""}
+                  {event.hostProfessionalName}
+                </p>
+                <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                  Cette page décrit un format collectif. La fiche professionnelle reste le bon
+                  point d&apos;entrée pour une demande de consultation individuelle.
+                </p>
+                <Link
+                  href={`/professionnels/${event.hostProfessionalSlug}` as Route}
+                  className="mt-3 inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                >
+                  Voir la fiche professionnelle
+                </Link>
+              </div>
+            ) : null}
           </div>
 
           {feedback ? (
@@ -118,7 +159,7 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
               data-reveal="section"
               style={{ ["--reveal-delay" as string]: "170ms" }}
             >
-              <p className="font-headline text-base font-semibold">Événement</p>
+              <p className="font-headline text-base font-semibold">{statusHeading}</p>
               <p className="mt-2 text-sm leading-7">{feedback}</p>
             </div>
           ) : null}
@@ -135,7 +176,7 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
                 </div>
                 <div>
                   <h2 className="font-headline text-lg font-semibold text-on-surface">
-                    Vous êtes inscrite à cet événement
+                    {registeredHeading}
                   </h2>
                   <p className="mt-2 text-sm leading-7 text-on-surface-variant">
                     Inscription enregistrée le {formatRegistrationDate(registration.createdAt)}.
@@ -196,8 +237,11 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
                 <div>
                   <div className="eyebrow">Inscription</div>
                   <h2 className="font-headline text-2xl font-bold text-on-surface">
-                    Réserver votre place
+                    {registrationHeading}
                   </h2>
+                  <p className="mt-2 max-w-2xl text-base leading-8 text-on-surface-variant">
+                    {registrationHelper}
+                  </p>
                 </div>
 
                 <form action={registerForEvent} className="surface-section space-y-5">
@@ -232,14 +276,18 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
 
                   <label className="block space-y-2">
                     <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                      Message pour l'équipe
+                      {noteLabel}
                     </span>
                     <textarea
                       name="note"
                       rows={5}
                       defaultValue={registration?.note ?? ""}
                       className="motion-field w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm leading-7 text-on-surface placeholder:text-outline"
-                      placeholder="Besoin d'accessibilité, question pratique, ou simple précision sur votre venue."
+                      placeholder={
+                        isProfessionalFormat
+                          ? "Question pratique, besoin d'accessibilité ou précision utile avant la session."
+                          : "Besoin d'accessibilité, question pratique, ou simple précision sur votre venue."
+                      }
                     />
                   </label>
 

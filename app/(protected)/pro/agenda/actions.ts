@@ -87,6 +87,7 @@ export async function respondToAppointment(
 
   revalidatePath("/pro");
   revalidatePath("/pro/agenda");
+  revalidatePath("/parcours");
   redirect(
     appendFeedback(
       "/pro/agenda",

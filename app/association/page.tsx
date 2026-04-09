@@ -12,6 +12,7 @@ import {
   UsersRound,
 } from "lucide-react";
 
+import { EventKindBadge } from "@/components/content/event-kind-badge";
 import { AppShell } from "@/components/shell/app-shell";
 import {
   formatEventSchedule,
@@ -174,10 +175,14 @@ export default async function AssociationPage() {
 
         <section className="space-y-4">
           <div>
-            <div className="eyebrow">Agenda associatif</div>
+            <div className="eyebrow">Agenda publié</div>
             <h2 className="font-headline text-2xl font-bold text-on-surface">
-              Les prochains rendez-vous publiés
+              Les prochains rendez-vous visibles
             </h2>
+            <p className="mt-2 max-w-2xl text-base leading-8 text-on-surface-variant">
+              Cette liste peut réunir des événements portés par l&apos;association et des
+              formats collectifs publiés par des professionnels partenaires.
+            </p>
           </div>
 
           {upcomingEvents.length > 0 ? (
@@ -191,6 +196,14 @@ export default async function AssociationPage() {
                     <CalendarRange aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
                   </div>
                   <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <EventKindBadge kind={event.eventKind} />
+                      {event.hostProfessionalName ? (
+                        <span className="text-sm text-on-surface-variant">
+                          Animé par {event.hostProfessionalName}
+                        </span>
+                      ) : null}
+                    </div>
                     <h3 className="font-headline text-lg font-semibold text-on-surface">
                       {event.title}
                     </h3>
@@ -209,7 +222,7 @@ export default async function AssociationPage() {
                       href={`/actualites/evenements/${event.id}` as Route}
                       className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
                     >
-                      Voir et s&apos;inscrire
+                      Voir le détail
                       <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
                     </Link>
                   </div>
@@ -219,7 +232,7 @@ export default async function AssociationPage() {
           ) : (
             <div className="surface-card">
               <p className="font-headline text-lg font-semibold text-on-surface">
-                Aucun événement associatif publié à venir
+                Aucun rendez-vous publié à venir
               </p>
               <p className="mt-2 text-sm leading-7 text-on-surface-variant">
                 {configured

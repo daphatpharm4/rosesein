@@ -1,16 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarDays, Globe, MapPin, Phone, Video } from "lucide-react";
+import { CalendarDays, Globe, MapPin, Phone, ShieldCheck, Video } from "lucide-react";
 
 import { AvailabilityPicker } from "@/components/pro/availability-picker";
+import { EventKindBadge } from "@/components/content/event-kind-badge";
 import { SubscriptionBadge } from "@/components/pro/subscription-badge";
 import { AppShell } from "@/components/shell/app-shell";
 import { getCurrentUserContext } from "@/lib/auth";
+import { formatEventSchedule } from "@/lib/content";
+import { getPublishedEventsByProfessional } from "@/lib/events";
 import { getPublishedAvailabilities } from "@/lib/professional-agenda";
 import {
   CONSULTATION_MODE_LABELS,
+  SUBSCRIPTION_TIER_DEFINITIONS,
   getProfessionalBySlug,
   getProfessionalCategoryLabel,
+  trackProfessionalProfileView,
 } from "@/lib/professional";
 
 import { requestAppointment } from "./actions";
@@ -53,10 +58,14 @@ export default async function ProfessionalProfilePage({
     notFound();
   }
 
-  const availabilities =
+  const [availabilities, hostedEvents] = await Promise.all([
     profile.subscriptionTier === "solidaire"
-      ? []
-      : await getPublishedAvailabilities(profile.id);
+      ? Promise.resolve([])
+      : getPublishedAvailabilities(profile.id),
+    profile.subscriptionTier === "partenaire"
+      ? getPublishedEventsByProfessional(profile.id, 3)
+      : Promise.resolve([]),
+  ]);
   const feedbackKey = error ?? status;
   const feedback = feedbackKey ? feedbackMap[feedbackKey] : null;
   const feedbackTone = error
@@ -64,6 +73,7 @@ export default async function ProfessionalProfilePage({
     : "bg-secondary-container text-on-secondary-container";
   const categoryLabel = getProfessionalCategoryLabel(profile);
   const headerTitle = profile.structureName ?? `${profile.title ? `${profile.title} ` : ""}${profile.displayName}`.trim();
+  const tierDefinition = SUBSCRIPTION_TIER_DEFINITIONS[profile.subscriptionTier];
   const viewerProfile = context.profile;
   const isAdminViewer = context.roles.includes("admin");
   const hasCompletedProfile = viewerProfile !== null;
@@ -73,6 +83,8 @@ export default async function ProfessionalProfilePage({
     && profile.subscriptionTier !== "solidaire"
     && availabilities.length > 0;
   const requestAppointmentAction = requestAppointment.bind(null, slug, profile.id);
+
+  await trackProfessionalProfileView(profile.id, context.user?.id ?? null);
 
   return (
     <AppShell title="Professionnels" currentPath="/professionnels">
@@ -141,6 +153,66 @@ export default async function ProfessionalProfilePage({
             ) : null}
           </div>
         </div>
+
+        {profile.subscriptionTier === "partenaire" ? (
+          <div className="surface-card space-y-3 bg-secondary-container/30">
+            <div className="flex items-center gap-3 text-primary">
+              <ShieldCheck aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+              <p className="font-headline text-lg font-semibold text-on-surface">
+                {tierDefinition.publicHeadline}
+              </p>
+            </div>
+            <p className="text-sm leading-7 text-on-surface-variant">
+              {tierDefinition.publicDescription}
+            </p>
+            <p className="text-xs leading-6 text-on-surface-variant">
+              Cette mise en avant aide à repérer la fiche dans l&apos;écosystème ROSE-SEIN. Elle ne remplace ni votre appréciation personnelle, ni un avis médical individualisé.
+            </p>
+          </div>
+        ) : null}
+
+        {hostedEvents.length > 0 ? (
+          <section className="surface-section space-y-4">
+            <div>
+              <div className="eyebrow">Formats collectifs</div>
+              <h2 className="font-headline text-2xl font-bold text-on-surface">
+                Ateliers et webinaires publiés
+              </h2>
+              <p className="max-w-2xl text-base leading-8 text-on-surface-variant">
+                Ces formats disposent d&apos;une page dédiée avec leurs propres inscriptions.
+                Pour une consultation individuelle, utilisez l&apos;agenda ou le contact direct.
+              </p>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              {hostedEvents.map((event) => (
+                <article key={event.id} className="surface-card space-y-3">
+                  <EventKindBadge kind={event.eventKind} />
+                  <h3 className="font-headline text-lg font-semibold text-on-surface">
+                    {event.title}
+                  </h3>
+                  <p className="text-sm leading-7 text-on-surface-variant">
+                    {event.description}
+                  </p>
+                  <p className="text-sm font-semibold text-on-surface">
+                    {formatEventSchedule(event)}
+                  </p>
+                  {event.locationLabel ? (
+                    <p className="text-xs uppercase tracking-[0.16em] text-outline">
+                      {event.locationLabel}
+                    </p>
+                  ) : null}
+                  <Link
+                    href={`/actualites/evenements/${event.id}`}
+                    className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                  >
+                    Voir le détail
+                  </Link>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {feedback ? (
           <div className={`surface-card ${feedbackTone}`} role={error ? "alert" : "status"}>

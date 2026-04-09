@@ -3,6 +3,7 @@ import { Globe, Link2, ShieldCheck } from "lucide-react";
 import type { Route } from "next";
 
 import { BackLink } from "@/components/navigation/back-link";
+import { ProfessionalTaxonomyFields } from "@/components/pro/professional-taxonomy-fields";
 import { SubscriptionBadge } from "@/components/pro/subscription-badge";
 import { AppShell } from "@/components/shell/app-shell";
 import { requireProfessional } from "@/lib/auth";
@@ -23,7 +24,9 @@ type ProProfilePageProps = {
 const feedbackMap: Record<string, string> = {
   "profile-saved": "Votre fiche publique a été mise à jour.",
   "profile-invalid": "Complétez les informations essentielles de la fiche.",
-  "category-required": "Choisissez une catégorie cohérente avec le parcours sélectionné.",
+  "category-required": "Choisissez une seule famille d'exercice, puis la catégorie correspondante.",
+  "category-exclusive":
+    "Une fiche professionnelle ne peut relever que d'une seule famille d'exercice: catégorie médicale ou soins de support.",
   "price-invalid": "Le tarif doit être un nombre valide.",
   "profile-save-failed": "La mise à jour de la fiche a échoué pour le moment.",
 };
@@ -49,6 +52,14 @@ export default async function ProProfilePage({ searchParams }: ProProfilePagePro
     ? "bg-primary/10 text-on-primary-container"
     : "bg-secondary-container text-on-secondary-container";
   const publicHref = `/professionnels/${profile.slug}`;
+  const medicalOptions = Object.entries(MEDICAL_CATEGORY_LABELS).map(([value, label]) => ({
+    value,
+    label,
+  }));
+  const supportOptions = Object.entries(SUPPORT_CATEGORY_LABELS).map(([value, label]) => ({
+    value,
+    label,
+  }));
 
   return (
     <AppShell title="Espace pro" currentPath="/pro">
@@ -63,7 +74,7 @@ export default async function ProProfilePage({ searchParams }: ProProfilePagePro
               <p className="max-w-2xl text-base leading-7 text-on-surface-variant">
                 Cette page alimente votre présence dans l&apos;annuaire. Elle doit aider une
                 patiente à comprendre rapidement qui vous êtes, comment vous consultez et
-                comment demander un rendez-vous.
+                comment demander un rendez-vous, sans ambiguïté sur votre cadre d&apos;intervention.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -126,58 +137,15 @@ export default async function ProProfilePage({ searchParams }: ProProfilePagePro
                 />
               </label>
 
-              <label className="block space-y-2">
-                <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                  Parcours
-                </span>
-                <select
-                  name="professionalKind"
-                  defaultValue={profile.professionalKind}
-                  className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
-                >
-                  <option value="medical">Parcours médical</option>
-                  <option value="support_care">Soins de support</option>
-                </select>
-              </label>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block space-y-2">
-                <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                  Catégorie médicale
-                </span>
-                <select
-                  name="medicalCategory"
-                  defaultValue={profile.medicalCategory ?? ""}
-                  className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
-                >
-                  <option value="">Sélectionner si parcours médical</option>
-                  {Object.entries(MEDICAL_CATEGORY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block space-y-2">
-                <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
-                  Soins de support
-                </span>
-                <select
-                  name="supportCategory"
-                  defaultValue={profile.supportCategory ?? ""}
-                  className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
-                >
-                  <option value="">Sélectionner si soins de support</option>
-                  {Object.entries(SUPPORT_CATEGORY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            <ProfessionalTaxonomyFields
+              defaultKind={profile.professionalKind}
+              defaultMedicalCategory={profile.medicalCategory}
+              defaultSupportCategory={profile.supportCategory}
+              medicalOptions={medicalOptions}
+              supportOptions={supportOptions}
+            />
 
             <label className="block space-y-2">
               <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
@@ -311,7 +279,7 @@ export default async function ProProfilePage({ searchParams }: ProProfilePagePro
               </div>
               <p className="text-sm leading-7 text-on-surface-variant">
                 Une fiche professionnelle rassure davantage quand elle reste concise, claire
-                et concrète: qui vous êtes, pour quoi vous consulter, et comment se passe le premier échange.
+                et concrète: votre cadre d&apos;intervention, vos modalités pratiques, et le déroulé du premier échange, sans promesse de résultat.
               </p>
             </div>
           </aside>
