@@ -11,12 +11,22 @@ export async function requestAppointment(
   formData: FormData,
 ) {
   const context = await requireCompletedProfile(`/professionnels/${slug}`);
+  const profile = context.profile;
+  const isAdmin = context.roles.includes("admin");
   const availabilityId = typeof formData.get("availabilityId") === "string"
     ? (formData.get("availabilityId") as string)
     : "";
   const patientNote = typeof formData.get("patientNote") === "string"
     ? (formData.get("patientNote") as string)
     : null;
+
+  if (!profile) {
+    redirect(`/account?status=complete-profile&redirectTo=${encodeURIComponent(`/professionnels/${slug}`)}`);
+  }
+
+  if (profile.profileKind === "professional" && !isAdmin) {
+    redirect(`/professionnels/${slug}?error=booking-forbidden`);
+  }
 
   if (!availabilityId) {
     redirect(`/professionnels/${slug}?error=booking-missing-slot`);

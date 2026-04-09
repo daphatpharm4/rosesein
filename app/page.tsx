@@ -3,6 +3,7 @@ import type { Route } from "next";
 import type { CSSProperties } from "react";
 import {
   ArrowRight,
+  BriefcaseMedical,
   CalendarHeart,
   HandHeart,
   HeartHandshake,
@@ -68,6 +69,13 @@ function getShortcuts(profileKind: ProfileKind | undefined): Shortcut[] {
         "Consultez les contenus vérifiés sur les traitements, le quotidien et les événements.",
       href: "/actualites" as Route,
       icon: Newspaper,
+    },
+    {
+      title: "Trouver un professionnel",
+      description:
+        "Parcourez l'annuaire, consultez les créneaux publiés et demandez un rendez-vous depuis une fiche dédiée.",
+      href: "/professionnels" as Route,
+      icon: BriefcaseMedical,
     },
     parcoursShortcut,
     {

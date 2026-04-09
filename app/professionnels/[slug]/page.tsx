@@ -28,6 +28,8 @@ const feedbackMap: Record<string, string> = {
   "booking-missing-slot": "Choisissez un créneau avant d'envoyer votre demande.",
   "booking-unavailable":
     "Ce créneau n'est plus disponible. Sélectionnez-en un autre ou contactez directement le professionnel.",
+  "booking-forbidden":
+    "Ce compte ne peut pas envoyer de demande de rendez-vous depuis cette fiche.",
 };
 
 function firstValue(value: string | string[] | undefined) {
@@ -62,9 +64,12 @@ export default async function ProfessionalProfilePage({
     : "bg-secondary-container text-on-secondary-container";
   const categoryLabel = getProfessionalCategoryLabel(profile);
   const headerTitle = profile.structureName ?? `${profile.title ? `${profile.title} ` : ""}${profile.displayName}`.trim();
+  const viewerProfile = context.profile;
+  const isAdminViewer = context.roles.includes("admin");
+  const hasCompletedProfile = viewerProfile !== null;
   const canRequestAppointment =
-    Boolean(context.user)
-    && context.profile?.profileKind !== "professional"
+    hasCompletedProfile
+    && (isAdminViewer || viewerProfile.profileKind !== "professional")
     && profile.subscriptionTier !== "solidaire"
     && availabilities.length > 0;
   const requestAppointmentAction = requestAppointment.bind(null, slug, profile.id);
@@ -223,13 +228,30 @@ export default async function ProfessionalProfilePage({
                     Ouvrir mon compte
                   </Link>
                 </div>
-              ) : context.profile?.profileKind === "professional" ? (
+              ) : !viewerProfile ? (
                 <div className="surface-card space-y-3">
                   <p className="font-headline text-lg font-semibold text-on-surface">
-                    Lecture seule depuis un compte pro
+                    Compléter le profil avant de réserver
                   </p>
                   <p className="text-sm leading-7 text-on-surface-variant">
-                    Les demandes de rendez-vous sont réservées aux patientes et aidants connectés.
+                    La demande de rendez-vous enregistre la personne qui prend contact. Il faut donc finaliser le profil avant l&apos;envoi.
+                  </p>
+                  <Link
+                    href={`/account?status=complete-profile&redirectTo=${encodeURIComponent(`/professionnels/${slug}`)}`}
+                    className="inline-flex items-center justify-center rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                  >
+                    Compléter mon profil
+                  </Link>
+                </div>
+              ) : viewerProfile.profileKind === "professional" ? (
+                <div className="surface-card space-y-3">
+                  <p className="font-headline text-lg font-semibold text-on-surface">
+                    {isAdminViewer ? "Mode admin" : "Lecture seule depuis un compte pro"}
+                  </p>
+                  <p className="text-sm leading-7 text-on-surface-variant">
+                    {isAdminViewer
+                      ? "Un compte administrateur peut tester le parcours, mais un profil complété reste nécessaire."
+                      : "Les demandes de rendez-vous sont réservées aux patientes et aidants connectés."}
                   </p>
                 </div>
               ) : null}
