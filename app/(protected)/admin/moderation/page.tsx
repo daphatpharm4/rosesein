@@ -1,5 +1,6 @@
 import { AlertTriangle, ClipboardCheck, ShieldAlert } from "lucide-react";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { getModerationQueue, moderationActionOptions } from "@/lib/moderation";
 
@@ -68,6 +69,8 @@ export default async function ModerationPage({ searchParams }: ModerationPagePro
   return (
     <AppShell title="Modération" currentPath="/admin">
       <section className="space-y-6">
+        <BackLink href="/admin" label="Retour à l'administration" />
+
         <div className="space-y-3">
           <div className="eyebrow">Queue staff</div>
           <h1 className="editorial-title">Signalements, décisions et escalades.</h1>

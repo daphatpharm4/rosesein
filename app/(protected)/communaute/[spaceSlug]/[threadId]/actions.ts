@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 
 import { notifyManyUsers } from "@/lib/app-notifications";
 import { requireCompletedProfile } from "@/lib/auth";
+import {
+  getCommunityThreadContext,
+  isCommunitySpaceAccessible,
+} from "@/lib/communaute";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function postReply(formData: FormData) {
@@ -24,7 +28,17 @@ export async function postReply(formData: FormData) {
     redirect(`/communaute/${spaceSlug}/${threadId}?error=body-required`);
   }
 
-  const { user } = await requireCompletedProfile("/communaute");
+  const { user, profile, roles } = await requireCompletedProfile("/communaute");
+  if (!profile) redirect("/account?status=complete-profile");
+  const threadContext = await getCommunityThreadContext(threadId);
+
+  if (
+    !threadContext ||
+    !isCommunitySpaceAccessible(threadContext.allowedKind, profile.profileKind, roles)
+  ) {
+    redirect("/communaute?error=space-not-allowed");
+  }
+
   const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.from("community_replies").insert({
@@ -39,21 +53,14 @@ export async function postReply(formData: FormData) {
     redirect(`/communaute/${spaceSlug}/${threadId}?error=reply-failed`);
   }
 
-  const [{ data: thread }, { data: existingReplies }] = await Promise.all([
-    supabase
-      .from("community_threads")
-      .select("created_by, title")
-      .eq("id", threadId)
-      .maybeSingle(),
-    supabase
-      .from("community_replies")
-      .select("author_id")
-      .eq("thread_id", threadId),
-  ]);
+  const { data: existingReplies } = await supabase
+    .from("community_replies")
+    .select("author_id")
+    .eq("thread_id", threadId);
 
   const recipientIds = Array.from(
     new Set([
-      thread?.created_by as string | undefined,
+      threadContext.createdBy,
       ...((existingReplies ?? []).map((reply) => reply.author_id as string)),
     ].filter((candidate): candidate is string => Boolean(candidate && candidate !== user.id)))
   );
@@ -63,12 +70,12 @@ export async function postReply(formData: FormData) {
       userId: recipientId,
       kind: "community_reply" as const,
       title: "Nouvelle réponse dans la communauté",
-      body: thread?.title ?? "Un sujet que vous suivez a reçu une réponse.",
-      href: `/communaute/${spaceSlug}/${threadId}`,
+      body: threadContext.threadTitle || "Un sujet que vous suivez a reçu une réponse.",
+      href: `/communaute/${threadContext.spaceSlug}/${threadId}`,
     }))
   );
 
-  revalidatePath(`/communaute/${spaceSlug}`);
-  revalidatePath(`/communaute/${spaceSlug}/${threadId}`);
-  redirect(`/communaute/${spaceSlug}/${threadId}?status=reply-posted`);
+  revalidatePath(`/communaute/${threadContext.spaceSlug}`);
+  revalidatePath(`/communaute/${threadContext.spaceSlug}/${threadId}`);
+  redirect(`/communaute/${threadContext.spaceSlug}/${threadId}?status=reply-posted`);
 }

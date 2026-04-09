@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { BellRing, LifeBuoy, LockKeyhole, Mail, ShieldCheck, UserRoundCog } from "lucide-react";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { signOut } from "@/app/account/actions";
 import { PushChannelManager } from "@/components/notifications/push-channel-manager";
@@ -46,6 +47,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   return (
     <AppShell title="Paramètres" currentPath="/parametres">
       <section className="space-y-6">
+        <BackLink href="/account" label="Retour au compte" />
+
         <div className="space-y-3">
           <div className="eyebrow">Compte et confidentialité</div>
           <h1 className="editorial-title">Votre compte, vos préférences, votre cadre.</h1>

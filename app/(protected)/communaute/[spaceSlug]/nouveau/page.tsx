@@ -1,10 +1,11 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { PenSquare, ShieldCheck } from "lucide-react";
 import type { Route } from "next";
-import { ArrowLeft, PenSquare, ShieldCheck } from "lucide-react";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
-import { getSpaceWithThreads } from "@/lib/communaute";
+import { requireCompletedProfile } from "@/lib/auth";
+import { getSpaceWithThreads, isCommunitySpaceAccessible } from "@/lib/communaute";
 
 import { createCommunityThread } from "../../actions";
 
@@ -35,16 +36,20 @@ export default async function NewCommunityThreadPage({
     notFound();
   }
 
+  const { profile, roles } = await requireCompletedProfile(`/communaute/${spaceSlug}/nouveau`);
+  if (!profile) redirect("/account?status=complete-profile");
+
+  if (!isCommunitySpaceAccessible(result.space.allowedKind, profile.profileKind, roles)) {
+    redirect("/communaute?error=space-not-allowed");
+  }
+
   return (
     <AppShell title="Communauté" currentPath="/communaute">
       <section className="space-y-6">
-        <Link
+        <BackLink
           href={`/communaute/${spaceSlug}` as Route}
-          className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Retour à {result.space.title}
-        </Link>
+          label={`Retour à ${result.space.title}`}
+        />
 
         <div className="space-y-3">
           <div className="eyebrow">Nouveau sujet</div>

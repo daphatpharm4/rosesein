@@ -1,6 +1,7 @@
 import "server-only";
 
 import { hasSupabaseBrowserEnv } from "@/lib/env";
+import { getCurrentUserContext, type PlatformRole, type ProfileKind } from "@/lib/auth";
 import {
   makeEmptyPayload,
   REACTION_KINDS,
@@ -50,12 +51,41 @@ export type SpaceWithThreads = {
 };
 
 export type ThreadWithReplies = {
-  thread: CommunityThread & { spaceSlug: string; spaceTitle: string };
+  thread: CommunityThread & {
+    spaceSlug: string;
+    spaceTitle: string;
+    spaceAllowedKind: CommunityKind;
+  };
   replies: CommunityReply[];
 };
 
+export type CommunityThreadContext = {
+  threadId: string;
+  threadTitle: string;
+  createdBy: string;
+  spaceSlug: string;
+  spaceTitle: string;
+  allowedKind: CommunityKind;
+};
+
+export function isCommunitySpaceAccessible(
+  allowedKind: CommunityKind,
+  profileKind: ProfileKind,
+  roles: PlatformRole[] = [],
+) {
+  return (
+    allowedKind === "all"
+    || roles.includes("moderator")
+    || roles.includes("admin")
+    || allowedKind === profileKind
+  );
+}
+
 export async function getCommunitySpaces(): Promise<CommunitySpace[]> {
   if (!hasSupabaseBrowserEnv()) return [];
+
+  const { profile, roles } = await getCurrentUserContext();
+  if (!profile) return [];
 
   const supabase = await createSupabaseServerClient();
 
@@ -88,16 +118,18 @@ export async function getCommunitySpaces(): Promise<CommunitySpace[]> {
     icon_name: string;
     allowed_kind: string;
     sort_order: number;
-  }[]).map((s) => ({
-    id: s.id,
-    slug: s.slug,
-    title: s.title,
-    description: s.description,
-    iconName: s.icon_name,
-    allowedKind: s.allowed_kind as CommunityKind,
-    sortOrder: s.sort_order,
-    threadCount: countMap.get(s.id) ?? 0,
-  }));
+  }[])
+    .map((s) => ({
+      id: s.id,
+      slug: s.slug,
+      title: s.title,
+      description: s.description,
+      iconName: s.icon_name,
+      allowedKind: s.allowed_kind as CommunityKind,
+      sortOrder: s.sort_order,
+      threadCount: countMap.get(s.id) ?? 0,
+    }))
+    .filter((space) => isCommunitySpaceAccessible(space.allowedKind, profile.profileKind, roles));
 }
 
 export async function getSpaceWithThreads(slug: string): Promise<SpaceWithThreads | null> {
@@ -181,7 +213,7 @@ export async function getThreadWithReplies(
   const { data: thread } = await supabase
     .from("community_threads")
     .select(
-      "id, space_id, title, body, created_by, pinned, created_at, community_spaces(slug, title)",
+      "id, space_id, title, body, created_by, pinned, created_at, community_spaces(slug, title, allowed_kind)",
     )
     .eq("id", threadId)
     .maybeSingle();
@@ -191,7 +223,7 @@ export async function getThreadWithReplies(
   const t = thread as unknown as {
     id: string; space_id: string; title: string; body: string;
     created_by: string; pinned: boolean; created_at: string;
-    community_spaces: { slug: string; title: string } | null;
+    community_spaces: { slug: string; title: string; allowed_kind: CommunityKind } | null;
   };
 
   const { data: replies } = await supabase
@@ -233,6 +265,7 @@ export async function getThreadWithReplies(
       replyCount: (replies ?? []).length,
       spaceSlug: t.community_spaces?.slug ?? "",
       spaceTitle: t.community_spaces?.title ?? "",
+      spaceAllowedKind: t.community_spaces?.allowed_kind ?? "all",
     },
     replies: (
       (replies ?? []) as unknown as {
@@ -256,6 +289,62 @@ export async function getThreadWithReplies(
       };
     }),
   };
+}
+
+export async function getCommunityThreadContext(
+  threadId: string,
+): Promise<CommunityThreadContext | null> {
+  if (!hasSupabaseBrowserEnv()) return null;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: thread } = await supabase
+    .from("community_threads")
+    .select("id, title, created_by, community_spaces!inner(slug, title, allowed_kind)")
+    .eq("id", threadId)
+    .maybeSingle();
+
+  if (!thread) return null;
+
+  const row = thread as unknown as {
+    id: string;
+    title: string;
+    created_by: string;
+    community_spaces: Array<{
+      slug: string;
+      title: string;
+      allowed_kind: CommunityKind;
+    }>;
+  };
+
+  const communitySpace = row.community_spaces[0];
+  if (!communitySpace) return null;
+
+  return {
+    threadId: row.id,
+    threadTitle: row.title,
+    createdBy: row.created_by,
+    spaceSlug: communitySpace.slug,
+    spaceTitle: communitySpace.title,
+    allowedKind: communitySpace.allowed_kind,
+  };
+}
+
+export async function getCommunityReplyThreadContext(
+  replyId: string,
+): Promise<CommunityThreadContext | null> {
+  if (!hasSupabaseBrowserEnv()) return null;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: reply } = await supabase
+    .from("community_replies")
+    .select("thread_id")
+    .eq("id", replyId)
+    .maybeSingle();
+
+  const threadId = reply?.thread_id as string | undefined;
+  if (!threadId) return null;
+
+  return getCommunityThreadContext(threadId);
 }
 
 type ReactionRow = {

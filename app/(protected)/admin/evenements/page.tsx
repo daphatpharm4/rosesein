@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowLeft, CalendarRange, Eye, EyeOff, PencilLine, UsersRound } from "lucide-react";
+import { CalendarRange, Eye, EyeOff, PencilLine, UsersRound } from "lucide-react";
 import type { Metadata } from "next";
 import type { Route } from "next";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { requireStaff } from "@/lib/auth";
 import { formatEventSchedule } from "@/lib/content";
@@ -58,13 +59,7 @@ export default async function AdminEventsPage({ searchParams }: Props) {
   return (
     <AppShell title="Administration" currentPath="/admin">
       <section className="space-y-6">
-        <Link
-          href={"/admin" as Route}
-          className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Retour à l'administration
-        </Link>
+        <BackLink href="/admin" label="Retour à l'administration" />
 
         <div className="space-y-3">
           <div className="eyebrow">Programmation</div>

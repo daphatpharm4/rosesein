@@ -5,7 +5,13 @@ import { redirect } from "next/navigation";
 
 import { requireCompletedProfile } from "@/lib/auth";
 import type { ReactionKind, ReactionsPayload } from "@/lib/community-reactions";
-import { getReplyReactionPayload, getThreadReactionPayload } from "@/lib/communaute";
+import {
+  getCommunityReplyThreadContext,
+  getCommunityThreadContext,
+  getReplyReactionPayload,
+  getThreadReactionPayload,
+  isCommunitySpaceAccessible,
+} from "@/lib/communaute";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const VALID_KINDS = new Set<string>(["touche", "pense", "courage", "merci"]);
@@ -19,7 +25,17 @@ export async function toggleThreadReaction(
   kind: ReactionKind
 ): Promise<ReactionsPayload> {
   if (!VALID_KINDS.has(kind)) throw new Error("Invalid reaction kind");
-  const { user } = await requireCompletedProfile("/communaute");
+  const { user, profile, roles } = await requireCompletedProfile("/communaute");
+  if (!profile) throw new Error("Profile required");
+  const threadContext = await getCommunityThreadContext(threadId);
+
+  if (
+    !threadContext ||
+    !isCommunitySpaceAccessible(threadContext.allowedKind, profile.profileKind, roles)
+  ) {
+    throw new Error("Community space access denied");
+  }
+
   const supabase = await createSupabaseServerClient();
 
   const { data: existing } = await supabase
@@ -64,7 +80,17 @@ export async function toggleReplyReaction(
   kind: ReactionKind
 ): Promise<ReactionsPayload> {
   if (!VALID_KINDS.has(kind)) throw new Error("Invalid reaction kind");
-  const { user } = await requireCompletedProfile("/communaute");
+  const { user, profile, roles } = await requireCompletedProfile("/communaute");
+  if (!profile) throw new Error("Profile required");
+  const replyContext = await getCommunityReplyThreadContext(replyId);
+
+  if (
+    !replyContext ||
+    !isCommunitySpaceAccessible(replyContext.allowedKind, profile.profileKind, roles)
+  ) {
+    throw new Error("Community space access denied");
+  }
+
   const supabase = await createSupabaseServerClient();
 
   const { data: existing } = await supabase
@@ -114,7 +140,7 @@ export async function createCommunityThread(formData: FormData) {
     redirect(`/communaute/${spaceSlug || ""}/nouveau?error=thread-invalid`);
   }
 
-  const { user, profile } = await requireCompletedProfile(`/communaute/${spaceSlug}/nouveau`);
+  const { user, profile, roles } = await requireCompletedProfile(`/communaute/${spaceSlug}/nouveau`);
   const supabase = await createSupabaseServerClient();
   const { data: space } = await supabase
     .from("community_spaces")
@@ -131,8 +157,8 @@ export async function createCommunityThread(formData: FormData) {
     redirect(`/account?status=complete-profile&redirectTo=${encodeURIComponent(`/communaute/${spaceSlug}/nouveau`)}`);
   }
 
-  if (space.allowed_kind !== "all" && profile.profileKind !== space.allowed_kind) {
-    redirect(`/communaute/${spaceSlug}?error=space-not-allowed`);
+  if (!isCommunitySpaceAccessible(space.allowed_kind, profile.profileKind, roles)) {
+    redirect("/communaute?error=space-not-allowed");
   }
 
   const { error } = await supabase.from("community_threads").insert({

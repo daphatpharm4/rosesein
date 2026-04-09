@@ -8,6 +8,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import {
   formatAppointmentSchedule,
@@ -92,6 +93,8 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
   return (
     <AppShell title="Mon parcours" currentPath="/parcours">
       <section className="space-y-8">
+        <BackLink href="/" label="Retour à l'accueil" />
+
         <div className="max-w-2xl space-y-3">
           <div className="eyebrow">Espace protégé</div>
           <h1 className="editorial-title">Votre organisation personnelle, au calme.</h1>

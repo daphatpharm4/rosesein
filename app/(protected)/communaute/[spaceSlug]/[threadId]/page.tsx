@@ -1,12 +1,17 @@
-import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import type { Route } from "next";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
+import { requireCompletedProfile } from "@/lib/auth";
 import { makeEmptyPayload } from "@/lib/community-reactions";
-import { getThreadWithReplies, getThreadReactionsMap, getReplyReactionsMap } from "@/lib/communaute";
+import {
+  getThreadWithReplies,
+  getThreadReactionsMap,
+  getReplyReactionsMap,
+  isCommunitySpaceAccessible,
+} from "@/lib/communaute";
 import { ReactionBar } from "@/components/community/reaction-bar";
 import { postReply } from "./actions";
 import { toggleThreadReaction, toggleReplyReaction } from "../../actions";
@@ -25,9 +30,13 @@ const feedbackMap: Record<string, string> = {
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { threadId } = await params;
+  const { spaceSlug, threadId } = await params;
+  const { profile, roles } = await requireCompletedProfile(`/communaute/${spaceSlug}/${threadId}`);
   const result = await getThreadWithReplies(threadId);
-  if (!result) return { title: "Fil introuvable" };
+  if (!result || !profile) return { title: "Communauté" };
+  if (!isCommunitySpaceAccessible(result.thread.spaceAllowedKind, profile.profileKind, roles)) {
+    return { title: "Communauté" };
+  }
   return { title: result.thread.title };
 }
 
@@ -51,7 +60,13 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
 
   if (!result) notFound();
 
+  const { profile, roles } = await requireCompletedProfile(`/communaute/${spaceSlug}/${threadId}`);
+  if (!profile) redirect("/account?status=complete-profile");
   const { thread, replies } = result;
+
+  if (!isCommunitySpaceAccessible(thread.spaceAllowedKind, profile.profileKind, roles)) {
+    redirect("/communaute?error=space-not-allowed");
+  }
 
   const replyIds = replies.map((r) => r.id);
   const [threadReactionsMap, replyReactionsMap] = await Promise.all([
@@ -64,13 +79,10 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
   return (
     <AppShell title="Communauté" currentPath="/communaute">
       <section className="space-y-6">
-        <Link
+        <BackLink
           href={`/communaute/${spaceSlug}` as Route}
-          className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Retour à {thread.spaceTitle}
-        </Link>
+          label={`Retour à ${thread.spaceTitle}`}
+        />
 
         {(status || error) && feedbackMap[(error ?? status) as string] ? (
           <div

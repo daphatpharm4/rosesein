@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { ArrowLeft, Megaphone, Send, UsersRound } from "lucide-react";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { MemberPicker } from "@/components/admin/member-picker";
 import { getAdminMessagingHistory, getMemberList } from "@/lib/admin-messaging";
@@ -55,13 +56,7 @@ export default async function AdminMessagingPage({
   return (
     <AppShell title="Messagerie collective" currentPath="/admin">
       <section className="space-y-6">
-        <Link
-          href={"/admin" as Route}
-          className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Retour à l'administration
-        </Link>
+        <BackLink href="/admin" label="Retour à l'administration" />
 
         <div className="space-y-3">
           <div className="eyebrow">Diffusions équipe</div>

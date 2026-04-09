@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarRange, Megaphone, Send, ShieldAlert, UserRoundCog } from "lucide-react";
 import type { Route } from "next";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { requireStaff } from "@/lib/auth";
 
@@ -11,6 +12,8 @@ export default async function AdminPage() {
   return (
     <AppShell title="Administration" currentPath="/admin">
       <section className="space-y-6">
+        <BackLink href="/" label="Retour à l'accueil" />
+
         <div className="space-y-2">
           <div className="eyebrow">Espace équipe</div>
           <h1 className="editorial-title">Administration</h1>

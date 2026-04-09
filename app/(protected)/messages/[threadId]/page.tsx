@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Building2, MessagesSquare, Send, Users } from "lucide-react";
+import { AlertTriangle, Building2, MessagesSquare, Send, Users } from "lucide-react";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { ThreadRealtimeProvider } from "@/components/chat/thread-realtime-provider";
 import { createMessageReport, sendMessage } from "@/app/(protected)/messages/actions";
@@ -59,13 +60,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
     <AppShell title="Messagerie" currentPath="/messages">
       <ThreadRealtimeProvider threadId={thread.id}>
         <section className="space-y-6">
-          <Link
-            href="/messages"
-            className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
-          >
-            <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-            Retour à la boîte de réception
-          </Link>
+          <BackLink href="/messages" label="Retour à la boîte de réception" />
 
           <div className="surface-section">
             <div className="flex items-start gap-4">

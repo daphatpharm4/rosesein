@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ArrowLeft, Megaphone } from "lucide-react";
+import { Megaphone } from "lucide-react";
 import type { Metadata } from "next";
-import type { Route } from "next";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { requireStaff } from "@/lib/auth";
 import { getActiveAssociationMessage } from "@/lib/association-message";
@@ -49,13 +49,7 @@ export default async function MessageAssociationPage({ searchParams }: Props) {
   return (
     <AppShell title="Administration" currentPath="/admin">
       <section className="space-y-8">
-        <Link
-          href={"/admin" as Route}
-          className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Administration
-        </Link>
+        <BackLink href="/admin" label="Retour à l'administration" />
 
         <div className="space-y-2">
           <div className="eyebrow">Administration</div>

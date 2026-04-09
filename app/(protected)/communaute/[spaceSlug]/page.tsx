@@ -1,12 +1,18 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, MessageCircle, Pin } from "lucide-react";
+import { ArrowRight, MessageCircle, Pin } from "lucide-react";
 import type { Metadata } from "next";
 import type { Route } from "next";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
+import { requireCompletedProfile } from "@/lib/auth";
 import { makeEmptyPayload } from "@/lib/community-reactions";
-import { getSpaceWithThreads, getThreadReactionsMap } from "@/lib/communaute";
+import {
+  getSpaceWithThreads,
+  getThreadReactionsMap,
+  isCommunitySpaceAccessible,
+} from "@/lib/communaute";
 import { ReactionBar } from "@/components/community/reaction-bar";
 import { toggleThreadReaction } from "../actions";
 
@@ -28,8 +34,12 @@ function firstValue(value: string | string[] | undefined) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { spaceSlug } = await params;
+  const { profile, roles } = await requireCompletedProfile(`/communaute/${spaceSlug}`);
   const result = await getSpaceWithThreads(spaceSlug);
-  if (!result) return { title: "Espace introuvable" };
+  if (!result || !profile) return { title: "Communauté" };
+  if (!isCommunitySpaceAccessible(result.space.allowedKind, profile.profileKind, roles)) {
+    return { title: "Communauté" };
+  }
   return { title: result.space.title };
 }
 
@@ -43,7 +53,13 @@ export default async function SpacePage({ params, searchParams }: SpacePageProps
 
   if (!result) notFound();
 
+  const { profile, roles } = await requireCompletedProfile(`/communaute/${spaceSlug}`);
+  if (!profile) redirect("/account?status=complete-profile");
   const { space, threads } = result;
+
+  if (!isCommunitySpaceAccessible(space.allowedKind, profile.profileKind, roles)) {
+    redirect("/communaute?error=space-not-allowed");
+  }
 
   const threadIds = threads.map((t) => t.id);
   const reactionsMap = await getThreadReactionsMap(threadIds);
@@ -51,13 +67,7 @@ export default async function SpacePage({ params, searchParams }: SpacePageProps
   return (
     <AppShell title="Communauté" currentPath="/communaute">
       <section className="space-y-6">
-        <Link
-          href={"/communaute" as Route}
-          className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Tous les espaces
-        </Link>
+        <BackLink href="/communaute" label="Tous les espaces" />
 
         <div className="space-y-2">
           <div className="eyebrow">Espace communauté</div>

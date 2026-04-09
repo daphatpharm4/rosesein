@@ -1,7 +1,7 @@
-import Link from "next/link";
 import type { Route } from "next";
-import { ArrowLeft, MessageSquarePlus, Search, Sparkles, Users } from "lucide-react";
+import { MessageSquarePlus, Search, Sparkles, Users } from "lucide-react";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { searchMemberDirectory } from "@/lib/member-directory";
 
@@ -33,13 +33,7 @@ export default async function NewConversationPage({ searchParams }: NewConversat
   return (
     <AppShell title="Nouveau message ou groupe" currentPath="/messages">
       <section className="space-y-6">
-        <Link
-          href={"/messages" as Route}
-          className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-          Retour à la messagerie
-        </Link>
+        <BackLink href="/messages" label="Retour à la messagerie" />
 
         <div className="space-y-3">
           <div className="eyebrow">Messagerie entre membres</div>
