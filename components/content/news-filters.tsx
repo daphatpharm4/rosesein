@@ -58,7 +58,7 @@ export function NewsFilters({ articles, events, configured }: Props) {
             }
             router.push(`?${params.toString()}`, { scroll: false });
           }}
-          className="w-full rounded-brand bg-surface-container-high py-4 pl-11 pr-4 text-sm text-on-surface placeholder:text-outline"
+          className="w-full rounded-brand bg-surface-container-high py-4 pl-11 pr-4 text-base text-on-surface placeholder:text-outline"
         />
       </div>
 
@@ -102,17 +102,17 @@ export function NewsFilters({ articles, events, configured }: Props) {
                   </div>
                   <p className="eyebrow">{article.category}</p>
                 </div>
-                <h2 className="font-headline text-lg font-semibold text-on-surface">
+                <h2 className="type-card-title text-on-surface">
                   {article.title}
                 </h2>
-                <p className="text-sm leading-7 text-on-surface-variant">{article.summary}</p>
+                <p className="type-body text-on-surface-variant">{article.summary}</p>
                 <div className="flex items-center justify-between">
-                  <p className="font-label text-xs uppercase tracking-[0.16em] text-outline">
+                  <p className="type-meta text-outline">
                     {formatPublishedDate(article.publishedAt)}
                   </p>
                   <Link
                     href={`/actualites/${article.slug}` as Route}
-                    className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                    className="type-action inline-flex items-center gap-2 text-primary"
                   >
                     Lire
                     <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
@@ -123,10 +123,10 @@ export function NewsFilters({ articles, events, configured }: Props) {
           </div>
         ) : (
           <div className="surface-card">
-            <p className="font-headline text-base font-semibold text-on-surface">
+            <p className="type-shell-title text-on-surface">
               Aucun article pour cette recherche
             </p>
-            <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+            <p className="type-note mt-2 text-on-surface-variant">
               Essayez un autre terme ou retirez le filtre de catégorie.
             </p>
           </div>
@@ -155,18 +155,18 @@ export function NewsFilters({ articles, events, configured }: Props) {
                     </span>
                   ) : null}
                 </div>
-                <h2 className="font-headline text-lg font-semibold text-on-surface">
+                <h2 className="type-card-title text-on-surface">
                   {event.title}
                 </h2>
-                <p className="text-sm leading-7 text-on-surface-variant">{event.description}</p>
-                <p className="font-label text-xs uppercase tracking-[0.16em] text-outline">
+                <p className="type-body text-on-surface-variant">{event.description}</p>
+                <p className="type-meta text-outline">
                   {formatEventSchedule(event)}
                   {event.locationLabel ? ` · ${event.locationLabel}` : ""}
                 </p>
                 <div className="flex justify-end">
                   <Link
                     href={`/actualites/evenements/${event.id}` as Route}
-                    className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                    className="type-action inline-flex items-center gap-2 text-primary"
                   >
                     Voir le détail
                     <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
@@ -185,14 +185,14 @@ export function NewsFilters({ articles, events, configured }: Props) {
               <ShieldCheck aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
             </div>
             <div>
-              <p className="font-headline text-base font-semibold text-on-surface">
+              <p className="type-shell-title text-on-surface">
                 Contenus validés par l&apos;association
               </p>
               <a
                 href="https://rosesein.org/"
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+                className="type-action mt-2 inline-flex items-center gap-2 text-primary"
               >
                 Voir le site institutionnel
                 <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />

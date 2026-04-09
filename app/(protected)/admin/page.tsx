@@ -10,7 +10,7 @@ export default async function AdminPage() {
   await requireStaff("/admin");
 
   return (
-    <AppShell title="Administration" currentPath="/admin">
+    <AppShell title="Administration" currentPath="/admin" wide>
       <section className="space-y-6">
         <BackLink href="/" label="Retour à l'accueil" />
 

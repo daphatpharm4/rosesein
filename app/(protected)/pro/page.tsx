@@ -105,7 +105,7 @@ export default async function ProDashboardPage({ searchParams }: ProDashboardPag
   ];
 
   return (
-    <AppShell title="Espace pro" currentPath="/pro">
+    <AppShell title="Espace pro" currentPath="/pro" wide>
       <section className="space-y-6">
         <BackLink href="/account" label="Retour au compte" />
 
@@ -231,7 +231,7 @@ export default async function ProDashboardPage({ searchParams }: ProDashboardPag
               <Link
                 key={action.href}
                 href={action.href}
-                className="surface-card group flex items-start gap-4 transition-colors hover:border-primary/20 hover:bg-white"
+                className="surface-card group flex items-start gap-4 transition-colors hover:border-primary/20 hover:bg-surface-container-lowest/80"
               >
                 <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${action.iconClassName}`}>
                   <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />

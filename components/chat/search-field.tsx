@@ -10,7 +10,7 @@ export function SearchField({ value, onChange }: SearchFieldProps) {
     <div className="space-y-2">
       <label
         htmlFor="conversation-search"
-        className="font-label text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-on-surface-variant sm:text-xs sm:tracking-[0.16em]"
+        className="type-meta text-on-surface-variant"
       >
         Rechercher une discussion
       </label>
@@ -26,7 +26,7 @@ export function SearchField({ value, onChange }: SearchFieldProps) {
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="Nom, groupe ou atelier"
-          className="w-full rounded-brand bg-surface-container-high px-12 py-4 text-sm text-on-surface placeholder:text-outline"
+          className="w-full rounded-brand bg-surface-container-high px-12 py-4 text-base text-on-surface placeholder:text-outline"
         />
       </div>
     </div>

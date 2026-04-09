@@ -47,7 +47,7 @@ export default async function MessageAssociationPage({ searchParams }: Props) {
   const minDate = tomorrow.toISOString().split("T")[0];
 
   return (
-    <AppShell title="Administration" currentPath="/admin">
+    <AppShell title="Administration" currentPath="/admin" wide>
       <section className="space-y-8">
         <BackLink href="/admin" label="Retour à l'administration" />
 

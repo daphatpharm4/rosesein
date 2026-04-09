@@ -47,7 +47,7 @@ export function ConversationCard({ conversation, index = 0 }: ConversationCardPr
             className={`flex h-12 w-12 items-center justify-center rounded-full ${accentClass}`}
           >
             {conversation.kind === "direct" ? (
-              <span className="font-headline text-sm font-bold">
+              <span className="font-headline text-base font-bold tracking-[-0.04em]">
                 {conversation.initials}
               </span>
             ) : (
@@ -66,15 +66,15 @@ export function ConversationCard({ conversation, index = 0 }: ConversationCardPr
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <h3 className="font-headline text-base font-semibold text-on-surface">
+              <h3 className="type-shell-title text-on-surface">
                 {conversation.name}
               </h3>
-              <p className="mt-1 text-[0.72rem] uppercase tracking-[0.14em] text-outline sm:text-xs sm:tracking-[0.16em]">
+              <p className="type-meta mt-1 text-outline">
                 {conversation.scope === "association" ? "Association" : "Privé"}
               </p>
             </div>
             <span
-              className={`font-label text-[0.72rem] sm:whitespace-nowrap sm:text-xs ${
+              className={`type-timestamp sm:whitespace-nowrap ${
                 conversation.active ? "text-primary" : "text-on-surface-variant"
               }`}
             >
@@ -82,7 +82,7 @@ export function ConversationCard({ conversation, index = 0 }: ConversationCardPr
             </span>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <p className="line-clamp-2 text-sm leading-6 text-on-surface-variant">
+            <p className="type-note line-clamp-2 text-on-surface-variant">
               {conversation.preview}
             </p>
             {conversation.unreadCount ? (

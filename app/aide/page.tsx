@@ -122,7 +122,7 @@ export default function HelpPage() {
           </article>
 
           <article className="surface-card">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sage-container text-on-sage">
               <HeartHandshake aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
             </div>
             <h2 className="mt-5 font-headline text-lg font-semibold text-on-surface">

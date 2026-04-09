@@ -129,7 +129,7 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
   };
 
   return (
-    <AppShell title="Mon parcours" currentPath="/parcours">
+    <AppShell title="Mon parcours" currentPath="/parcours" wide>
       <section className="space-y-8">
         <BackLink href="/" label="Retour à l'accueil" />
 
@@ -206,7 +206,7 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
                   value={value}
                   aria-label={label}
                   title={label}
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-container-low text-2xl transition-transform hover:-translate-y-0.5 hover:bg-surface-container"
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-sage-container/60 text-2xl transition-transform hover:-translate-y-0.5 hover:bg-sage-container"
                 >
                   {emoji}
                 </button>

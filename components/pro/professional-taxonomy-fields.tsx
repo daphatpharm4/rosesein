@@ -45,7 +45,7 @@ export function ProfessionalTaxonomyFields({
           className={`block cursor-pointer rounded-brand border px-4 py-4 transition-colors ${
             kind === "medical"
               ? "border-primary/30 bg-primary/10"
-              : "border-outline-variant/30 bg-surface-container-lowest hover:border-primary/20 hover:bg-white"
+              : "border-outline-variant/30 bg-surface-container-lowest hover:border-primary/20 hover:bg-surface-container-lowest/80"
           }`}
         >
           <input
@@ -75,7 +75,7 @@ export function ProfessionalTaxonomyFields({
           className={`block cursor-pointer rounded-brand border px-4 py-4 transition-colors ${
             kind === "support_care"
               ? "border-primary/30 bg-primary/10"
-              : "border-outline-variant/30 bg-surface-container-lowest hover:border-primary/20 hover:bg-white"
+              : "border-outline-variant/30 bg-surface-container-lowest hover:border-primary/20 hover:bg-surface-container-lowest/80"
           }`}
         >
           <input

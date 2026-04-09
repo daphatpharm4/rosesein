@@ -31,10 +31,10 @@ export function TopAppBar({
             <RoseSeinLogo compact />
           </Link>
           <div className="min-w-0">
-            <p className="hidden font-label text-[0.63rem] uppercase tracking-[0.18em] text-secondary sm:block">
+            <p className="type-shell-kicker hidden text-secondary sm:block">
               Association de lutte contre le cancer du sein
             </p>
-            <p className="truncate font-headline text-[0.95rem] font-semibold text-on-surface sm:text-sm">
+            <p className="type-shell-title truncate text-on-surface">
               {title ?? "Accueil"}
             </p>
           </div>

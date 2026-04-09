@@ -157,7 +157,7 @@ export default async function ProfessionalProfilePage({
               </div>
             </div>
 
-            <aside className="rounded-brand-xl border border-white/60 bg-white/72 px-4 py-4 shadow-ambient backdrop-blur-sm">
+            <aside className="rounded-brand-xl border border-outline-variant/35 bg-surface-container-lowest/80 px-4 py-4 shadow-ambient backdrop-blur-sm">
               <p className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-primary">
                 Cadre de consultation
               </p>

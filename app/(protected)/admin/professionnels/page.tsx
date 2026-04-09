@@ -42,7 +42,7 @@ export default async function AdminProfessionalsPage({
   const professionals = await getManagedProfessionals();
 
   return (
-    <AppShell title="Administration" currentPath="/admin">
+    <AppShell title="Administration" currentPath="/admin" wide>
       <section className="space-y-6">
         <BackLink href="/admin" label="Retour à l'administration" />
 

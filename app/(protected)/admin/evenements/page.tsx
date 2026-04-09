@@ -58,7 +58,7 @@ export default async function AdminEventsPage({ searchParams }: Props) {
   const eventToEdit = edit ? events.find((event) => event.id === edit) ?? null : null;
 
   return (
-    <AppShell title="Administration" currentPath="/admin">
+    <AppShell title="Administration" currentPath="/admin" wide>
       <section className="space-y-6">
         <BackLink href="/admin" label="Retour à l'administration" />
 

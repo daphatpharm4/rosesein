@@ -73,7 +73,7 @@ export function BottomNav({ currentPath, profileKind, wide = false }: BottomNavP
             }`}
           >
             <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-            <span className="truncate font-label text-[0.68rem] font-semibold leading-none sm:text-[11px]">
+            <span className="truncate font-label text-[0.78rem] font-semibold leading-[1.1] tracking-[-0.01em] sm:text-[0.82rem]">
               {label}
             </span>
           </Link>

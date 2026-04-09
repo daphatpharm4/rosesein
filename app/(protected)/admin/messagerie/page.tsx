@@ -54,7 +54,7 @@ export default async function AdminMessagingPage({
   ]);
 
   return (
-    <AppShell title="Messagerie collective" currentPath="/admin">
+    <AppShell title="Messagerie collective" currentPath="/admin" wide>
       <section className="space-y-6">
         <BackLink href="/admin" label="Retour à l'administration" />
 

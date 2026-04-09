@@ -75,7 +75,7 @@ export default async function ProAgendaPage({ searchParams }: ProAgendaPageProps
   const recentUpdates = appointments.filter((appointment) => appointment.status !== "pending" && appointment.status !== "confirmed");
 
   return (
-    <AppShell title="Espace pro" currentPath="/pro">
+    <AppShell title="Espace pro" currentPath="/pro" wide>
       <section className="space-y-6">
         <BackLink href="/pro" label="Retour à l'espace pro" />
 

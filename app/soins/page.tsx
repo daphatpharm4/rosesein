@@ -20,28 +20,28 @@ const CATEGORY_CONFIG: {
     label: "Nutrition",
     description: "Conseils alimentaires et recettes adaptées aux traitements.",
     icon: Leaf,
-    tone: "bg-primary/10 text-primary",
+    tone: "bg-sage-container text-on-sage",
   },
   {
     category: "activite",
     label: "Activité physique",
     description: "Programmes doux, vidéos guidées et exercices adaptés.",
     icon: Dumbbell,
-    tone: "bg-secondary-container text-on-secondary-container",
+    tone: "bg-tertiary/20 text-on-surface",
   },
   {
     category: "beaute",
     label: "Beauté & image",
     description: "Soins de la peau, conseils coiffure, ateliers socio-esthétiques.",
     icon: Smile,
-    tone: "bg-primary/10 text-primary",
+    tone: "bg-primary-container/25 text-primary",
   },
   {
     category: "psychologie",
     label: "Soutien psychologique",
     description: "Respiration, journal personnel, méditation et orientation professionnelle.",
     icon: HeartPulse,
-    tone: "bg-secondary-container text-on-secondary-container",
+    tone: "bg-primary/10 text-primary",
   },
 ];
 

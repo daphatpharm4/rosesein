@@ -17,7 +17,7 @@ export function ProfessionalCard({ profile }: { profile: ProfessionalProfile }) 
   const tierDefinition = SUBSCRIPTION_TIER_DEFINITIONS[profile.subscriptionTier];
   const cardToneClass =
     profile.subscriptionTier === "partenaire"
-      ? "border-primary/15 bg-[radial-gradient(circle_at_top_left,rgba(226,105,142,0.12),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(252,248,250,0.92))]"
+      ? "border-primary/15 bg-[radial-gradient(circle_at_top_left,color-mix(in_srgb,rgb(var(--color-primary-container))_16%,transparent),transparent_42%),linear-gradient(180deg,color-mix(in_srgb,rgb(var(--color-surface-container-lowest))_96%,rgb(var(--color-background))_4%),color-mix(in_srgb,rgb(var(--color-surface))_88%,rgb(var(--color-primary-container))_12%))]"
       : "";
   const footerLabel =
     profile.subscriptionTier === "solidaire"
@@ -29,7 +29,7 @@ export function ProfessionalCard({ profile }: { profile: ProfessionalProfile }) 
   return (
     <Link
       href={`/professionnels/${profile.slug}`}
-      className={`surface-card group block overflow-hidden transition-colors hover:border-primary/20 hover:bg-white ${cardToneClass}`}
+      className={`surface-card group block overflow-hidden transition-colors hover:border-primary/20 hover:bg-surface-container-lowest/80 ${cardToneClass}`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-3">
@@ -49,26 +49,26 @@ export function ProfessionalCard({ profile }: { profile: ProfessionalProfile }) 
             ) : null}
 
             <div>
-              <h3 className="font-headline text-lg font-semibold text-on-surface group-hover:text-primary">
+              <h3 className="type-card-title text-on-surface group-hover:text-primary">
                 {primaryLabel}
               </h3>
-              <p className="mt-1 text-sm font-medium text-primary">{categoryLabel}</p>
+              <p className="mt-1 text-[0.96rem] font-medium leading-6 text-primary">{categoryLabel}</p>
             </div>
 
             {profile.structureName ? (
-              <p className="text-xs leading-6 text-on-surface-variant">
+              <p className="type-note text-on-surface-variant">
                 Orientation assurée par la structure, avec prise de rendez-vous centralisée.
               </p>
             ) : null}
           </div>
 
           {profile.bio ? (
-            <p className="max-w-2xl text-sm leading-7 text-on-surface-variant">
+            <p className="type-body text-on-surface-variant">
               {profile.bio}
             </p>
           ) : null}
 
-          <p className="max-w-2xl text-sm leading-7 text-on-surface-variant">
+          <p className="type-body text-on-surface-variant">
             {tierDefinition.publicDescription}
           </p>
 
@@ -110,10 +110,10 @@ export function ProfessionalCard({ profile }: { profile: ProfessionalProfile }) 
       </div>
 
       <div className="mt-5 flex items-center justify-between border-t border-outline-variant/20 pt-4">
-        <p className="text-xs uppercase tracking-[0.16em] text-outline">
+        <p className="type-meta text-outline">
           {footerLabel}
         </p>
-        <span className="font-label text-sm font-semibold text-primary">Voir la fiche</span>
+        <span className="type-action text-primary">Voir la fiche</span>
       </div>
     </Link>
   );

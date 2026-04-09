@@ -67,7 +67,7 @@ export default async function ModerationPage({ searchParams }: ModerationPagePro
   const queue = await getModerationQueue();
 
   return (
-    <AppShell title="Modération" currentPath="/admin">
+    <AppShell title="Modération" currentPath="/admin" wide>
       <section className="space-y-6">
         <BackLink href="/admin" label="Retour à l'administration" />
 

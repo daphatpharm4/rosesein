@@ -100,12 +100,12 @@ export function NotificationBellClient({
           className="notification-panel glass-panel fixed inset-x-3 top-[calc(var(--safe-area-top)+4.5rem)] z-50 rounded-brand-md shadow-ambient sm:absolute sm:right-0 sm:top-14 sm:w-80 sm:inset-x-auto"
         >
           <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-            <p className="font-headline text-sm font-semibold text-on-surface">Notifications</p>
+            <p className="type-shell-title text-on-surface">Notifications</p>
             {unreadCount > 0 ? (
               <form action={markAllAction}>
                 <button
                   type="submit"
-                  className="min-h-11 rounded-full px-3 font-label text-xs font-semibold text-primary"
+                  className="type-action min-h-11 rounded-full px-3 text-primary"
                 >
                   Tout marquer comme lu
                 </button>
@@ -114,7 +114,7 @@ export function NotificationBellClient({
           </div>
 
           {notifications.length === 0 ? (
-            <p className="px-4 pb-4 text-sm text-on-surface-variant">Aucune notification.</p>
+            <p className="type-note px-4 pb-4 text-on-surface-variant">Aucune notification.</p>
           ) : (
             <ul className="max-h-[min(24rem,calc(100dvh-var(--safe-area-top)-6rem))] divide-y divide-outline-variant/30 overflow-y-auto">
               {notifications.map((notif) => {
@@ -129,13 +129,13 @@ export function NotificationBellClient({
                       <Icon aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-on-surface">{notif.title}</p>
+                      <p className="type-action text-on-surface">{notif.title}</p>
                       {notif.body ? (
-                        <p className="mt-0.5 break-words text-xs leading-5 text-on-surface-variant">
+                        <p className="type-note mt-0.5 break-words text-on-surface-variant">
                           {notif.body}
                         </p>
                       ) : null}
-                      <p className="mt-1 font-label text-[11px] text-outline">
+                      <p className="type-timestamp mt-1 text-outline">
                         {formatRelative(notif.createdAt)}
                       </p>
                     </div>

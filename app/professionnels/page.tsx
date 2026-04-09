@@ -83,7 +83,7 @@ export default async function ProfessionalDirectoryPage({
         ) : null}
 
         {professionals.length > 0 ? (
-          <div className="grid gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             {professionals.map((professional) => (
               <ProfessionalCard key={professional.id} profile={professional} />
             ))}

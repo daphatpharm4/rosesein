@@ -31,6 +31,7 @@ type Shortcut = {
   description: string;
   href: Route;
   icon: typeof MessageCircleHeart;
+  tone: string;
 };
 
 type RecommendedNextStep = {
@@ -49,6 +50,7 @@ function getShortcuts(profileKind: ProfileKind | undefined): Shortcut[] {
             "Gardez rendez-vous, notes et repères utiles pour la personne que vous soutenez.",
           href: "/parcours" as Route,
           icon: HandHeart,
+          tone: "bg-tertiary/20 text-on-surface",
         }
       : {
           title: "Mon parcours",
@@ -56,6 +58,7 @@ function getShortcuts(profileKind: ProfileKind | undefined): Shortcut[] {
             "Retrouvez vos rendez-vous, vos notes et vos documents personnels dans un même fil.",
           href: "/parcours" as Route,
           icon: CalendarHeart,
+          tone: "bg-tertiary/20 text-on-surface",
         };
 
   return [
@@ -65,6 +68,7 @@ function getShortcuts(profileKind: ProfileKind | undefined): Shortcut[] {
         "Retrouvez l'association, vos groupes de parole et vos échanges directs dans un seul endroit.",
       href: "/messages" as Route,
       icon: MessageCircleHeart,
+      tone: "bg-primary/10 text-primary",
     },
     {
       title: "Actualités validées",
@@ -72,6 +76,7 @@ function getShortcuts(profileKind: ProfileKind | undefined): Shortcut[] {
         "Consultez les contenus vérifiés sur les traitements, le quotidien et les événements.",
       href: "/actualites" as Route,
       icon: Newspaper,
+      tone: "bg-secondary-container text-on-secondary-container",
     },
     {
       title: "Trouver un professionnel",
@@ -79,6 +84,7 @@ function getShortcuts(profileKind: ProfileKind | undefined): Shortcut[] {
         "Parcourez l'annuaire, consultez les créneaux publiés et demandez un rendez-vous depuis une fiche dédiée.",
       href: "/professionnels" as Route,
       icon: BriefcaseMedical,
+      tone: "bg-sage-container text-on-sage",
     },
     parcoursShortcut,
     {
@@ -87,6 +93,7 @@ function getShortcuts(profileKind: ProfileKind | undefined): Shortcut[] {
         "Nutrition, bien-être, groupes de parole et aides pratiques restent accessibles à tout moment.",
       href: "/association" as Route,
       icon: HeartHandshake,
+      tone: "bg-primary-container/25 text-primary",
     },
   ];
 }
@@ -275,8 +282,8 @@ export default async function HomePage() {
               data-reveal="hero"
               style={revealDelay("280ms")}
             >
-              <div className="flex items-center gap-3 text-primary">
-                <Sparkles aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+              <div className="flex items-center gap-3">
+                <Sparkles aria-hidden="true" className="h-5 w-5 text-tertiary" strokeWidth={1.8} />
                 <p className="font-headline text-lg font-semibold text-on-surface">
                   En ce moment
                 </p>
@@ -379,13 +386,13 @@ export default async function HomePage() {
               </div>
 
               <div className="home-list divide-y divide-outline-variant/25 border-b border-outline-variant/30 pt-px">
-                {shortcuts.map(({ title, description, href, icon: Icon }) => (
+                {shortcuts.map(({ title, description, href, icon: Icon, tone }) => (
                   <Link
                     key={title}
                     href={href}
                     className="motion-link-row group flex items-start gap-4 py-5 hover:text-on-surface"
                   >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tone}`}>
                       <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -460,7 +467,7 @@ export default async function HomePage() {
                 </p>
               </div>
 
-              <div className="grid gap-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {featuredPartners.map((professional) => (
                   <ProfessionalCard key={professional.id} profile={professional} />
                 ))}

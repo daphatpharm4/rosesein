@@ -66,7 +66,7 @@ export default async function ProProfilePage({ searchParams }: ProProfilePagePro
   }));
 
   return (
-    <AppShell title="Espace pro" currentPath="/pro">
+    <AppShell title="Espace pro" currentPath="/pro" wide>
       <section className="space-y-6">
         <BackLink href="/pro" label="Retour à l'espace pro" />
 

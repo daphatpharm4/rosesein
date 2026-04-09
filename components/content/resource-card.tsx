@@ -39,15 +39,15 @@ export function ResourceCard({ resource }: Props) {
 
       <div>
         <p className="eyebrow">{formatFormat(resource.format)}</p>
-        <h3 className="mt-1 font-headline text-lg font-semibold text-on-surface">
+        <h3 className="type-card-title mt-1 text-on-surface">
           {resource.title}
         </h3>
-        <p className="mt-2 text-sm leading-7 text-on-surface-variant">{resource.summary}</p>
+        <p className="type-body mt-2 text-on-surface-variant">{resource.summary}</p>
       </div>
 
       <Link
         href={`/soins/${resource.category}/${resource.id}` as Route}
-        className="inline-flex items-center gap-2 font-label text-sm font-semibold text-primary"
+        className="type-action inline-flex items-center gap-2 text-primary"
       >
         Voir le contenu
         <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />

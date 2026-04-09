@@ -12,7 +12,7 @@ export function ArticleContent({ blocks }: Props) {
       {blocks.map((block, index) => {
         if (block.type === "paragraph") {
           return (
-            <p key={index} className="text-base leading-8 text-on-surface-variant">
+            <p key={index} className="type-body text-on-surface-variant">
               {block.text}
             </p>
           );
@@ -20,7 +20,7 @@ export function ArticleContent({ blocks }: Props) {
 
         if (block.type === "heading") {
           return (
-            <h2 key={index} className="font-headline text-xl font-bold text-on-surface mt-8 mb-3">
+            <h2 key={index} className="type-section-title mt-8 mb-3 text-on-surface">
               {block.text}
             </h2>
           );
@@ -30,7 +30,7 @@ export function ArticleContent({ blocks }: Props) {
           return (
             <blockquote
               key={index}
-              className="border-l-4 border-primary pl-5 py-1 text-base leading-8 text-on-surface-variant italic"
+              className="type-body border-l-4 border-primary py-1 pl-5 italic text-on-surface-variant"
             >
               {block.text}
             </blockquote>

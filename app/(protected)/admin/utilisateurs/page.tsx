@@ -38,7 +38,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   const canManageRoles = roles.includes("admin");
 
   return (
-    <AppShell title="Utilisateurs" currentPath="/admin">
+    <AppShell title="Utilisateurs" currentPath="/admin" wide>
       <section className="space-y-6">
         <BackLink href="/admin" label="Retour à l'administration" />
 

@@ -9,10 +9,10 @@ export function ConversationList({ conversations }: ConversationListProps) {
   if (conversations.length === 0) {
     return (
       <div className="rounded-brand-xl border border-outline-variant/40 bg-surface-container-lowest px-5 py-5 shadow-ambient">
-        <p className="font-headline text-lg font-semibold text-on-surface">
+        <p className="type-card-title text-on-surface">
           Aucun résultat pour cette recherche
         </p>
-        <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+        <p className="type-note mt-2 text-on-surface-variant">
           Essayez un autre mot-clé ou revenez à la liste complète des conversations.
         </p>
       </div>

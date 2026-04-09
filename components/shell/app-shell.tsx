@@ -43,8 +43,8 @@ export async function AppShell({
       >
         {difficultDayMode ? (
           <div className="rounded-brand-xl bg-secondary-container px-5 py-5 text-on-secondary-container">
-            <p className="font-headline text-base font-semibold">Mode journée difficile activé</p>
-            <p className="mt-2 text-sm leading-7">
+            <p className="type-card-title">Mode journée difficile activé</p>
+            <p className="type-body mt-2 max-w-[58ch]">
               L&apos;interface va à l&apos;essentiel. Gardez seulement deux repères: l&apos;aide
               si vous avez besoin d&apos;orientation, et vos messages si vous voulez joindre
               une personne de confiance.

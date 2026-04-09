@@ -68,7 +68,7 @@ export default async function ProEventsPage({ searchParams }: ProEventsPageProps
   ).length;
 
   return (
-    <AppShell title="Espace pro" currentPath="/pro">
+    <AppShell title="Espace pro" currentPath="/pro" wide>
       <section className="space-y-6">
         <BackLink href="/pro" label="Retour à l'espace pro" />
 
