@@ -1,12 +1,12 @@
 import "server-only";
 
-import { requireCompletedProfile } from "@/lib/auth";
+import { requireCompletedProfile, type ProfileKind } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type DirectoryMember = {
   id: string;
   visibleName: string;
-  profileKind: "patient" | "caregiver";
+  profileKind: ProfileKind;
   isAnonymous: boolean;
   hasExistingThread: boolean;
 };
@@ -25,7 +25,7 @@ export async function searchMemberDirectory(query = ""): Promise<DirectoryMember
   return (data as Array<{
     user_id: string;
     visible_name: string;
-    profile_kind: "patient" | "caregiver";
+    profile_kind: ProfileKind;
     is_anonymous: boolean;
     has_existing_thread: boolean;
   }>).map((row) => ({

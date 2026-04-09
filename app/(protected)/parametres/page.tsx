@@ -7,6 +7,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { signOut } from "@/app/account/actions";
 import { PushChannelManager } from "@/components/notifications/push-channel-manager";
 import { getPushVapidPublicKey } from "@/lib/env";
+import { PROFILE_KIND_LABELS } from "@/lib/auth";
 import { getSettingsSnapshot } from "@/lib/settings";
 
 import { submitPrivacyRequest, updateNotificationPreferences, updateProfileSettings } from "./actions";
@@ -43,6 +44,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     : "bg-secondary-container text-on-secondary-container";
   const { email, profile, roles, notificationPreferences } = await getSettingsSnapshot();
   const vapidPublicKey = getPushVapidPublicKey();
+  const isProfessional = profile.profileKind === "professional";
 
   return (
     <AppShell title="Paramètres" currentPath="/parametres">
@@ -101,14 +103,23 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
                 Je suis
               </span>
-              <select
-                name="profileKind"
-                defaultValue={profile.profileKind}
-                className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
-              >
-                <option value="patient">Patiente</option>
-                <option value="caregiver">Aidant</option>
-              </select>
+              {isProfessional ? (
+                <>
+                  <input type="hidden" name="profileKind" value="professional" />
+                  <div className="rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface">
+                    {PROFILE_KIND_LABELS[profile.profileKind]}
+                  </div>
+                </>
+              ) : (
+                <select
+                  name="profileKind"
+                  defaultValue={profile.profileKind}
+                  className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
+                >
+                  <option value="patient">Patiente</option>
+                  <option value="caregiver">Aidant</option>
+                </select>
+              )}
             </label>
 
             <label className="block space-y-2">

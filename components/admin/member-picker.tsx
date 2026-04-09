@@ -5,6 +5,12 @@ import { useState } from "react";
 
 import type { MemberOption } from "@/lib/admin-messaging";
 
+const profileKindLabels = {
+  patient: "Patiente",
+  caregiver: "Aidant",
+  professional: "Professionnel",
+} as const;
+
 type MemberPickerProps = {
   members: MemberOption[];
 };
@@ -58,7 +64,7 @@ export function MemberPicker({ members }: MemberPickerProps) {
         ) : (
           filtered.map((member) => {
             const visibleName = member.pseudonym ?? member.displayName;
-            const badge = member.profileKind === "patient" ? "Patiente" : "Aidant·e";
+            const badge = profileKindLabels[member.profileKind];
             const isSelected = selectedIds.has(member.id);
 
             return (

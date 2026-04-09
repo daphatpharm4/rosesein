@@ -1,13 +1,13 @@
 import "server-only";
 
-import { requireStaff } from "@/lib/auth";
+import { requireStaff, type ProfileKind } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ManagedUser = {
   id: string;
   displayName: string;
   pseudonym: string | null;
-  profileKind: "patient" | "caregiver";
+  profileKind: ProfileKind;
   isAnonymous: boolean;
   difficultDayMode: boolean;
   roles: string[];

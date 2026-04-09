@@ -4,8 +4,14 @@ import { notFound, redirect } from "next/navigation";
 import { hasSupabaseBrowserEnv } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export type ProfileKind = "patient" | "caregiver";
-export type PlatformRole = "member" | "moderator" | "admin";
+export type ProfileKind = "patient" | "caregiver" | "professional";
+export type PlatformRole = "member" | "moderator" | "admin" | "professional";
+
+export const PROFILE_KIND_LABELS: Record<ProfileKind, string> = {
+  patient: "Patiente",
+  caregiver: "Aidant",
+  professional: "Professionnel",
+};
 
 export type UserProfile = {
   id: string;
@@ -122,6 +128,16 @@ export async function requireAdmin(redirectTo = "/admin/utilisateurs") {
   const context = await requireCompletedProfile(redirectTo);
 
   if (!context.roles.includes("admin")) {
+    notFound();
+  }
+
+  return context;
+}
+
+export async function requireProfessional(redirectTo = "/pro") {
+  const context = await requireCompletedProfile(redirectTo);
+
+  if (context.profile?.profileKind !== "professional") {
     notFound();
   }
 

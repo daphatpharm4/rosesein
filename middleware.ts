@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasSupabaseBrowserEnv } from "@/lib/env";
 import { updateSession } from "@/lib/supabase/middleware";
 
-const protectedPrefixes = ["/communaute", "/messages", "/parcours", "/parametres", "/admin"];
+const protectedPrefixes = ["/communaute", "/messages", "/parcours", "/parametres", "/admin", "/pro"];
 
 function isProtectedPath(pathname: string) {
   return protectedPrefixes.some(
@@ -13,6 +13,7 @@ function isProtectedPath(pathname: string) {
 
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  const isProPath = pathname === "/pro" || pathname.startsWith("/pro/");
 
   if (!hasSupabaseBrowserEnv()) {
     if (isProtectedPath(pathname)) {
@@ -37,13 +38,20 @@ export async function middleware(request: NextRequest) {
   if (isProtectedPath(pathname) && user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id")
+      .select("id, profile_kind")
       .eq("id", user.id)
       .maybeSingle();
 
     if (!profile) {
+      const redirectUrl = new URL(isProPath ? "/account/pro-onboarding" : "/account", request.url);
+      redirectUrl.searchParams.set("status", isProPath ? "complete-pro-profile" : "complete-profile");
+      redirectUrl.searchParams.set("redirectTo", `${pathname}${search}`);
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    if (isProPath && profile.profile_kind !== "professional") {
       const redirectUrl = new URL("/account", request.url);
-      redirectUrl.searchParams.set("status", "complete-profile");
+      redirectUrl.searchParams.set("error", "professional-space-forbidden");
       redirectUrl.searchParams.set("redirectTo", `${pathname}${search}`);
       return NextResponse.redirect(redirectUrl);
     }

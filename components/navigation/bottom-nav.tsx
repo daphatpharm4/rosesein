@@ -1,9 +1,11 @@
 // components/navigation/bottom-nav.tsx
 import Link from "next/link";
 import type { Route } from "next";
-import { CalendarDays, HeartPulse, MessageCircleMore, Users } from "lucide-react";
+import { BriefcaseMedical, CalendarDays, HeartPulse, MessageCircleMore, Users } from "lucide-react";
 
-const navItems = [
+import type { ProfileKind } from "@/lib/auth";
+
+const baseNavItems = [
   {
     href: "/" as Route,
     label: "Accueil",
@@ -28,9 +30,22 @@ const navItems = [
 
 type BottomNavProps = {
   currentPath: string;
+  profileKind: ProfileKind | null;
 };
 
-export function BottomNav({ currentPath }: BottomNavProps) {
+export function BottomNav({ currentPath, profileKind }: BottomNavProps) {
+  const navItems = [
+    ...baseNavItems,
+    ...(profileKind === "professional"
+      ? [
+          {
+            href: "/pro" as Route,
+            label: "Espace pro",
+            icon: BriefcaseMedical,
+          },
+        ]
+      : []),
+  ];
   const isActive = (href: string) =>
     currentPath === href || (href !== "/" && currentPath.startsWith(href));
 
@@ -39,7 +54,11 @@ export function BottomNav({ currentPath }: BottomNavProps) {
       aria-label="Navigation principale"
       className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-screen-md px-3 pb-[max(var(--safe-area-bottom),0.75rem)] sm:px-4 sm:pb-4"
     >
-      <div className="shell-bar grid grid-cols-4 gap-1.5 rounded-[2rem] border border-outline-variant/25 bg-background/92 px-2 py-2 shadow-ambient backdrop-blur-sm sm:rounded-brand-xl sm:px-3 sm:py-3">
+      <div
+        className={`shell-bar grid gap-1.5 rounded-[2rem] border border-outline-variant/25 bg-background/92 px-2 py-2 shadow-ambient backdrop-blur-sm sm:rounded-brand-xl sm:px-3 sm:py-3 ${
+          navItems.length > 4 ? "grid-cols-5" : "grid-cols-4"
+        }`}
+      >
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}

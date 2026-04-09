@@ -35,6 +35,12 @@ Next steps:
    - supabase/migrations/0012_association_messages.sql
    - supabase/migrations/0013_member_open_channels.sql
    - supabase/migrations/0014_admin_collective_messaging.sql
+   - supabase/migrations/0015_admin_events_and_registrations.sql
+   - supabase/migrations/0016_member_group_conversations.sql
+   - supabase/migrations/0017_community_access_by_profile.sql
+   - supabase/migrations/0017a_professional_role_enums.sql
+   - supabase/migrations/0018_professional_foundation.sql
+   - supabase/migrations/0019_professional_agenda.sql
 4. Start the app:
    npm run dev
 5. Run the local verification pack:

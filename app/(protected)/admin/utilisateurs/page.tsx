@@ -4,7 +4,7 @@ import { Search, ShieldCheck, ShieldPlus, UserRoundCog } from "lucide-react";
 
 import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
-import { requireStaff } from "@/lib/auth";
+import { PROFILE_KIND_LABELS, requireStaff } from "@/lib/auth";
 import { getManagedUsers } from "@/lib/admin-users";
 
 import { updateManagedUserRole } from "./actions";
@@ -114,7 +114,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                         {managedUser.displayName}
                       </p>
                       <p className="mt-1 text-sm leading-7 text-on-surface-variant">
-                        {managedUser.profileKind === "patient" ? "Patiente" : "Aidant"}
+                        {PROFILE_KIND_LABELS[managedUser.profileKind]}
                         {managedUser.pseudonym ? ` · pseudo public ${managedUser.pseudonym}` : ""}
                         {managedUser.isAnonymous ? " · mode pseudonyme" : ""}
                         {managedUser.difficultDayMode ? " · mode journée difficile" : ""}

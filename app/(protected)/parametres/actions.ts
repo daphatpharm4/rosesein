@@ -14,7 +14,7 @@ function appendFeedback(targetPath: string, key: "status" | "error", value: stri
 }
 
 function normalizeProfileKind(value: FormDataEntryValue | null): ProfileKind | null {
-  if (value === "patient" || value === "caregiver") {
+  if (value === "patient" || value === "caregiver" || value === "professional") {
     return value;
   }
 
@@ -35,11 +35,14 @@ function normalizeOptionalText(value: FormDataEntryValue | null) {
 }
 
 export async function updateProfileSettings(formData: FormData) {
-  const profileKind = normalizeProfileKind(formData.get("profileKind"));
+  const context = await requireCompletedProfile("/parametres");
+  const requestedProfileKind = normalizeProfileKind(formData.get("profileKind"));
   const displayName = normalizeDisplayName(formData.get("displayName"));
   const pseudonym = normalizeOptionalText(formData.get("pseudonym"));
   const isAnonymous = formData.get("isAnonymous") === "on";
   const difficultDayMode = formData.get("difficultDayMode") === "on";
+  const profileKind =
+    context.profile?.profileKind === "professional" ? "professional" : requestedProfileKind;
 
   if (!profileKind) {
     redirect("/parametres?error=profile-kind-required");
@@ -49,7 +52,6 @@ export async function updateProfileSettings(formData: FormData) {
     redirect("/parametres?error=display-name-required");
   }
 
-  const { user } = await requireCompletedProfile("/parametres");
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("profiles")
@@ -60,7 +62,7 @@ export async function updateProfileSettings(formData: FormData) {
       is_anonymous: isAnonymous,
       difficult_day_mode: difficultDayMode,
     })
-    .eq("id", user.id);
+    .eq("id", context.user.id);
 
   if (error) {
     redirect("/parametres?error=profile-update-failed");

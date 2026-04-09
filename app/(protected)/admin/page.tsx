@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarRange, Megaphone, Send, ShieldAlert, UserRoundCog } from "lucide-react";
+import { BriefcaseMedical, CalendarRange, Megaphone, Send, ShieldAlert, UserRoundCog } from "lucide-react";
 import type { Route } from "next";
 
 import { BackLink } from "@/components/navigation/back-link";
@@ -104,6 +104,23 @@ export default async function AdminPage() {
               </p>
               <p className="mt-1 text-sm leading-6 text-on-surface-variant">
                 Créer, publier et suivre les inscriptions aux rendez-vous.
+              </p>
+            </div>
+          </Link>
+
+          <Link
+            href={"/admin/professionnels" as Route}
+            className="surface-card group flex items-start gap-4 hover:border-primary/20"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <BriefcaseMedical aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+            </div>
+            <div>
+              <p className="font-headline text-base font-semibold text-on-surface group-hover:text-primary">
+                Professionnels
+              </p>
+              <p className="mt-1 text-sm leading-6 text-on-surface-variant">
+                Offres, activation des fiches et pilotage de l'espace professionnel.
               </p>
             </div>
           </Link>

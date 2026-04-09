@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, MailCheck, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 
 import { AppShell } from "@/components/shell/app-shell";
-import { getCurrentUserContext } from "@/lib/auth";
+import { getCurrentUserContext, PROFILE_KIND_LABELS } from "@/lib/auth";
 import { hasSupabaseBrowserEnv } from "@/lib/env";
 import { normalizeInternalPath } from "@/lib/internal-path";
 
@@ -37,6 +37,10 @@ const messageMap: Record<string, string> = {
   "complete-profile":
     "Complétez votre profil avant d'accéder aux espaces privés de ROSE-SEIN.",
   "profile-ready": "Votre profil est prêt. Vous pouvez maintenant continuer en toute sérénité.",
+  "complete-pro-profile":
+    "Terminez votre fiche professionnelle pour activer l'annuaire, l'agenda et votre espace pro.",
+  "professional-space-forbidden":
+    "Cet espace est réservé aux professionnels disposant d'un profil dédié.",
 };
 
 function firstValue(value: string | string[] | undefined) {
@@ -54,6 +58,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
   const feedbackTone = error
     ? "bg-primary/10 text-on-primary-container"
     : "bg-secondary-container text-on-secondary-container";
+  const isProfessional = profile?.profileKind === "professional";
 
   return (
     <AppShell title="Compte" currentPath="/account">
@@ -108,27 +113,30 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                       {user.email}
                     </p>
                     <p className="text-xs uppercase tracking-[0.16em] text-outline">
-                      {profile.profileKind === "patient" ? "Patiente" : "Aidant"}
+                      {PROFILE_KIND_LABELS[profile.profileKind]}
                     </p>
                   </div>
                 </div>
 
                 <p className="text-sm leading-7 text-on-surface-variant">
-                  Choisissez simplement la suite la plus utile maintenant. Le reste
-                  restera accessible depuis la navigation.
+                  {isProfessional
+                    ? "Retrouvez votre espace pro, vos créneaux et votre visibilité publique depuis une seule surface calme."
+                    : "Choisissez simplement la suite la plus utile maintenant. Le reste restera accessible depuis la navigation."}
                 </p>
 
                 <div className="divide-y divide-outline-variant/30 rounded-brand-xl border border-outline-variant/40 bg-surface-container-lowest">
                   <a
-                    href={redirectTo}
+                    href={isProfessional && redirectTo === "/messages" ? "/pro" : redirectTo}
                     className="flex items-center justify-between px-5 py-5 transition-colors hover:bg-surface-container-low"
                   >
                     <div>
                       <p className="font-headline text-lg font-semibold text-on-surface">
-                        Continuer là où vous en étiez
+                        {isProfessional ? "Ouvrir mon espace pro" : "Continuer là où vous en étiez"}
                       </p>
                       <p className="mt-1 text-sm leading-7 text-on-surface-variant">
-                        Reprendre le chemin qui vous a amené ici sans repartir de zéro.
+                        {isProfessional
+                          ? "Retrouver le tableau de bord professionnel, vos rendez-vous et vos repères essentiels."
+                          : "Reprendre le chemin qui vous a amené ici sans repartir de zéro."}
                       </p>
                     </div>
                     <ArrowRight
@@ -139,15 +147,17 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                   </a>
 
                   <Link
-                    href="/messages"
+                    href={isProfessional ? "/pro/agenda" : "/messages"}
                     className="flex items-center justify-between px-5 py-5 transition-colors hover:bg-surface-container-low"
                   >
                     <div>
                       <p className="font-headline text-lg font-semibold text-on-surface">
-                        Ouvrir la messagerie
+                        {isProfessional ? "Gérer mon agenda" : "Ouvrir la messagerie"}
                       </p>
                       <p className="mt-1 text-sm leading-7 text-on-surface-variant">
-                        Retrouver l'association, vos groupes et vos contacts de confiance.
+                        {isProfessional
+                          ? "Voir les créneaux publiés, les demandes en attente et les confirmations."
+                          : "Retrouver l'association, vos groupes et vos contacts de confiance."}
                       </p>
                     </div>
                     <ArrowRight
@@ -158,15 +168,17 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                   </Link>
 
                   <Link
-                    href="/parcours"
+                    href={isProfessional ? "/pro/profil" : "/parcours"}
                     className="flex items-center justify-between px-5 py-5 transition-colors hover:bg-surface-container-low"
                   >
                     <div>
                       <p className="font-headline text-lg font-semibold text-on-surface">
-                        Reprendre mon parcours
+                        {isProfessional ? "Mettre à jour ma fiche publique" : "Reprendre mon parcours"}
                       </p>
                       <p className="mt-1 text-sm leading-7 text-on-surface-variant">
-                        Retrouver rendez-vous, notes et documents privés sans vous disperser.
+                        {isProfessional
+                          ? "Ajuster votre présentation, vos modes de consultation et votre présence dans l'annuaire."
+                          : "Retrouver rendez-vous, notes et documents privés sans vous disperser."}
                       </p>
                     </div>
                     <ArrowRight
@@ -203,6 +215,12 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                       <dt className="font-semibold text-on-surface">Rôle</dt>
                       <dd>{roles.length > 0 ? roles.join(", ") : "membre"}</dd>
                     </div>
+                    {isProfessional ? (
+                      <div>
+                        <dt className="font-semibold text-on-surface">Surface dédiée</dt>
+                        <dd>Annuaire public, agenda de rendez-vous et espace professionnel</dd>
+                      </div>
+                    ) : null}
                   </dl>
                 </div>
 
@@ -244,6 +262,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                     >
                       <option value="patient">Patiente</option>
                       <option value="caregiver">Aidant</option>
+                      <option value="professional">Professionnel</option>
                     </select>
                   </label>
 
@@ -311,8 +330,8 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                     </p>
                   </div>
                   <ul className="mt-4 space-y-3 text-sm leading-7 text-on-surface-variant">
-                    <li>La messagerie privée devient accessible.</li>
-                    <li>Le parcours peut enregistrer rendez-vous, notes et documents.</li>
+                    <li>Patiente ou aidant: messagerie, parcours et paramètres deviennent accessibles.</li>
+                    <li>Professionnel: une fiche dédiée, un agenda et l'espace pro sont ensuite proposés.</li>
                     <li>Vos options de confidentialité restent modifiables plus tard.</li>
                   </ul>
                 </div>
@@ -328,7 +347,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                 </p>
                 <p className="text-sm leading-7 text-on-surface-variant">
                   Utilisez votre email pour recevoir un lien sécurisé. Le profil
-                  patient ou aidant sera précisé juste après.
+                  patient, aidant ou professionnel sera précisé juste après.
                 </p>
               </div>
 

@@ -1,4 +1,5 @@
 // lib/admin-messaging.ts
+import type { ProfileKind } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type BroadcastSegment = "all" | "patient" | "caregiver";
@@ -28,7 +29,7 @@ export type MemberOption = {
   id: string;
   displayName: string;
   pseudonym: string | null;
-  profileKind: "patient" | "caregiver";
+  profileKind: ProfileKind;
 };
 
 export async function getAdminMessagingHistory(): Promise<AdminMessagingHistory> {
@@ -102,6 +103,6 @@ export async function getMemberList(): Promise<MemberOption[]> {
       id: row.id as string,
       displayName: row.display_name as string,
       pseudonym: row.pseudonym as string | null,
-      profileKind: row.profile_kind as "patient" | "caregiver",
+      profileKind: row.profile_kind as ProfileKind,
     }));
 }

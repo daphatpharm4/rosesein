@@ -3,6 +3,7 @@ import { MessageSquarePlus, Search, Sparkles, Users } from "lucide-react";
 
 import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
+import { PROFILE_KIND_LABELS } from "@/lib/auth";
 import { searchMemberDirectory } from "@/lib/member-directory";
 
 import { createGroupConversation, startDirectConversation } from "../actions";
@@ -168,7 +169,7 @@ export default async function NewConversationPage({ searchParams }: NewConversat
                           {member.visibleName}
                         </span>
                         <span className="block text-sm leading-6 text-on-surface-variant">
-                          {member.profileKind === "patient" ? "Patiente" : "Aidant"}
+                          {PROFILE_KIND_LABELS[member.profileKind]}
                           {member.isAnonymous ? " · profil pseudonyme" : ""}
                         </span>
                       </span>
@@ -210,7 +211,7 @@ export default async function NewConversationPage({ searchParams }: NewConversat
                       {member.visibleName}
                     </p>
                     <p className="mt-1 text-sm leading-7 text-on-surface-variant">
-                      {member.profileKind === "patient" ? "Patiente" : "Aidant"}
+                      {PROFILE_KIND_LABELS[member.profileKind]}
                       {member.isAnonymous ? " · profil pseudonyme" : ""}
                     </p>
                   </div>

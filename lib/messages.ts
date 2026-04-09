@@ -1,6 +1,11 @@
 import { notFound } from "next/navigation";
 
-import { requireCompletedProfile, type UserProfile } from "@/lib/auth";
+import {
+  PROFILE_KIND_LABELS,
+  requireCompletedProfile,
+  type ProfileKind,
+  type UserProfile,
+} from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ConversationKind = "association" | "direct" | "group";
@@ -23,7 +28,7 @@ export type Conversation = {
 
 export type ThreadParticipant = {
   id: string;
-  profileKind: "patient" | "caregiver";
+  profileKind: ProfileKind;
   visibleName: string;
   isCurrentUser: boolean;
 };
@@ -74,7 +79,7 @@ type MessageRow = {
 
 type ProfileRow = {
   id: string;
-  profile_kind: "patient" | "caregiver";
+  profile_kind: ProfileKind;
   display_name: string;
   pseudonym: string | null;
   is_anonymous: boolean;
@@ -433,5 +438,5 @@ export function getThreadLead(thread: MessageThread) {
 }
 
 export function getAudienceLabel(profile: UserProfile) {
-  return profile.profileKind === "patient" ? "Patiente" : "Aidant";
+  return PROFILE_KIND_LABELS[profile.profileKind];
 }

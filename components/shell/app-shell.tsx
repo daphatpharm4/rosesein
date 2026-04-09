@@ -65,7 +65,10 @@ export async function AppShell({
         {children}
       </main>
       {floatingAction}
-      <BottomNav currentPath={currentPath} />
+      <BottomNav
+        currentPath={currentPath}
+        profileKind={context?.profile?.profileKind ?? null}
+      />
     </div>
   );
 }

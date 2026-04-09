@@ -10,7 +10,7 @@ import { getRequestSiteUrl } from "@/lib/request-site-url";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function normalizeProfileKind(value: FormDataEntryValue | null): ProfileKind | null {
-  if (value === "patient" || value === "caregiver") {
+  if (value === "patient" || value === "caregiver" || value === "professional") {
     return value;
   }
 
@@ -102,6 +102,14 @@ export async function saveProfileSetup(formData: FormData) {
   }
 
   const user = await requireUser();
+
+  if (profileKind === "professional") {
+    const proRedirectUrl = new URL("/account/pro-onboarding", "http://localhost");
+    proRedirectUrl.searchParams.set("displayName", displayName);
+    proRedirectUrl.searchParams.set("redirectTo", redirectTo);
+    redirect((proRedirectUrl.pathname + proRedirectUrl.search) as Route);
+  }
+
   const supabase = await createSupabaseServerClient();
 
   const { error: profileError } = await supabase.from("profiles").upsert(
