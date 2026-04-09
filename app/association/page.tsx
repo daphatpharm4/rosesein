@@ -18,6 +18,7 @@ import {
   formatPublishedDate,
   getPublicContentSnapshot,
 } from "@/lib/content";
+import { BackLink } from "@/components/navigation/back-link";
 
 const associationAreas = [
   {
@@ -78,6 +79,8 @@ export default async function AssociationPage() {
   return (
     <AppShell title="Association" currentPath="/association">
       <section className="space-y-6">
+        <BackLink href="/" label="Retour à l'accueil" />
+
         <div className="space-y-3">
           <div className="eyebrow">Présence institutionnelle</div>
           <h1 className="editorial-title">

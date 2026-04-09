@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { AppShell } from "@/components/shell/app-shell";
 import { getPublicContentSnapshot } from "@/lib/content";
 import { NewsFilters } from "@/components/content/news-filters";
@@ -12,6 +13,8 @@ export default async function NewsPage() {
   return (
     <AppShell title="Actualités" currentPath="/actualites">
       <section className="space-y-6">
+        <BackLink href="/" label="Retour à l'accueil" />
+
         <div className="space-y-3">
           <div className="eyebrow">Editorial et orientation</div>
           <h1 className="editorial-title">Des contenus clairs, fiables et sereins.</h1>
