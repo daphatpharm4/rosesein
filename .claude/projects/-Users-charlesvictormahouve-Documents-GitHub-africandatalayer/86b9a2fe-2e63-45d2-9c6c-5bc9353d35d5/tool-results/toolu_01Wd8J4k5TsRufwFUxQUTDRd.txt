@@ -1,0 +1,689 @@
+     1→# African Data Layer (ADL) -- Final Data Acquisition Strategy
+     2→## Bonamoussadi, Douala, Cameroon
+     3→
+     4→**Document:** 10-FINAL-STRATEGY-synthesis.md
+     5→**Date:** March 2026
+     6→**Purpose:** Executive-ready synthesis of all 9 teammate deliverables into a unified, actionable strategy
+     7→
+     8→---
+     9→
+    10→## Table of Contents
+    11→
+    12→1. [Vertical-by-Vertical Matrix](#1-vertical-by-vertical-matrix)
+    13→2. [Recommended Collection Mix Per Vertical](#2-recommended-collection-mix-per-vertical)
+    14→3. [6-Week Pilot Plan for Bonamoussadi](#3-6-week-pilot-plan-for-bonamoussadi)
+    15→4. [Priority Contact List](#4-priority-contact-list)
+    16→5. [Risk Register and Mitigation Plan](#5-risk-register-and-mitigation-plan)
+    17→6. [80/20 Focus](#6-8020-focus)
+    18→7. [Validation SOP](#7-validation-sop)
+    19→
+    20→**Detailed Reference Documents:**
+    21→- `01-data-analyst-local-context.md` -- Market context, vertical analysis, competitor landscape
+    22→- `02-system-design-collection-workflow.md` -- Data model, delta computation, schemas
+    23→- `03-cloud-architect-technical-architecture.md` -- Architecture, offline-first design, API
+    24→- `04-cloud-engineer-implementation.md` -- Deployment, observability, runbooks
+    25→- `05-cybersecurity-security-privacy.md` -- Threat model, privacy framework, compliance
+    26→- `06-fraud-specialist-anti-fraud.md` -- GPS spoofing detection, duplicate detection, scoring
+    27→- `07-marketing-commercial-strategy.md` -- Buyer personas, pricing, go-to-market
+    28→- `08-ui-ux-design-research.md` -- Field capture UX, design system, agent personas
+    29→- `09-project-leader-execution-plan.md` -- 6-week plan, budget, KPIs, Go/No-Go
+    30→
+    31→---
+    32→
+    33→## 1. Vertical-by-Vertical Matrix
+    34→
+    35→### 1.1 Billboards
+    36→
+    37→| Dimension | Detail |
+    38→|---|---|
+    39→| **Data Needed** | GPS location, format/size, operator/owner, advertiser brand, content category, occupancy status (booked/vacant), condition, photo evidence, installation date |
+    40→| **Actors (Producer to Consumer)** | **Regulators:** Ministry of Communication (licensing), Douala City Council (permits). **Operators:** Alliance Media, JC Decaux Cameroun, McCann Douala, Acmar Media, local operators. **Advertisers:** MTN, Orange, SABC/Brasseries du Cameroun, banks, FMCG. **Agencies:** Media buying/planning agencies (Sortlist-listed, Bamboo Agency). **Informal:** Sign painters, poster distributors, small business owners. |
+    41→| **Products/Services** | Monthly billboard market report (PDF/dashboard), real-time alert feed for content changes, one-time competitive audit, brand share-of-voice analytics |
+    42→| **Likely Problems** | Boundary ambiguity between formal billboards and large commercial signage; ownership attribution (many lack visible operator markings); seasonal damage during rainy season (June-Oct); periodic municipal crackdowns remove unauthorized boards in batches |
+    43→| **Data Gaps** | No centralized geolocated billboard inventory for Douala exists; informal signage is completely unmapped; occupancy rates (booked vs. vacant) are not public; no historical lifecycle data |
+    44→| **Delta Method** | Monthly field re-survey of all billboard locations. Track: new installations (commercial investment signal), vacancy rate changes (advertising market health), informal-to-formal ratio shifts (regulatory enforcement), content category shifts (industry spending trends) |
+    45→
+    46→### 1.2 Alcohol
+    47→
+    48→| Dimension | Detail |
+    49→|---|---|
+    50→| **Data Needed** | GPS location, business name, formal/informal classification, brands available, operating hours, price points, license status, photo evidence |
+    51→| **Actors (Producer to Consumer)** | **Producers:** SABC/Brasseries du Cameroun (dominant, 75%+ market), UCB, informal distillers. **Importers:** Formal (wines, spirits), informal cross-border (Nigeria). **Distributors:** SABC network, independent wholesalers, informal. **Retailers:** Licensed bars, restaurants, off-licences, street vendors, informal spots. **Regulators:** Ministry of Commerce (licensing), Ministry of Public Health (quality). **Consumers:** Urban middle class (branded beer), lower income (artisanal brews, sachets). |
+    52→| **Products/Services** | Quarterly distribution intelligence report, monthly alert digest (new openings/closures), annual market structure report, enterprise API for distribution management integration |
+    53→| **Likely Problems** | High informal turnover (unlicensed spots open/close rapidly); dual-purpose establishments (shops selling alcohol alongside other goods); under-reporting by operators; counterfeit/smuggled products indistinguishable at POS; night-only operations make daytime capture incomplete |
+    54→| **Data Gaps** | No geolocated POS database in Douala; informal sector volume estimated but unmeasured; product-level distribution data proprietary to SABC; quality/safety data at POS non-existent; operating hours undocumented |
+    55→| **Delta Method** | Weekly agent re-surveys of commercial corridors. Track: new establishment openings/closures (economic vitality), informal-to-formal ratio (regulatory signal), brand distribution shifts (market competition), price point changes (inflation indicator), density changes by micro-zone (commercial development) |
+    56→
+    57→### 1.3 Census (Demographic Proxy)
+    58→
+    59→| Dimension | Detail |
+    60→|---|---|
+    61→| **Data Needed** | Building count, building height (stories), construction status (new/in-progress/complete), ground-floor commercial occupancy, residential/commercial classification, building condition, photo evidence |
+    62→| **Actors (Producer to Consumer)** | **Official:** BUCREP (census authority, last census 2005), INS (statistical surveys), Ministry of Economy/Planning. **Local:** Douala V Municipality, community chiefs (chefs de quartier). **International:** UNFPA, UNDP, World Bank. **Private:** Real estate developers (SIC, Diamond Realty), banks (Afriland, Ecobank), telecoms (network planning). |
+    63→| **Products/Services** | Quarterly neighborhood profile update, annual neighborhood census report, custom demographic analysis per project |
+    64→| **Likely Problems** | 21-year-old baseline (2005 census) makes all projections unreliable; rapid urbanization since 2005 (1.9M to 4.35M); informal residents and transient populations systematically missed; no address system in most of Douala; political sensitivity of census data |
+    65→| **Data Gaps** | No neighborhood-level population data less than 20 years old; zero building-level occupancy data; no demographic composition at neighborhood level; migration patterns untracked; no household income data at micro-zone level |
+    66→| **Delta Method** | Monthly building footprint surveys using field agents + satellite imagery comparison. Track: building construction/demolition (population proxy), occupancy rates, commercial establishment density (economic activity proxy), building height changes (densification indicator) |
+    67→
+    68→### 1.4 Fuel
+    69→
+    70→| Dimension | Detail |
+    71→|---|---|
+    72→| **Data Needed** | GPS location, operator/brand, services offered (convenience store, car wash, mobile money, food), stock-out status, price compliance, informal vendor presence nearby, queue indicators, photo evidence |
+    73→| **Actors (Producer to Consumer)** | **Upstream:** SONARA (national refinery, Limbe). **Storage/Distribution:** SCDP (13 depots, monopoly). **Regulation:** CSPH (price stabilization). **Marketers:** TotalEnergies (26% share), Tradex (state-owned), MRS (18%), OLA Energy (8%), Neptune Oil, ~28 smaller companies. **Informal:** Black market fuel sellers (jerry cans). **Consumers:** Private vehicles, commercial transport, moto-taxis. |
+    74→| **Products/Services** | Weekly fuel market pulse, monthly competitive report, real-time stock-out alert API, integration feed for fleet management systems |
+    75→| **Likely Problems** | Informal fuel sellers near formal stations create classification confusion; temporary closures without notification; multi-purpose stations complicate categorization; government subsidies mask true market dynamics |
+    76→| **Data Gaps** | No real-time fuel availability data at station level; queue lengths/wait times untracked; informal sales volume unknown; station-level service inventory not centralized; fuel quality not monitored systematically |
+    77→| **Delta Method** | Weekly station visits (5-10 stations are manageable). Track: stock-out events (supply chain health), new station construction (infrastructure investment), informal vendor density near stations (supply constraint indicator), service diversification (market maturation), price compliance |
+    78→
+    79→### 1.5 Mobile Money
+    80→
+    81→| Dimension | Detail |
+    82→|---|---|
+    83→| **Data Needed** | GPS location, operator (MTN MoMo / Orange Money / both / CAMTEL Blue Money), activity status (open/closed/inactive), services offered (cash-in, cash-out, bill pay, merchant), float availability indicator, agent branding, photo evidence |
+    84→| **Actors (Producer to Consumer)** | **Operators:** MTN Cameroon (MoMo, ~30% share), Orange Cameroon (Orange Money, ~70% share, CFA 800B monthly transactions), CAMTEL (entering 2026). **Regulators:** COBAC (banking commission), BEAC (central bank), ANIF (financial intelligence). **Super-agents:** Master agents managing sub-agent networks. **Individual agents:** Kiosk operators, street-side agents. **Fintechs:** Wave (launched Aug 2025), others. **Development:** CGAP, World Bank, Gates Foundation. |
+    85→| **Products/Services** | Weekly agent network dashboard (interactive map), monthly agent churn report, quarterly financial inclusion report, enterprise API for operator back-office integration |
+    86→| **Likely Problems** | Extreme agent turnover (open/close weekly); multi-operator agents complicate attribution; branded but inactive agents; float availability invisible without asking; KYC compliance weak (ID coverage <60%); agent-level fraud documented |
+    87→| **Data Gaps** | No public geolocated database of active agents; activity status unknown without field verification; float/liquidity untracked publicly; transaction density proprietary; commission structures and earnings opaque |
+    88→| **Delta Method** | Weekly field re-survey of all agent locations. Track: agent density changes by micro-zone (financial access indicator), agent churn rate (market health), multi-service vs. single-service agents, new merchant acceptance points (digital payment adoption) |
+    89→
+    90→### 1.6 Pharmacy
+    91→
+    92→| Dimension | Detail |
+    93→|---|---|
+    94→| **Data Needed** | GPS location, name, formal/informal classification, operating hours, on-duty rotation (pharmacie de garde), product categories available, proximity to health facilities, license status, photo evidence |
+    95→| **Actors (Producer to Consumer)** | **Regulators:** DPML (licensing), LANACOME (quality control), IGSPL (inspection), Pharmacists Council. **Supply:** CENAME (national essential medicines procurement). **Distributors:** Licensed pharmaceutical wholesalers. **Formal Retail:** Licensed community pharmacies. **Informal:** Street vendors, market sellers, unregistered medicine shops. **Prescribers:** Doctors, clinics, hospitals. **International:** Sanofi, Novartis, Roche, WHO, UNICEF, USAID. |
+    96→| **Products/Services** | Monthly pharmacy access report, quarterly public health intelligence report, pharmacie de garde API for consumer apps, distribution intelligence for pharma companies |
+    97→| **Likely Problems** | Informal drug vendors are mobile and hard to classify; counterfeit medicines cannot be identified visually; temporary pharmacy closures without notice; night/duty rotation poorly communicated; discrepancy between licensed and actually operating |
+    98→| **Data Gaps** | No public geolocated directory of licensed pharmacies in Douala; informal vendor locations unmapped; real-time drug availability not tracked at retail; operating hours and on-duty schedules not digitized; retail drug pricing not monitored |
+    99→| **Delta Method** | Monthly formal pharmacy visits, weekly informal vendor surveys near markets. Track: informal vendor density changes (enforcement/public health signal), new pharmacy openings, stock-out frequency for essential medicines, pharmacy-to-population ratio |
+   100→
+   101→### 1.7 Transport Roads
+   102→
+   103→| Dimension | Detail |
+   104→|---|---|
+   105→| **Data Needed** | Road segment GPS coordinates, surface type (paved/unpaved/gravel/laterite), condition rating, blockage status (clear/partial/blocked), cause of blockage (flooding/construction/accident), vehicle passability (sedan/SUV/truck/moto), estimated clearance time, bypass route, photo evidence |
+   106→| **Actors (Producer to Consumer)** | **Infrastructure:** Ministry of Public Works (national), Douala City Council (municipal). **Contractors:** Road construction companies (often Chinese-funded). **Transport:** Taxi drivers, moto-taxi operators, bus companies, freight/logistics companies. **Traffic police.** **Emergency services.** **Ride-hailing:** Yango, Gozem. **Development:** World Bank ($543M BRT project, construction 2026). |
+   107→| **Products/Services** | Real-time road blockage alert API, weekly road condition dashboard, rainy season flood risk map, construction zone tracking, enterprise routing integration for logistics/ride-hailing |
+   108→| **Likely Problems** | Conditions change within hours during rainy season (June-Oct); GPS accuracy reduced in urban canyons; "blocked" is subjective (spectrum from impassable to difficult); seasonal bias in dry-season data; construction zones may lack signage |
+   109→| **Data Gaps** | No real-time road condition system for Douala; historical flooding patterns not digitized by street; traffic density data unavailable; blocked roads communicated only via social media/word of mouth; road surface condition not systematically mapped; construction project locations not centrally tracked |
+   110→| **Delta Method** | Daily to real-time field reporting during rainy season; weekly during dry season. Track: blockage events (highest real-time value), condition deterioration/improvement over time, new paving or rehabilitation, flooding recurrence by location, construction project progress |
+   111→
+   112→---
+   113→
+   114→## 2. Recommended Collection Mix Per Vertical
+   115→
+   116→The percentages below represent the recommended source of initial data for the Bonamoussadi pilot, calibrated to local realities.
+   117→
+   118→| Source | Billboards | Alcohol | Census | Fuel | Mobile Money | Pharmacy | Transport Roads |
+   119→|---|---|---|---|---|---|---|---|
+   120→| **Field Ops** (paid agents) | 70% | 80% | 50% | 60% | 75% | 75% | 60% |
+   121→| **Satellite Imagery** | 5% | 0% | 25% | 5% | 0% | 0% | 15% |
+   122→| **Partner Data** (telcos, fuel cos, operators) | 5% | 5% | 5% | 15% | 10% | 5% | 5% |
+   123→| **Public Data** (govt registers, OSM) | 10% | 5% | 15% | 15% | 5% | 15% | 15% |
+   124→| **Competitor Tracking** | 10% | 10% | 5% | 5% | 10% | 5% | 5% |
+   125→
+   126→**Rationale:**
+   127→
+   128→- **Field ops dominate every vertical** because Bonamoussadi's informal economy (30-50% of GDP) is invisible to satellites, government registers, and partner databases. Ground truth is ADL's core value proposition.
+   129→- **Satellite imagery** is most useful for Census (building footprint change detection) and Roads (surface-level condition visible from above). It is useless for identifying whether a kiosk sells mobile money or alcohol.
+   130→- **Partner data** is highest for Fuel (branded operators like TotalEnergies and Tradex maintain station lists) and Mobile Money (MTN/Orange have agent directories, though proprietary).
+   131→- **Public data** contributes most to Fuel (CSPH price data), Pharmacy (Pharmacists Council registry), Roads (OSM road geometry, Ministry of Public Works classifications), and Census (BUCREP 2005 baseline, however outdated).
+   132→- **Competitor tracking** (monitoring what Google Maps, OSM volunteers, and Alliance Media publish) provides baseline cross-references, especially for Billboards and Mobile Money.
+   133→
+   134→---
+   135→
+   136→## 3. 6-Week Pilot Plan for Bonamoussadi
+   137→
+   138→### 3.1 Budget Summary
+   139→
+   140→| Category | Amount (CFA) | Amount (USD) | % of Total |
+   141→|---|---|---|---|
+   142→| Personnel | 975,000 | $1,585 | 46.5% |
+   143→| Equipment | 399,500 | $650 | 19.1% |
+   144→| Infrastructure | 52,275 | $85 | 2.5% |
+   145→| Operations | 392,500 | $638 | 18.7% |
+   146→| Contingency (15%) | 272,893 | $444 | 13.0% |
+   147→| **TOTAL** | **2,092,168** | **~$3,402** | **100%** |
+   148→
+   149→**Personnel breakdown:** 1 Field Team Lead (CFA 200,000/month) + 3 Field Agents (CFA 100,000/month base + CFA 20,000 transport + up to CFA 30,000 performance bonus each).
+   150→
+   151→**Equipment:** 4 Samsung A15 phones (CFA 75,000 each), 4 power banks, 4 SIM cards with data plans, cases, branded ID badges.
+   152→
+   153→**Infrastructure:** Vercel Pro ($20/mo), Neon PostgreSQL ($20/mo), Google Gemini API ($10/mo est.), domain renewal.
+   154→
+   155→### 3.2 Team Roles and Headcount
+   156→
+   157→| Role | Count | Location | Compensation (CFA/month) | Key Responsibilities |
+   158→|---|---|---|---|---|
+   159→| **CEO / Technical Lead** (Charles Mahouve) | 1 | Lyon, France (remote) | -- | Platform development, admin review, client outreach, Go/No-Go decision |
+   160→| **Field Team Lead** | 1 | Douala, Bonamoussadi | 200,000 | Agent recruitment/training, daily supervision, spot-check audits, zone management |
+   161→| **Field Agents** | 3 | Douala, Bonamoussadi | 120,000-150,000 (base + transport + bonus) | 30-50 POI submissions/day, 8AM-5PM field hours, photo + GPS for every submission |
+   162→| **Total Headcount** | **5** | | | |
+   163→
+   164→### 3.3 KPIs with Specific Targets
+   165→
+   166→| Category | KPI | Target (End of Pilot) |
+   167→|---|---|---|
+   168→| **Data Collection** | Total POIs captured | >700 |
+   169→| | P0 coverage (Roads + MoMo) | >80% of estimated POIs |
+   170→| | P1/P2 coverage | >60% / >40% |
+   171→| | Submission quality score | >85% |
+   172→| | Enrichment rate | >40% of baseline POIs |
+   173→| **Operations** | Agent productivity | 30-50 submissions/agent/day |
+   174→| | Sync success rate | >95% |
+   175→| | Admin review turnaround | <48 hours |
+   176→| | Agent attendance | >90% |
+   177→| | System uptime (7AM-6PM WAT) | >99% |
+   178→| **Commercial** | Outreach messages sent | >10 |
+   179→| | Client meetings completed | >1 |
+   180→| | Pipeline value | >CFA 10M |
+   181→| **Quality** | Fraud flag rate | <10% |
+   182→| | Audit accuracy (spot-check) | >85% |
+   183→| | GPS accuracy <30m | >80% of submissions |
+   184→| | Photo quality pass rate | >90% |
+   185→
+   186→### 3.4 Week-by-Week Milestones
+   187→
+   188→| Week | Dates | Focus | Key Milestone | Deliverables |
+   189→|---|---|---|---|---|
+   190→| **Week 1** | Apr 14-18 | Setup & Preparation | **M1: Infrastructure Ready** | RBAC deployed, 7 verticals live, fraud detection operational, team hired + trained, test day completed (60-90 test submissions) |
+   191→| **Week 2** | Apr 21-25 | Baseline Capture | **M2: Baseline Complete** | 400+ POIs across 7 verticals and 4 zones; Snapshot S1 frozen; >70% approval rate |
+   192→| **Week 3** | Apr 28 - May 2 | First Delta Cycle | **M3: First Delta Published** | Snapshot S2 + Delta D1 computed; first data sample document; 10-POI spot-check audit (>80% accuracy); enrichment of 30%+ baseline |
+   193→| **Week 4** | May 5-9 | Second Delta + Optimization | Snapshot S3 + Delta D2 | 600+ POIs cumulative; 3 pitch decks ready; night-economy capture tested; second audit (>85%); bug fixes deployed |
+   194→| **Week 5** | May 12-16 | Client Outreach | **M4: First Client Meeting** | 8-10 outreach messages to Yango, SABC, MTN, Orange, TotalEnergies, AGL, Acmar, Gozem; 1+ meeting with real data; 7 vertical data samples; S4 + D3 |
+   195→| **Week 6** | May 19-22 | Assessment | **M5: Go/No-Go Decision** | Final S5 + D4 + cumulative delta (S5-S1); 50-POI comprehensive audit; pilot metrics report; agent debriefs; Phase 2 plan (if GO) |
+   196→
+   197→### 3.5 Go/No-Go Criteria
+   198→
+   199→**ALL 7 criteria must be met to proceed (STRONG GO or CONDITIONAL GO):**
+   200→
+   201→| # | Criterion | Minimum Threshold |
+   202→|---|---|---|
+   203→| 1 | Total POIs captured | >= 500 |
+   204→| 2 | P0 vertical coverage (Roads + MoMo) | >= 70% of estimated POIs |
+   205→| 3 | Audit accuracy | >= 80% |
+   206→| 4 | Weekly deltas computed | >= 3 (D1, D2, D3) |
+   207→| 5 | Agent team functional | >= 2 agents active at pilot end |
+   208→| 6 | Client outreach initiated | >= 5 prospects contacted |
+   209→| 7 | Platform stability | Zero data loss incidents |
+   210→
+   211→**Decision Matrix:**
+   212→
+   213→| Outcome | Condition | Action |
+   214→|---|---|---|
+   215→| **STRONG GO** | All 7 met + 1+ client meeting + purchase intent | Expand to full Bonamoussadi + adjacent neighborhoods; hire 2 more agents; target first paid contract in 30 days |
+   216→| **CONDITIONAL GO** | All 7 met + outreach sent but no meeting or no purchase intent yet | Maintain team; focus top 3 verticals; intensify outreach 30 more days; new Go/No-Go at Week 10 |
+   217→| **PIVOT** | 5-6 of 7 met OR audit accuracy 70-80% | Pause 2 weeks; fix issues; retrain; restart; re-evaluate at Week 10 |
+   218→| **STOP** | <5 met OR accuracy <70% OR data loss OR zero commercial interest | Stop pilot; document lessons; reassess PMF |
+   219→
+   220→---
+   221→
+   222→## 4. Priority Contact List
+   223→
+   224→### 4.1 Transport Roads
+   225→
+   226→| Company | Why They'd Buy ADL Data | Est. Annual Budget (CFA) | Contact Approach |
+   227→|---|---|---|---|
+   228→| **Yango Cameroon** | Real-time routing; ETA accuracy; driver safety during floods | 15-25M | Warm intro via Douala tech community; WhatsApp to Country Manager |
+   229→| **Africa Global Logistics (AGL)** | Truck routing; avoid blockages; reduce fuel waste | 10-20M | Cold email to Douala Operations Director; ROI pitch |
+   230→| **Gozem Cameroon** | Moto-taxi routing; delivery ETA; food delivery reliability | 5-10M | API integration pitch to tech team |
+   231→| **GEODIS Cameroon** | Freight corridor monitoring; customs route planning | 5-10M | LinkedIn outreach to Branch Manager |
+   232→| **World Bank (BRT Project)** | BRT construction monitoring ($543M project); traffic impact data | 20-50M/project | Formal vendor registration; respond to RFPs |
+   233→| **Douala City Council (CUD)** | Emergency response; flood zone mapping; urban planning | 5-15M | Government relations; present at council meetings |
+   234→| **Ministry of Public Works** | Road maintenance prioritization; infrastructure monitoring | 10-20M | Government procurement process |
+   235→
+   236→### 4.2 Mobile Money
+   237→
+   238→| Company | Why They'd Buy ADL Data | Est. Annual Budget (CFA) | Contact Approach |
+   239→|---|---|---|---|
+   240→| **MTN Cameroon (MoMo)** | Agent network optimization; competitive intel vs. Orange; CFA 70.2B revenue | 20-35M | Target Head of Mobile Financial Services; enterprise sales |
+   241→| **Orange Cameroon (Orange Money)** | Agent expansion intel; churn tracking; market leadership defense; CFA 65B revenue | 20-35M | Target Director of Orange Money; enterprise sales |
+   242→| **CAMTEL (Blue Money)** | Market entry planning; agent location strategy (entering 2026) | 10-20M | Government connections; essential market entry data positioning |
+   243→| **Wave Cameroon** | Competitive landscape; agent density; market sizing (launched Aug 2025) | 5-15M | Direct CEO/CTO outreach; startup-to-startup |
+   244→| **COBAC** | Agent compliance monitoring; licensing verification | 5-10M | Regulatory engagement; compliance tool pitch |
+   245→| **Bill & Melinda Gates Foundation** | Agent access mapping for financial inclusion programs | 15-30M/project | Formal grant/procurement; through CGAP network |
+   246→
+   247→### 4.3 Alcohol
+   248→
+   249→| Company | Why They'd Buy ADL Data | Est. Annual Budget (CFA) | Contact Approach |
+   250→|---|---|---|---|
+   251→| **SABC / Brasseries du Cameroun** | Distribution coverage verification (75%+ market share); informal market sizing; Douala HQ | 15-25M | Warm intro via local networks; target Head of Trade Marketing |
+   252→| **Union Camerounaise de Brasseries (UCB)** | White-space identification; distribution expansion | 8-15M | Cold outreach to Sales Director; "find where SABC is weak" |
+   253→| **Diageo** | Informal spirits tracking; counterfeit monitoring | 5-10M | Regional office; London/Nairobi connection |
+   254→| **Castel Group** (parent of SABC) | Pan-African portfolio tracking; Cameroon deep-dive | 10-20M | Paris HQ; data for African operations review |
+   255→| **WHO Cameroon** | Informal alcohol mapping for public health interventions | 5-15M/project | UN procurement; health data partnership |
+   256→
+   257→### 4.4 Fuel
+   258→
+   259→| Company | Why They'd Buy ADL Data | Est. Annual Budget (CFA) | Contact Approach |
+   260→|---|---|---|---|
+   261→| **TotalEnergies Cameroon** | Competitive tracking (26% share); expansion planning; service benchmarking | 8-15M | Enterprise outreach; Director of Network Development |
+   262→| **Tradex SA** | Market intelligence for expansion (state-owned, 112 regional stations) | 5-10M | Government connections; Douala HQ direct |
+   263→| **MRS** | Competitive positioning (18% share); stock-out monitoring at competitors | 5-8M | Direct B2B outreach |
+   264→| **CSPH** | Price compliance monitoring across stations | 5-10M | Government procurement; compliance tool pitch |
+   265→
+   266→### 4.5 Pharmacy
+   267→
+   268→| Company | Why They'd Buy ADL Data | Est. Annual Budget (CFA) | Contact Approach |
+   269→|---|---|---|---|
+   270→| **Sanofi Cameroon** | Distribution mapping; counterfeit product tracking | 5-10M | Regional Africa team; distribution integrity pitch |
+   271→| **CENAME** | Distribution coverage verification; stock-out identification | 3-8M | Ministry of Health liaison |
+   272→| **WHO Cameroon** | Counterfeit medicine mapping; pharmacy access metrics | 10-20M/project | UN procurement; health data partnership |
+   273→| **USAID Global Health Supply Chain** | Last-mile distribution data; pharmacy access | 10-15M/project | USAID procurement; through implementing partners |
+   274→
+   275→### 4.6 Billboards
+   276→
+   277→| Company | Why They'd Buy ADL Data | Est. Annual Budget (CFA) | Contact Approach |
+   278→|---|---|---|---|
+   279→| **Acmar Media Group** | Competitive intelligence; market monitoring (Douala HQ) | 3-5M | Direct sales; free competitive audit offer |
+   280→| **JC Decaux Cameroun** | Market share tracking; unauthorized competitor identification | 3-5M | Paris/regional office + local contact |
+   281→| **Alliance Media Cameroon** | Occupancy tracking; competitive intelligence | 3-5M | Direct outreach via Cameroon office |
+   282→| **MTN Cameroon (marketing)** | Campaign verification; competitive share-of-voice | 3-5M | Marketing department |
+   283→
+   284→### 4.7 Census (Demographic Proxy)
+   285→
+   286→| Company | Why They'd Buy ADL Data | Est. Annual Budget (CFA) | Contact Approach |
+   287→|---|---|---|---|
+   288→| **World Bank (Sustainable Cities)** | Baseline urban data for $200M project; impact monitoring | 20-50M/project | Formal procurement; consultant networks |
+   289→| **SIC (Societe Immobiliere du Cameroun)** | Demand forecasting; site selection (5,676 planned homes) | 5-10M | Government connections; direct pitch |
+   290→| **UNDP Cameroon** | SDG monitoring; poverty mapping | 5-15M/project | UN procurement |
+   291→| **Afriland First Bank** | Branch planning; mortgage market sizing by neighborhood | 3-5M | Bank strategy/digital team |
+   292→
+   293→### 4.8 Top 10 Priority Accounts (Cross-Vertical)
+   294→
+   295→These are the first 10 accounts to approach, ordered by estimated value and time-to-close:
+   296→
+   297→| Priority | Company | Vertical(s) | Est. Annual Value (CFA) | First Action |
+   298→|---|---|---|---|---|
+   299→| 1 | Yango Cameroon | Roads | 15-25M | Warm intro; free rainy season pilot offer |
+   300→| 2 | AGL | Roads + Fuel | 10-20M | Cold email; ROI pitch on truck rerouting |
+   301→| 3 | SABC / Brasseries du Cameroun | Alcohol | 15-25M | Warm intro; "map every bar in Bonamoussadi in 30 days" |
+   302→| 4 | MTN Cameroon (MoMo) | Mobile Money | 20-35M | Target Head of MFS; competitive intelligence pilot |
+   303→| 5 | Orange Cameroon | Mobile Money | 20-35M | Approach separately; agent churn analytics |
+   304→| 6 | TotalEnergies Cameroon | Fuel | 8-15M | Director of Network Development; station benchmarking |
+   305→| 7 | Gozem Cameroon | Roads | 5-10M | API integration pitch to tech team |
+   306→| 8 | Acmar Media Group | Billboards | 3-5M | Direct; free competitive audit of Bonamoussadi |
+   307→| 9 | World Bank (Douala Projects) | Roads + Census | 20-50M/project | Formal procurement; RFP response |
+   308→| 10 | Tradex SA | Fuel | 5-10M | Government connections; market intelligence pitch |
+   309→
+   310→---
+   311→
+   312→## 5. Risk Register and Mitigation Plan
+   313→
+   314→### Top 20 Risks
+   315→
+   316→| # | Risk | Category | Probability | Impact | Risk Score | Mitigation Strategy | Owner |
+   317→|---|---|---|---|---|---|---|---|
+   318→| **1** | GPS spoofing by agents (fabricated submissions from home) | Fraud | High | Critical | 20 | Multi-layered detection: client-side mock location API, EXIF GPS cross-validation (1km threshold), IP geolocation (50km), velocity analysis (>200km/h = block, >80km/h = flag), sensor data (accelerometer), batch statistical anomaly detection, perceptual photo hashing | Charles |
+   319→| **2** | Fabricated/ghost entity submissions (phantom POIs) | Fraud | High | Critical | 20 | Photo evidence required for all submissions; perceptual hash deduplication; entity proximity thresholds per vertical (e.g., 10m reject for mobile money); spot-check audits (10-50 POIs/week); XP escrowed until admin review | Charles |
+   320→| **3** | Cannot hire qualified Team Lead by W1D3 | Operational | Medium | High | 12 | Pre-screen candidates before pilot start; have backup candidate; Charles can remotely manage W1 if needed | Charles |
+   321→| **4** | Field agents produce low-quality data | Operational | Medium | High | 12 | Structured 3-hour training (W1D4); supervised test day with quality gate; progressive disclosure UI (3-tap capture); daily Team Lead coaching; performance bonuses tied to quality not just volume | Team Lead |
+   322→| **5** | Zero client meetings by end of W6 | Commercial | Medium | High | 12 | Start outreach W5D1; free data samples as hook; 10+ outreach messages; leverage advisor network; target Yango (fastest close) and SABC (highest value) | Charles |
+   323→| **6** | Admin review bottleneck (Charles alone as reviewer) | Operational | High | Medium | 10 | Auto-approve submissions with fraud score <20 and confidence >70; batch approval for low-risk items; prioritize fraud-flagged only for manual review; train Team Lead as secondary reviewer | Charles |
+   324→| **7** | Connectivity issues during field capture | Technical | High | Medium | 10 | Offline-first architecture (IndexedDB queue); exponential backoff sync; no data loss by design; agents trained to sync on WiFi at end of day; sync status bar always visible in app | Charles |
+   325→| **8** | Data protection compliance risk (Law 2024/017, deadline June 23, 2026) | Regulatory | Low | Critical | 10 | Consent collection flow deployed W1D4; no PII beyond business names; photos of public storefronts only; register as data controller before June deadline; international data transfer safeguards | Charles |
+   326→| **9** | Charles unavailable due to emergency | Operational | Low | Critical | 10 | Document all platform credentials; Team Lead trained to manage field ops independently for 1 week; weekly snapshot cron is automated; emergency escalation via phone | Charles |
+   327→| **10** | Recycled/stock photos used for multiple submissions | Fraud | High | High | 12 | SHA-256 exact hash matching; perceptual hash (aHash) with Hamming distance threshold (<=5 = near-identical); EXIF fingerprint matching (same device + time + GPS = flag); screenshot detection | Charles |
+   328→| **11** | Agent collusion to inflate XP | Fraud | Medium | High | 10 | Graph analysis of user-to-user and user-to-point relationships; detect circular enrichment patterns; monitor cross-agent duplicate submissions within proximity thresholds | Charles |
+   329→| **12** | Agent attrition during pilot | Operational | Medium | Medium | 8 | Competitive pay (CFA 120-150K/month total); performance bonuses (up to CFA 30K); gamification (XP, leaderboard); community building; branded identity | Team Lead |
+   330→| **13** | Fraud detection false positives frustrate agents | Technical | Medium | Medium | 8 | Low-end device exceptions for GPS accuracy thresholds (2km EXIF vs 1km); gradual threshold tuning based on W2 data; transparent quality feedback to agents; trust tiers (new/established/veteran) with escalating autonomy | Charles |
+   331→| **14** | Alt account farming by agents | Fraud | Medium | High | 10 | Device fingerprint binding (deviceId stored); same IP + device across multiple accounts = flag; phone verification requirement; limit one account per SIM | Charles |
+   332→| **15** | Unauthorized bulk data export by authenticated users | Security | Medium | High | 10 | Rate limiting on API endpoints; per-user export throttling; audit logging of all data access; role-based access control (field agents cannot export) | Charles |
+   333→| **16** | Insider data manipulation (direct DB access) | Security | Low | Critical | 10 | Event-sourced append-only model; dedicated fraud audit log table; admin action logging; principle of least privilege for database access | Charles |
+   334→| **17** | Phone theft or damage in field | Operational | Medium | Low | 4 | Phone cases + screen protectors budgeted; equipment agreement signed by agents; 15% contingency covers replacement; agents carry equipment home | Team Lead |
+   335→| **18** | Community resistance to data collectors | Operational | Low | Medium | 4 | Branded ID badges and T-shirts; agents explain ADL mission; no personal data collected; photos of public storefronts only; Team Lead handles escalations; community chief engagement | Team Lead |
+   336→| **19** | Budget overrun | Commercial | Low | Medium | 4 | 15% contingency budgeted; weekly expense tracking; no variable costs beyond personnel/data plans; front-loaded spend (W1 = CFA 948K, W2-6 = CFA 174K/week steady state) | Charles |
+   337→| **20** | Rainy season early onset disrupts W5-W6 fieldwork | Operational | Low | Medium | 4 | Pilot starts April (dry season); typical rain onset June; if early rain, pivot to road condition data collection (highest value during rain); equip agents with umbrellas/raincoats | Team Lead |
+   338→
+   339→---
+   340→
+   341→## 6. 80/20 Focus
+   342→
+   343→### 6.1 Which Verticals to Prioritize
+   344→
+   345→The top 20% of collection effort that produces 80% of commercial value:
+   346→
+   347→| Rank | Vertical | % of Collection Effort | % of Estimated Revenue | Revenue/Effort Ratio | Action |
+   348→|---|---|---|---|---|---|
+   349→| **1** | **Transport Roads** | 10% | 25% | **2.5x** | Allocate resources first; baseline before rainy season |
+   350→| **2** | **Mobile Money** | 15% | 30% | **2.0x** | Highest absolute revenue; collect simultaneously with Roads |
+   351→| **3** | **Fuel** | 5% | 10% | **2.0x** | Quick wins (only 5-10 stations); natural cross-sell with Roads |
+   352→| 4 | Alcohol | 25% | 20% | 0.8x | Strong buyer interest but high collection difficulty |
+   353→| 5 | Billboards | 10% | 8% | 0.8x | Fixed, visible, daytime -- easy but smaller market |
+   354→| 6 | Pharmacy | 15% | 5% | 0.3x | High project-based value from WHO/USAID, slower sales cycle |
+   355→| 7 | Census | 20% | 2% | 0.1x | Strategic long-term asset; collect passively during other surveys |
+   356→
+   357→**Conclusion:** Focus 30% of field agent time on Roads + Mobile Money + Fuel to capture 65% of estimated revenue. These are the 80/20 sweet spot.
+   358→
+   359→**Resource Allocation for First 6 Months:**
+   360→- 40% of field agent time: Roads + Mobile Money (P0, highest ROI)
+   361→- 25% of field agent time: Alcohol + Fuel (P1, strong buyer interest)
+   362→- 20% of field agent time: Billboards + Pharmacy (P1-P2, valuable but slower cycle)
+   363→- 15% of field agent time: Census proxy (P2, strategic long-term)
+   364→
+   365→### 6.2 Which Data Fields Matter Most (Must-Have vs. Nice-to-Have)
+   366→
+   367→**Across all verticals, these data fields generate disproportionate buyer interest:**
+   368→
+   369→| Vertical | Must-Have Fields (buyers pay for these) | Nice-to-Have (add later) |
+   370→|---|---|---|
+   371→| **Roads** | Blockage status, vehicle passability, estimated clearance time, bypass route | Road surface type, traffic density |
+   372→| **Mobile Money** | Agent location (GPS), operator (MTN/Orange/both), activity status (open/closed) | Float availability, services offered, commission rates |
+   373→| **Fuel** | Station location, operator/brand, availability status (stock-out indicator) | Services offered, queue length, informal vendor count |
+   374→| **Alcohol** | POS location, brands available, formal/informal classification | Operating hours, price points, license status |
+   375→| **Billboards** | Location, advertiser/brand, occupancy status (booked/vacant) | Format/size, condition, installation date |
+   376→| **Pharmacy** | Location, formal/informal classification, operating status | On-duty rotation, product categories, stock-out data |
+   377→| **Census** | Building count, construction activity (new/in-progress/complete) | Building height, occupancy, residential/commercial split |
+   378→
+   379→### 6.3 Highest-Value Delta Types
+   380→
+   381→| Rank | Delta Type | Verticals Affected | Why Highest Value | Primary Buyer |
+   382→|---|---|---|---|---|
+   383→| **1** | **Blockage/disruption events** | Roads, Fuel (stock-outs) | Immediate operational impact; time-sensitive; saves real money per incident (CFA 50-200K per truck reroute avoided) | Logistics, ride-hailing |
+   384→| **2** | **New entity openings** | MoMo, Alcohol, Pharmacy | Distribution expansion opportunity; competitive intelligence; first-mover advantage | Telcos, breweries, pharma |
+   385→| **3** | **Entity closures** | MoMo, Alcohol | Network health signal; competitor opportunity; market contraction indicator | Telcos, breweries |
+   386→| **4** | **Brand/operator switches** | MoMo, Billboards | Competitive market share shift signal | Telcos, ad agencies |
+   387→| **5** | **Formal/informal ratio shifts** | Alcohol, Pharmacy | Regulatory environment signal; market maturation | Regulators, public health, development |
+   388→| **6** | **Density changes by zone** | All verticals | Neighborhood economic development signal; investment indicator | Banks, developers, telcos, government |
+   389→
+   390→### 6.4 Where to Allocate Limited Resources
+   391→
+   392→**Priority collection schedule for months 1-6:**
+   393→
+   394→| Month | Primary Focus | Secondary Focus | Rationale |
+   395→|---|---|---|---|
+   396→| **Month 1 (Apr)** | Roads baseline (all segments) | Mobile Money agent mapping | Roads baseline must be done before rainy season; MoMo collected simultaneously |
+   397→| **Month 2 (May)** | MoMo deep collection (activity, services) | Fuel stations (complete inventory) | Deepen MoMo data for telco pitch; fuel is quick (5-10 stations) |
+   398→| **Month 3 (Jun)** | Roads ACTIVE MONITORING (rains begin) | Alcohol POS mapping begins | Rainy season = highest-value road data; start alcohol for SABC pitch |
+   399→| **Month 4 (Jul)** | Roads + Alcohol + Billboards | Continue MoMo updates | Multi-vertical strengthens platform pitch |
+   400→| **Month 5 (Aug)** | All verticals weekly updates | Pharmacy mapping begins | System mature enough for full coverage |
+   401→| **Month 6 (Sep)** | All verticals + census proxy begins | Prepare first annual reports | Census starts as longitudinal baseline builds |
+   402→
+   403→---
+   404→
+   405→## 7. Validation SOP
+   406→
+   407→### 7.1 End-to-End Data Flow
+   408→
+   409→```
+   410→CAPTURE --> VERIFY --> SCORE CONFIDENCE --> PUBLISH DELTA
+   411→
+   412→Step 1: CAPTURE (Field Agent, via PWA)
+   413→  |
+   414→  |  Agent selects vertical, takes photo, GPS auto-captured,
+   415→  |  fills required fields (progressive disclosure)
+   416→  |  GPS integrity report collected (mock location, sensors, accuracy)
+   417→  |  Submission queued in IndexedDB (offline-first)
+   418→  |
+   419→  v
+   420→Step 2: SYNC (Client --> Server)
+   421→  |
+   422→  |  IndexedDB queue flushes with idempotency keys
+   423→  |  Exponential backoff on failure
+   424→  |  Photo uploaded to Vercel Blob
+   425→  |  Event written to point_events (CREATE_EVENT or ENRICH_EVENT)
+   426→  |
+   427→  v
+   428→Step 3: VERIFY (Server-Side, Automated)
+   429→  |
+   430→  |  3a. GPS Validation Pipeline
+   431→  |  3b. Photo Validation Pipeline
+   432→  |  3c. Entity Deduplication
+   433→  |  3d. Fraud Risk Scoring
+   434→  |
+   435→  v
+   436→Step 4: SCORE CONFIDENCE
+   437→  |
+   438→  |  Composite confidence score computed
+   439→  |  Auto-routing: approve / soft review / hard review / reject
+   440→  |
+   441→  v
+   442→Step 5: ADMIN REVIEW (for flagged submissions)
+   443→  |
+   444→  |  Admin reviews photo, GPS, metadata, fraud flags
+   445→  |  Approve, reject, or request re-submission
+   446→  |
+   447→  v
+   448→Step 6: PUBLISH DELTA (Weekly)
+   449→  |
+   450→  |  Weekly snapshot frozen (Vercel Cron)
+   451→  |  Delta computed: S(n) - S(n-1)
+   452→  |  Z-score anomaly detection on delta stats
+   453→  |  Published to API / dashboard / reports
+   454→```
+   455→
+   456→### 7.2 Confidence Scoring Formula
+   457→
+   458→ADL uses two complementary scores:
+   459→
+   460→#### A. Data Quality Confidence Score (0-100)
+   461→
+   462→Measures how reliable a data point is. Computed per POI and updated with each event.
+   463→
+   464→```
+   465→DATA QUALITY CONFIDENCE SCORE
+   466→==============================
+   467→
+   468→Factor                Weight    Scoring
+   469→--------------------------------------------------
+   470→Recency               25%      100 if <7 days old, decays linearly to 0 at 90 days
+   471→Source Count           20%      min(100, sourceCount * 25) -- more sources = higher confidence
+   472→Photo Evidence         20%      100 if photo with EXIF GPS; 60 if photo without EXIF; 0 if no photo
+   473→GPS Accuracy           15%      100 if <10m; 80 if <30m; 50 if <50m; 20 if <100m; 0 if >100m
+   474→Reviewer Approval      10%      100 if admin approved; 50 if pending; 0 if rejected
+   475→Field Completeness     10%      (filled fields / total fields) * 100
+   476→
+   477→FINAL SCORE = weighted sum of all factors, clamped to 0-100
+   478→
+   479→Publication threshold: >= 40 (below 40, data is withheld from client-facing products)
+   480→High-confidence threshold: >= 70 (used for premium data products)
+   481→```
+   482→
+   483→#### B. Fraud Risk Score (0-100)
+   484→
+   485→Measures how likely a submission is fraudulent. Computed at submission time.
+   486→
+   487→```
+   488→FRAUD RISK SCORE
+   489→=================
+   490→
+   491→Category              Weight    Signals
+   492→--------------------------------------------------
+   493→GPS Integrity          25%      Inverted GPS confidence (100 - GPS_CONFIDENCE_SCORE)
+   494→                                Mock location detection, EXIF mismatch, IP mismatch,
+   495→                                velocity analysis, sensor data
+   496→
+   497→Photo Integrity        25%      SHA-256 exact duplicate check (reject if different POI)
+   498→                                Perceptual hash (aHash, Hamming distance <=5 = near-identical)
+   499→                                EXIF fingerprint match (same device+time+GPS)
+   500→                                Photo freshness (100 if <30 min, decays; <10 if >7 days)
+   501→                                Screenshot detection, metadata editing detection
+   502→
+   503→Temporal Consistency   15%      Submission velocity (>200 km/h = block, >80 km/h = flag)
+   504→                                Time-of-day plausibility
+   505→                                Offline batch anomaly analysis
+   506→
+   507→Agent History          20%      Account age, prior fraud flags, prior rejections,
+   508→                                trust tier (new/established/veteran),
+   509→                                consecutive clean submissions
+   510→
+   511→Behavioral Patterns    15%      Self-enrichment patterns, device sharing,
+   512→                                category distribution anomalies, IP reputation (VPN/datacenter)
+   513→
+   514→COMPOSITE FRAUD RISK = weighted sum, clamped to 0-100
+   515→```
+   516→
+   517→#### C. Auto-Routing Rules
+   518→
+   519→| Fraud Risk Score | Data Quality Score | Action | XP |
+   520→|---|---|---|---|
+   521→| 0-20 | >= 70 | **Auto-approve** | Award immediately |
+   522→| 0-20 | 40-69 | **Soft review** (admin reviews within 48h) | Escrow until review |
+   523→| 21-50 | Any | **Soft review** | Escrow until review |
+   524→| 51-70 | Any | **Hard review** (admin must investigate) | Deny until cleared |
+   525→| 71-100 | Any | **Auto-reject** | Deny |
+   526→
+   527→### 7.3 Fraud Detection Checkpoints
+   528→
+   529→Each submission passes through these checkpoints in order:
+   530→
+   531→```
+   532→CHECKPOINT 1: CLIENT-SIDE (before submission)
+   533→  [ ] Mock location API check (Android isMocked flag)
+   534→  [ ] GPS accuracy sanity (reject if accuracy = 0 or <1m on consumer device)
+   535→  [ ] Sensor data collection (2 sec accelerometer sample)
+   536→  [ ] Network type recording
+   537→  [ ] GPS timestamp vs device clock check (flag if >30s drift)
+   538→
+   539→CHECKPOINT 2: SERVER-SIDE (at submission time)
+   540→  [ ] EXIF GPS vs submission GPS (threshold: 1km standard, 2km low-end device)
+   541→  [ ] IP geolocation vs submission GPS (threshold: 50km)
+   542→  [ ] Velocity check (time + distance since last submission by same user)
+   543→      - >200 km/h or >5km in <2 min = BLOCK
+   544→      - >80 km/h = FLAG
+   545→  [ ] Photo SHA-256 exact hash check against all prior submissions
+   546→  [ ] Perceptual hash check (Hamming distance <=5 on aHash = flag)
+   547→  [ ] EXIF fingerprint dedup (same device + time + GPS = flag)
+   548→  [ ] Photo freshness check (>7 days old = reject; >24h = flag)
+   549→  [ ] Screenshot detection (no EXIF + specific resolution patterns)
+   550→  [ ] Entity proximity dedup (per-vertical thresholds, e.g., 10m for mobile money)
+   551→  [ ] Geofence check (within Bonamoussadi: 4.0755-4.0999 N, 9.7185-9.7602 E)
+   552→
+   553→CHECKPOINT 3: BATCH ANALYSIS (daily cron)
+   554→  [ ] Agent movement pattern analysis (cluster count, radius, precision distribution)
+   555→  [ ] Cross-agent duplicate detection (different agents submitting same entity)
+   556→  [ ] Collusion pattern detection (circular enrichment graphs)
+   557→  [ ] Coordinate precision anomaly (>80% of submissions with <=4 decimal places = flag)
+   558→  [ ] Alt account detection (same deviceId or IP across multiple userIds)
+   559→```
+   560→
+   561→### 7.4 Review Workflow
+   562→
+   563→```
+   564→ADMIN REVIEW QUEUE WORKFLOW
+   565→=============================
+   566→
+   567→1. TRIAGE (daily, 9:00 AM WAT)
+   568→   - Sort queue by fraud risk score (highest first)
+   569→   - Auto-rejected items: log and archive (no action needed)
+   570→   - Auto-approved items: log and publish (no action needed)
+   571→   - Hard review items: investigate immediately
+   572→   - Soft review items: batch review after hard reviews
+   573→
+   574→2. INVESTIGATION (per flagged submission)
+   575→   - View side-by-side: photo | map (GPS pin) | submission data | fraud flags
+   576→   - Check EXIF metadata panel (capture time, device, GPS)
+   577→   - Compare with nearby existing POIs (dedup check)
+   578→   - Review agent history (recent submissions, trust score, prior flags)
+   579→   - If GPS flag: verify photo content matches the neighborhood
+   580→   - If photo flag: compare flagged photo with matched photo(s)
+   581→
+   582→3. DECISION
+   583→   - APPROVE: submission enters published dataset; XP released to agent
+   584→   - REJECT: submission archived; XP denied; agent notified with reason
+   585→   - REQUEST RE-SUBMISSION: agent asked to revisit and re-capture
+   586→   - MERGE: duplicate submission merged with existing POI (enrichment)
+   587→
+   588→4. AGENT FEEDBACK
+   589→   - Rejection reason communicated to agent via app notification
+   590→   - Repeated rejections trigger trust score reduction
+   591→   - 3+ confirmed fraud incidents = agent suspension pending investigation
+   592→```
+   593→
+   594→### 7.5 Spot-Check Audit Protocol
+   595→
+   596→Physical field verification of data accuracy:
+   597→
+   598→```
+   599→SPOT-CHECK AUDIT SOP
+   600→=====================
+   601→
+   602→Frequency: Weekly (W3-W6), expanding scope each week
+   603→  - Week 3: 10 random POIs
+   604→  - Week 4: 10 different random POIs
+   605→  - Week 5: 15 random POIs
+   606→  - Week 6: 50 POIs (comprehensive, all verticals)
+   607→
+   608→Executor: Field Team Lead (independent of agents who submitted)
+   609→
+   610→For each audited POI:
+   611→  1. Navigate to the GPS coordinates recorded in the submission
+   612→  2. Verify EXISTENCE: Does the entity physically exist at this location? (Y/N)
+   613→  3. Verify NAME: Does the name match what was submitted? (Y/N/Close)
+   614→  4. Verify CATEGORY: Is the vertical classification correct? (Y/N)
+   615→  5. Verify STATUS: Is the operating status correct (open/closed)? (Y/N)
+   616→  6. Verify PHOTO: Does the submission photo match what you see? (Y/N)
+   617→  7. Take independent verification photo
+   618→  8. Note any discrepancies
+   619→
+   620→Scoring:
+   621→  - MATCH: All 5 criteria verified (existence, name, category, status, photo)
+   622→  - PARTIAL: 3-4 criteria match (acceptable, may need enrichment)
+   623→  - MISMATCH: <3 criteria match (data quality failure)
+   624→
+   625→Audit accuracy = (MATCH + PARTIAL) / Total Audited * 100
+   626→
+   627→Threshold: >= 80% (W3), >= 85% (W4-W5), >= 85% (W6 comprehensive)
+   628→
+   629→If audit accuracy drops below 70%: PAUSE collection; retrain agents; investigate cause
+   630→```
+   631→
+   632→### 7.6 Publication Criteria
+   633→
+   634→A data point is published (made available to clients via API/dashboard) when:
+   635→
+   636→```
+   637→PUBLICATION CRITERIA
+   638→=====================
+   639→
+   640→ALL of the following must be true:
+   641→
+   642→  [x] Data Quality Confidence Score >= 40
+   643→  [x] Fraud Risk Score < 71 (not auto-rejected)
+   644→  [x] Admin review status is "approved" or "auto-approved"
+   645→  [x] Photo evidence is present
+   646→  [x] GPS coordinates are within the designated collection zone
+   647→  [x] At least one required field per vertical is populated
+   648→
+   649→For PREMIUM/HIGH-CONFIDENCE publication:
+   650→
+   651→  [x] All of the above, PLUS:
+   652→  [x] Data Quality Confidence Score >= 70
+   653→  [x] Fraud Risk Score < 21
+   654→  [x] Photo has EXIF GPS matching submission GPS (within 1km)
+   655→  [x] At least one spot-check audit has verified this POI (or same-vertical POIs in same zone)
+   656→  [x] At least one enrichment event exists (data confirmed by multiple sources)
+   657→
+   658→DELTA PUBLICATION:
+   659→
+   660→  Weekly snapshot frozen every Friday at 23:59 WAT (Vercel Cron)
+   661→  Delta computed: new POIs, changed fields, removed/closed entities
+   662→  Z-score anomaly detection flags statistical outliers for manual review
+   663→  Delta published to API endpoint: /api/deltas?snapshot=S{n}
+   664→  Client notification sent for subscribed verticals/zones
+   665→```
+   666→
+   667→---
+   668→
+   669→## Summary
+   670→
+   671→This strategy is built on three pillars, as synthesized from all 9 teammate deliverables:
+   672→
+   673→**1. Ground truth that nobody else has.** No competitor maps the informal economy at street level with verified, GPS-located, photo-evidenced data points. In Cameroon, where 30-50% of GDP is informal and the last census is 21 years old, this gap is enormous. ADL fills it.
+   674→
+   675→**2. Consistent deltas that demonstrate change.** Weekly snapshots with computed deltas turn static maps into dynamic intelligence. The delta is the product -- not the map. Road blockages during rainy season, mobile money agent churn, new alcohol outlets opening -- these changes are what buyers pay for.
+   676→
+   677→**3. Immediately clear value for transactional buyers.** Every data product answers: "If I buy this, what money do I save or make this week?" For logistics companies: avoid a CFA 200K truck reroute. For telcos: identify 15 agent gaps before competitors fill them. For breweries: find 23 bars where they are not selling.
+   678→
+   679→**The 6-week pilot (April 14 - May 22, 2026) will answer one question:** Can ADL collect reliable, ground-truth data in Bonamoussadi at a cost (~$3,400 total) and quality level (>85% audit accuracy) that creates a product worth paying for?
+   680→
+   681→**Revenue trajectory if successful:**
+   682→- Month 6: CFA 5-10M/month (2-3 paying customers at Professional tier)
+   683→- Month 12: CFA 20-40M/month (1-2 enterprise + 5-8 professional tier)
+   684→- Path to CFA 100M+/month: City-wide Douala coverage, enterprise telco and development org contracts
+   685→
+   686→---
+   687→
+   688→*This document synthesizes the complete work of 9 specialized teammates. For deep dives into any topic, refer to the individual deliverables (01 through 09) in the /research directory.*
+   689→

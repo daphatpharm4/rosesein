@@ -1,0 +1,179 @@
+# Plan: Close Implementation Gaps for Research Docs 02, 05, and 06
+
+## Context
+Verification of three research documents against the codebase revealed:
+- **Doc 02 (System Design):** ~92% complete — effectively done, no code changes needed
+- **Doc 05 (Cybersecurity):** ~75% complete — 6 implementable gaps
+- **Doc 06 (Anti-Fraud):** ~70% complete — 9 implementable gaps
+
+**Hard constraint:** Stay at ≤12 Vercel serverless functions (currently 11). All changes are library modules or modifications to existing files — **zero new API routes**.
+
+---
+
+## Doc 02 Verdict: COMPLETE — No Changes Needed
+
+| Gap | Status | Reasoning |
+|-----|--------|-----------|
+| No GET /api/snapshots | Skip | Accessible via /api/analytics?view=snapshots |
+| Assignments not separate routes | Skip | Works via /api/user endpoint |
+| No GET /api/admin/users | Skip | Works via /api/user with role checks |
+
+---
+
+## Phase 1: Quick Security Wins [3 items, ~1hr]
+
+### 5A. Logout Event Logging [S]
+**File:** `lib/server/auth/handler.ts`
+- Add `events.signOut` hook to Auth() config (alongside existing `callbacks`)
+- Call `logSecurityEvent({ eventType: "logout", userId: token.uid })` (import already exists)
+
+### 5C. Server-Side Photo Hash Verification [S]
+**File:** `api/submissions/index.ts`
+- After image buffer is parsed, compute `computeImageSha256(imageBuffer)` (already imported)
+- Compare with client-sent `photoEvidenceSha256`; return 400 on mismatch
+- Non-breaking: only activates when client sends the field
+
+### 6G. Trust Score Auto-Update on Admin Review [S]
+**File:** `lib/server/userTrust.ts`
+- Add `adjustTrustOnReview({ userId, decision: 'approved'|'rejected'|'flagged' })`
+- approved: +1 (or +2 if consecutiveClean > 10), rejected: -15, flagged: -5
+- Uses existing `updateUserTrust()`
+- Wire into admin review handler (api/submissions PATCH or api/user PATCH view=status)
+
+---
+
+## Phase 2: Core Fraud Detection [3 items, ~3hr]
+
+### 6A. Server-Side GPS Validation [M]
+**New file:** `lib/server/gpsValidation.ts` (library, not API route)
+- `validateGps()` → `GpsValidationResult { score: 0-100, flags[], mockDetected, exifMismatch }`
+- Scoring deductions from 100: mock detected (-50), accuracy=0 (-20), EXIF mismatch >500m (-30), low precision (-10), no integrity report (-15)
+- **Integration:** Called from `evaluateSubmissionRisk()` in `submissionRisk.ts` to feed `locationRisk`
+- **Reuse:** `haversineKm()` from `submissionFraud.ts`, `GpsIntegrityReport` from `shared/types.ts`
+
+### 6B. Photo Freshness Validation [M]
+**File:** `lib/server/submissionFraud.ts`
+- Add `computePhotoFreshnessScore(capturedAt, submittedAt)` → 0-100
+- Thresholds: <30min=100, <2h=80, <24h=60, <7d=30, >7d=10, >1yr=0
+- Clock skew: tolerate -5 min; detect exact-hour timezone offsets
+- **Integration:** Called from `evaluateSubmissionRisk()`, contributes to `photoRisk`
+
+### 6C. Screenshot & Editing Detection [S]
+**File:** `lib/server/submissionFraud.ts`
+- Add `detectPhotoManipulation()` → `{ isScreenshot, isEdited, isDownloaded, flags[] }`
+- Screenshot: aspect ratio >2.0, common screen resolutions
+- Editing: EXIF Software tag (Photoshop, GIMP, Snapseed, etc.) — need to add `"Software"` to exifr `pick` array
+- Downloaded: triple-null (no GPS + no device + no timestamp), standard web dimensions
+- File size: <50KB flag, high compression ratio flag
+- **Integration:** Each flag adds 15-25 to `photoRisk` in `evaluateSubmissionRisk()`
+
+---
+
+## Phase 3: XP Escrow & Consent [2 items, ~2hr]
+
+### 6E. XP Escrow Mechanism [M]
+**Files:** `lib/server/submissionRisk.ts`, `api/submissions/index.ts`
+- Add `xpAction: 'award' | 'escrow' | 'deny'` to `SubmissionRiskEvaluation`
+- Logic: riskScore 0-50 → award, 51-75 → escrow, 76+ or blocked → deny
+- In submissions handler: replace direct XP check with `xpAction`
+- Track via `details.xpEscrow = true` in JSONB (no migration needed)
+- Admin approve later releases escrowed XP
+
+### 5B. Consent Collection UI [M]
+**File:** `components/Screens/ContributionFlow.tsx`
+- Consent selector already exists (lines 1378-1403)
+- Add validation: PII-rich categories (pharmacy, mobile_money) require `consentStatus !== 'not_required'`
+- Add acknowledgment checkbox when `consentStatus === 'obtained'`
+- Block submit if consent required but not acknowledged
+
+---
+
+## Phase 4: RBAC & Session Management [3 items, ~2hr]
+
+### 5D. Fine-Grained RBAC Enforcement [M]
+**Files:** `lib/auth.ts`, `lib/server/submissionAccess.ts`
+- Extend `requireUser()` return to include `role: UserRole`
+- Add `canPerformAction(role, action)` permission map: agents=submit+read, clients=read, admins=all
+- Enforce in `api/submissions/index.ts` POST (submit) and admin views (review)
+
+### 5E. Session Idle Timeout [S]
+**File:** `lib/client/auth.ts`
+- Add `startIdleWatcher(onTimeout, timeoutMs=30min)` tracking mouse/key/touch events
+- Call from App component after session established
+- Auto-logout on 30min idle
+
+### 5F. Remote Wipe Polling [S]
+**File:** `lib/client/auth.ts`
+- `wipeRequested` already returned by /api/user GET
+- Add periodic check (on session refresh) that calls existing `executeAppWipe()` if flag is true
+
+---
+
+## Phase 5: Advanced Fraud Detection [4 items, ~4hr]
+
+### 6I. Elite Trust Tier [S]
+**Files:** `shared/types.ts`, `lib/server/userTrust.ts`
+- Add `'elite'` to `TrustTier` union type
+- Update `getTrustTier()`: score ≥85 AND totalApproved ≥50 → elite
+- Add async variant `getTrustTierWithStats()` for DB-backed check
+- **Migration:** Update trust_tier CHECK constraint
+
+### 6H. Trust Score Inactivity Decay [S]
+**File:** `lib/server/userTrust.ts`, `api/analytics/index.ts`
+- Add `decayInactiveTrust()`: query users inactive >30 days, apply -1 delta
+- Hook into existing cron dispatcher as daily job
+
+### 6D. Perceptual Image Hashing (aHash) [L]
+**File:** `lib/server/submissionRisk.ts`
+- Add `computePerceptualHash(buffer)` using `sharp` (resize 8x8 grayscale, mean threshold)
+- Add `hammingDistance(a, b)` comparison
+- Store in existing `perceptual_hash` column of `submission_image_hashes`
+- In duplicate detection: flag if hamming distance ≤ 5
+- **Dependency:** Add `sharp` to package.json
+
+### 6F. GPS Anomaly Detection Batch [L]
+**New file:** `lib/server/gpsAnomalyDetection.ts` (library, not API route)
+- `analyzeAgentMovementPatterns(windowDays=30)` → per-agent analysis
+- Coordinate precision analysis (flag >80% low precision)
+- DBSCAN-like clustering with 200m radius
+- Location diversity check (<30% unique locations = flag)
+- **Integration:** Hook into `/api/analytics` cron dispatcher as daily job
+
+---
+
+## Database Migration
+**New file:** `supabase/migrations/20260311_research_gap_closure.sql`
+- Update `trust_tier` CHECK constraint to include `'elite'`
+- Add index on `submission_image_hashes(perceptual_hash)` WHERE NOT NULL
+- Add `xp_escrow boolean DEFAULT false` to `point_events` (optional, can use JSONB instead)
+
+---
+
+## Files Modified Summary
+
+| File | Changes |
+|------|---------|
+| `lib/server/auth/handler.ts` | 5A (logout logging) |
+| `api/submissions/index.ts` | 5C (hash verify), 5D (RBAC), 6E (XP escrow) |
+| `lib/server/userTrust.ts` | 6G (review trust), 6H (decay), 6I (elite tier) |
+| `lib/server/submissionFraud.ts` | 6B (freshness), 6C (screenshot/editing) |
+| `lib/server/submissionRisk.ts` | 6A (integrate GPS), 6B-6C (integrate), 6D (perceptual hash), 6E (xpAction) |
+| `lib/auth.ts` | 5D (role in requireUser) |
+| `lib/server/submissionAccess.ts` | 5D (canPerformAction) |
+| `lib/client/auth.ts` | 5E (idle timeout), 5F (wipe polling) |
+| `components/Screens/ContributionFlow.tsx` | 5B (consent UI) |
+| `shared/types.ts` | 6I (elite TrustTier) |
+| **New:** `lib/server/gpsValidation.ts` | 6A (GPS scoring) |
+| **New:** `lib/server/gpsAnomalyDetection.ts` | 6F (batch analysis) |
+| **New:** `supabase/migrations/20260311_...sql` | Migration |
+| `api/analytics/index.ts` | 6F, 6H (cron jobs) |
+| `package.json` | 6D (sharp dependency) |
+
+## Verification
+1. `npx vite build` — must succeed with no errors
+2. `find api -name "*.ts" | wc -l` — must be ≤ 12 (no new API routes)
+3. Run existing tests: `npx vitest run`
+4. Manual test: submit a photo → verify server-side hash check works
+5. Manual test: consent UI blocks submission when required but not acknowledged
+6. Manual test: GPS validation flags appear in admin queue for mock-location submissions
+7. Check trust score changes after admin approve/reject actions

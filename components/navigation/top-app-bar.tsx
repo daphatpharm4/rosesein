@@ -10,15 +10,17 @@ type TopAppBarProps = {
   title?: string;
   showAdminLink?: boolean;
   adminActive?: boolean;
+  wide?: boolean;
 };
 
 export function TopAppBar({
   title,
   showAdminLink = false,
   adminActive = false,
+  wide = false,
 }: TopAppBarProps) {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 mx-auto w-full max-w-screen-md px-3 pt-[max(var(--safe-area-top),0.75rem)] sm:px-4">
+    <header className={`fixed inset-x-0 top-0 z-50 mx-auto w-full px-3 pt-[max(var(--safe-area-top),0.75rem)] sm:px-4 ${wide ? "max-w-screen-lg" : "max-w-screen-md"}`}>
       <div className="shell-bar flex items-center justify-between gap-3 rounded-[2rem] border border-outline-variant/25 bg-background/90 px-3 py-2.5 shadow-ambient backdrop-blur-sm sm:rounded-brand-xl sm:px-5 sm:py-3">
         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
           <Link

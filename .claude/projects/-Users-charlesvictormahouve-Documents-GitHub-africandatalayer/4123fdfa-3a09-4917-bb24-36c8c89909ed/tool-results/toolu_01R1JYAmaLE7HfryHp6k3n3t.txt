@@ -1,0 +1,2150 @@
+     1→# ADL Cloud Engineering: Implementation Playbook
+     2→## Bonamoussadi, Douala, Cameroon
+     3→
+     4→**Teammate 4 -- Cloud Engineer Deliverable**
+     5→**Date:** March 2026
+     6→
+     7→---
+     8→
+     9→## Table of Contents
+    10→
+    11→1. [Tooling Inventory](#1-tooling-inventory)
+    12→2. [Deployment Approach](#2-deployment-approach)
+    13→3. [Observability Stack](#3-observability-stack)
+    14→4. [Runbooks](#4-runbooks)
+    15→5. [Implementation Roadmap](#5-implementation-roadmap)
+    16→6. [Developer Experience](#6-developer-experience)
+    17→
+    18→---
+    19→
+    20→## Existing System Baseline
+    21→
+    22→Before prescribing anything new, here is what is already running and what we are working with:
+    23→
+    24→| Layer | Technology | File(s) |
+    25→|---|---|---|
+    26→| **Build** | Vite 6 + React 19 + TypeScript 5.8 | `vite.config.ts`, `tsconfig.json` |
+    27→| **API** | Vercel Serverless Functions | `api/**/*.ts` (12 route files) |
+    28→| **Database** | Neon PostgreSQL via `pg` driver | `lib/server/db.ts` |
+    29→| **File Storage** | Vercel Blob | `@vercel/blob` in `package.json` |
+    30→| **Auth** | `@auth/core` + Google OAuth + bcrypt | `api/auth/*.ts`, `lib/auth.ts` |
+    31→| **Offline Queue** | IndexedDB | `lib/client/offlineQueue.ts` |
+    32→| **Sync** | Custom flush engine | `lib/client/submissionSync.ts` |
+    33→| **Fraud Detection** | EXIF + haversine + IP | `lib/server/submissionFraud.ts` |
+    34→| **Cron** | Vercel Cron (weekly snapshot) | `vercel.json` |
+    35→| **Analytics** | `@vercel/analytics` + `@vercel/speed-insights` | `package.json` |
+    36→| **Tests** | Node.js built-in `node:test` | `tests/*.test.ts` (8 test files) |
+    37→| **CI/CD** | Vercel Git Integration (GitHub) | `.vercel/project.json` |
+    38→| **Deployment** | Vercel (project: `africandatalayer`, team: `team_lhlb001Ry6zDHLXyOSt59ga3`) | Auto-deploy on push to `main` |
+    39→
+    40→**Key observation:** There is no linter, no formatter, no CI pipeline beyond Vercel's auto-build, no staging environment, no monitoring beyond page-level analytics, and no test runner in CI. The test files use `node:test` but there is no `test` script in `package.json`. This playbook addresses all of these gaps.
+    41→
+    42→---
+    43→
+    44→## 1. Tooling Inventory
+    45→
+    46→### 1.1 Development Tools
+    47→
+    48→| Tool | Purpose | Cost | Why Chosen |
+    49→|---|---|---|---|
+    50→| **VS Code** | Primary IDE | Free | Team already uses it; TypeScript support is best-in-class; extensions for Vite, ESLint, Prettier, Tailwind |
+    51→| **ESLint 9** | Linting | Free | Catches bugs early; enforces consistent code style; flat config format for simplicity |
+    52→| **Prettier 3** | Code formatting | Free | Eliminates formatting debates; integrates with ESLint; format-on-save in VS Code |
+    53→| **TypeScript 5.8** | Type checking | Free (already installed) | Already in use; `--noEmit` for type-checking without build; catches type errors at dev time |
+    54→| **Biome** (alternative) | Linting + formatting | Free | Faster than ESLint + Prettier combined; single tool; consider if team prefers speed over ecosystem |
+    55→
+    56→### 1.2 Testing Frameworks
+    57→
+    58→| Tool | Purpose | Cost | Why Chosen |
+    59→|---|---|---|---|
+    60→| **Node.js `node:test`** | Unit tests | Free (already in use) | Already 8 test files written; zero dependencies; built into Node 20+; sufficient for pure logic tests |
+    61→| **Vitest** | Unit + integration tests | Free | If `node:test` becomes limiting: same config as Vite, instant HMR, watch mode, coverage reports; drop-in for existing tests |
+    62→| **Playwright** | E2E tests (Phase 2) | Free | Cross-browser; mobile emulation for PWA testing; network throttling for offline-first testing; Vercel integration |
+    63→
+    64→### 1.3 CI/CD Pipeline Tools
+    65→
+    66→| Tool | Purpose | Cost | Why Chosen |
+    67→|---|---|---|---|
+    68→| **GitHub Actions** | CI pipeline | Free (2,000 min/month) | Repository is on GitHub; tight integration; matrix builds for Node versions; artifact storage for test reports |
+    69→| **Vercel CLI** | Preview deployments | Free (included in Pro) | Already the deployment target; preview URLs per PR; environment promotion |
+    70→| **Vercel Git Integration** | Production deployment | Free (already configured) | Auto-deploy on push to `main`; zero config; rollback via dashboard |
+    71→
+    72→### 1.4 Monitoring and Alerting Tools
+    73→
+    74→| Tool | Purpose | Cost | Why Chosen |
+    75→|---|---|---|---|
+    76→| **Sentry** | Error tracking + performance | Free (5K events/month) | Client-side + server-side; source maps; breadcrumbs for offline queue debugging; release tracking |
+    77→| **Vercel Analytics** | Page-level performance | Included in Pro ($20/mo) | Already integrated; Web Vitals; real-user monitoring |
+    78→| **Vercel Speed Insights** | Core Web Vitals | Included in Pro | Already integrated |
+    79→| **Better Uptime / UptimeRobot** | Uptime monitoring | Free tier | External health check on `/api/health`; SMS/email alerts on downtime; 5-minute intervals |
+    80→| **Vercel Logs** | Request-level logs | Included in Pro | Serverless function logs; request tracing; tail in real-time via CLI |
+    81→| **pg_stat_statements** | Database query analysis | Free (Neon built-in) | Identify slow queries; track query frequency; available in Neon dashboard |
+    82→
+    83→### 1.5 Database Management Tools
+    84→
+    85→| Tool | Purpose | Cost | Why Chosen |
+    86→|---|---|---|---|
+    87→| **Neon Console** | Database GUI + branching | Free | Already the database provider; SQL editor; schema viewer; branching for safe migrations |
+    88→| **pgAdmin / DBeaver** | Local database GUI | Free | For complex query development; schema visualization; export capabilities |
+    89→| **pg_dump / pg_restore** | Backup and restore | Free (CLI) | Weekly backups to Vercel Blob; disaster recovery; already recommended by Cloud Architect |
+    90→| **Neon Branching** | Migration testing | Free | Create a branch of production database; test migrations without risk; merge or discard |
+    91→
+    92→### 1.6 Deployment Tools
+    93→
+    94→| Tool | Purpose | Cost | Why Chosen |
+    95→|---|---|---|---|
+    96→| **Vercel CLI (`vercel`)** | Manual deploys, env management | Free | `vercel env pull` for local `.env`; `vercel deploy --prod` for manual production deploys; `vercel logs --follow` for debugging |
+    97→| **GitHub CLI (`gh`)** | PR and release management | Free | Create PRs, manage releases, trigger workflows from terminal |
+    98→
+    99→### 1.7 Total Tooling Cost
+   100→
+   101→| Category | Monthly Cost |
+   102→|---|---|
+   103→| Development tools | $0 |
+   104→| Testing tools | $0 |
+   105→| CI/CD (GitHub Actions) | $0 |
+   106→| Monitoring (Sentry free + UptimeRobot free) | $0 |
+   107→| Hosting (Vercel Pro) | $20 |
+   108→| Database (Neon Free) | $0 |
+   109→| **Total** | **$20/month** |
+   110→
+   111→---
+   112→
+   113→## 2. Deployment Approach
+   114→
+   115→### 2.1 Environment Setup
+   116→
+   117→```
+   118→ENVIRONMENT TOPOLOGY
+   119→═════════════════════
+   120→
+   121→┌─────────────────────────────────────────────────────────┐
+   122→│                    GITHUB REPOSITORY                     │
+   123→│                    main branch                           │
+   124→│                                                         │
+   125→│  Push to main ──────► Vercel Production Deploy          │
+   126→│                       URL: africandatalayer.vercel.app   │
+   127→│                       DB:  Neon main branch              │
+   128→│                                                         │
+   129→│  Push to staging ───► Vercel Preview Deploy             │
+   130→│  (or PR to main)     URL: staging-adl.vercel.app        │
+   131→│                       DB:  Neon staging branch           │
+   132→│                                                         │
+   133→│  Push to feature/* ─► Vercel Preview Deploy             │
+   134→│                       URL: {branch}-adl.vercel.app      │
+   135→│                       DB:  Neon dev branch               │
+   136→│                                                         │
+   137→│  Local dev ─────────► vite dev server (localhost:5173)  │
+   138→│                       DB:  Neon dev branch               │
+   139→│                       API: Vercel Dev (localhost:3000)   │
+   140→│                       or: proxy to staging               │
+   141→└─────────────────────────────────────────────────────────┘
+   142→```
+   143→
+   144→**Step-by-step environment setup:**
+   145→
+   146→```bash
+   147→# 1. Create Git branches
+   148→git checkout -b staging
+   149→git push -u origin staging
+   150→
+   151→# 2. Create Neon database branches
+   152→#    In Neon console: Project > Branches > Create Branch
+   153→#    - Branch "staging" from "main" (production snapshot)
+   154→#    - Branch "dev" from "staging"
+   155→#    Each branch gets its own connection string.
+   156→
+   157→# 3. Configure Vercel environments
+   158→#    In Vercel Dashboard > Project > Settings > Environment Variables:
+   159→
+   160→# Production (main branch):
+   161→vercel env add ADL_POSTGRES_URL production
+   162→# Paste: postgres://...@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require
+   163→
+   164→# Preview (all non-main branches):
+   165→vercel env add ADL_POSTGRES_URL preview
+   166→# Paste: postgres://...@ep-yyy.us-east-1.aws.neon.tech/neondb?sslmode=require
+   167→
+   168→# 4. Configure branch-specific preview deployments
+   169→#    In Vercel Dashboard > Project > Settings > Git:
+   170→#    - Production Branch: main
+   171→#    - Preview Branches: staging, feature/*
+   172→
+   173→# 5. Pull environment for local development
+   174→vercel env pull .env.local
+   175→```
+   176→
+   177→**Environment variable matrix:**
+   178→
+   179→| Variable | Production | Staging | Development |
+   180→|---|---|---|---|
+   181→| `ADL_POSTGRES_URL` | Neon main branch | Neon staging branch | Neon dev branch |
+   182→| `AUTH_SECRET` | Unique per env | Unique per env | Unique per env |
+   183→| `GOOGLE_CLIENT_ID` | Production OAuth app | Same (localhost in redirect URIs) | Same |
+   184→| `GOOGLE_CLIENT_SECRET` | Production secret | Same | Same |
+   185→| `GEMINI_API_KEY` | Shared | Shared | Shared |
+   186→| `BLOB_READ_WRITE_TOKEN` | Production store | Staging store (separate) | Dev store |
+   187→| `SENTRY_DSN` | Production DSN | Staging DSN | Empty (disabled) |
+   188→| `NODE_ENV` | production | production | development |
+   189→
+   190→### 2.2 Infrastructure as Code
+   191→
+   192→Since ADL uses Vercel's managed platform, traditional IaC (Terraform/Pulumi) is unnecessary for compute and networking. Instead, we codify configuration declaratively:
+   193→
+   194→**vercel.json (enhanced):**
+   195→
+   196→```jsonc
+   197→{
+   198→  "framework": "vite",
+   199→  "buildCommand": "vite build",
+   200→  "devCommand": "vite",
+   201→  "outputDirectory": "dist",
+   202→  "crons": [
+   203→    {
+   204→      "path": "/api/analytics?view=cron",
+   205→      "schedule": "0 3 * * 1"
+   206→    },
+   207→    {
+   208→      "path": "/api/road-snapshot",
+   209→      "schedule": "0 6 * * *"
+   210→    },
+   211→    {
+   212→      "path": "/api/monthly-rollup",
+   213→      "schedule": "0 4 1 * *"
+   214→    },
+   215→    {
+   216→      "path": "/api/backup",
+   217→      "schedule": "0 2 * * 0"
+   218→    }
+   219→  ],
+   220→  "headers": [
+   221→    {
+   222→      "source": "/api/submissions",
+   223→      "headers": [
+   224→        { "key": "Cache-Control", "value": "no-store" }
+   225→      ]
+   226→    },
+   227→    {
+   228→      "source": "/api/analytics",
+   229→      "headers": [
+   230→        { "key": "Cache-Control", "value": "public, s-maxage=300, stale-while-revalidate=600" }
+   231→      ]
+   232→    },
+   233→    {
+   234→      "source": "/api/data/(.*)",
+   235→      "headers": [
+   236→        { "key": "Cache-Control", "value": "public, s-maxage=60, stale-while-revalidate=300" }
+   237→      ]
+   238→    },
+   239→    {
+   240→      "source": "/api/health",
+   241→      "headers": [
+   242→        { "key": "Cache-Control", "value": "no-cache" }
+   243→      ]
+   244→    }
+   245→  ],
+   246→  "functions": {
+   247→    "api/**/*.ts": {
+   248→      "maxDuration": 30
+   249→    },
+   250→    "api/backup.ts": {
+   251→      "maxDuration": 60
+   252→    }
+   253→  }
+   254→}
+   255→```
+   256→
+   257→**Database migrations as code:**
+   258→
+   259→Instead of Terraform for Neon, we use plain SQL migration files versioned in Git:
+   260→
+   261→```
+   262→migrations/
+   263→├── 001_initial_schema.sql          (existing tables: point_events, snapshots, etc.)
+   264→├── 002_add_content_hash.sql        (ALTER TABLE point_events ADD content_hash)
+   265→├── 003_add_collection_assignments.sql
+   266→├── 004_add_api_keys.sql
+   267→├── 005_add_monthly_stats.sql
+   268→└── 006_add_review_flags.sql
+   269→```
+   270→
+   271→**Migration runner script (`scripts/migrate.mjs`):**
+   272→
+   273→```javascript
+   274→#!/usr/bin/env node
+   275→// scripts/migrate.mjs
+   276→// Usage: node scripts/migrate.mjs [--dry-run]
+   277→
+   278→import { readFileSync, readdirSync } from 'fs';
+   279→import { join } from 'path';
+   280→import pg from 'pg';
+   281→
+   282→const pool = new pg.Pool({
+   283→  connectionString: process.env.ADL_POSTGRES_URL || process.env.POSTGRES_URL,
+   284→  ssl: { rejectUnauthorized: false },
+   285→});
+   286→
+   287→const DRY_RUN = process.argv.includes('--dry-run');
+   288→
+   289→async function main() {
+   290→  // Create migrations tracking table if it doesn't exist
+   291→  await pool.query(`
+   292→    CREATE TABLE IF NOT EXISTS _migrations (
+   293→      id SERIAL PRIMARY KEY,
+   294→      filename TEXT NOT NULL UNIQUE,
+   295→      applied_at TIMESTAMPTZ DEFAULT NOW()
+   296→    );
+   297→  `);
+   298→
+   299→  // Get already-applied migrations
+   300→  const { rows: applied } = await pool.query(
+   301→    'SELECT filename FROM _migrations ORDER BY filename'
+   302→  );
+   303→  const appliedSet = new Set(applied.map(r => r.filename));
+   304→
+   305→  // Read migration files
+   306→  const migrationsDir = join(import.meta.dirname, '..', 'migrations');
+   307→  const files = readdirSync(migrationsDir)
+   308→    .filter(f => f.endsWith('.sql'))
+   309→    .sort();
+   310→
+   311→  let count = 0;
+   312→  for (const file of files) {
+   313→    if (appliedSet.has(file)) {
+   314→      console.log(`SKIP  ${file} (already applied)`);
+   315→      continue;
+   316→    }
+   317→
+   318→    const sql = readFileSync(join(migrationsDir, file), 'utf-8');
+   319→    console.log(`${DRY_RUN ? 'WOULD APPLY' : 'APPLY'}  ${file}`);
+   320→
+   321→    if (!DRY_RUN) {
+   322→      const client = await pool.connect();
+   323→      try {
+   324→        await client.query('BEGIN');
+   325→        await client.query(sql);
+   326→        await client.query(
+   327→          'INSERT INTO _migrations (filename) VALUES ($1)',
+   328→          [file]
+   329→        );
+   330→        await client.query('COMMIT');
+   331→        count++;
+   332→      } catch (err) {
+   333→        await client.query('ROLLBACK');
+   334→        console.error(`FAILED  ${file}: ${err.message}`);
+   335→        process.exit(1);
+   336→      } finally {
+   337→        client.release();
+   338→      }
+   339→    }
+   340→  }
+   341→
+   342→  console.log(`\nDone. ${count} migration(s) applied.`);
+   343→  await pool.end();
+   344→}
+   345→
+   346→main().catch(err => {
+   347→  console.error(err);
+   348→  process.exit(1);
+   349→});
+   350→```
+   351→
+   352→**Sample migration file (`migrations/002_add_content_hash.sql`):**
+   353→
+   354→```sql
+   355→-- 002_add_content_hash.sql
+   356→-- Adds content hash for server-side deduplication (ADR-008)
+   357→
+   358→ALTER TABLE point_events
+   359→  ADD COLUMN IF NOT EXISTS content_hash TEXT;
+   360→
+   361→CREATE INDEX IF NOT EXISTS idx_point_events_content_hash
+   362→  ON point_events (content_hash)
+   363→  WHERE content_hash IS NOT NULL;
+   364→
+   365→-- Add review flag columns
+   366→ALTER TABLE point_events
+   367→  ADD COLUMN IF NOT EXISTS review_status TEXT DEFAULT 'auto_approved',
+   368→  ADD COLUMN IF NOT EXISTS review_flags TEXT[] DEFAULT '{}';
+   369→
+   370→COMMENT ON COLUMN point_events.content_hash IS 'SHA-256 hash for dedup (category+point_id+event_type+coords+details)';
+   371→COMMENT ON COLUMN point_events.review_status IS 'auto_approved | pending_review | approved | rejected';
+   372→COMMENT ON COLUMN point_events.review_flags IS 'Array of flags: gps_mismatch, potential_duplicate, late_submission, low_confidence, anomaly';
+   373→```
+   374→
+   375→**Sample migration file (`migrations/003_add_collection_assignments.sql`):**
+   376→
+   377→```sql
+   378→-- 003_add_collection_assignments.sql
+   379→-- Zone-based field agent assignment tracking
+   380→
+   381→CREATE TABLE IF NOT EXISTS collection_assignments (
+   382→  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   383→  user_id TEXT NOT NULL,
+   384→  zone_id TEXT NOT NULL,
+   385→  zone_bounds JSONB NOT NULL,
+   386→  assigned_verticals TEXT[] NOT NULL,
+   387→  due_date DATE NOT NULL,
+   388→  points_expected INTEGER DEFAULT 0,
+   389→  points_collected INTEGER DEFAULT 0,
+   390→  status TEXT DEFAULT 'assigned'
+   391→    CHECK (status IN ('assigned', 'in_progress', 'completed', 'expired')),
+   392→  created_at TIMESTAMPTZ DEFAULT NOW(),
+   393→  updated_at TIMESTAMPTZ DEFAULT NOW()
+   394→);
+   395→
+   396→CREATE INDEX IF NOT EXISTS idx_assignments_user
+   397→  ON collection_assignments (user_id, status);
+   398→
+   399→CREATE INDEX IF NOT EXISTS idx_assignments_zone
+   400→  ON collection_assignments (zone_id, status);
+   401→```
+   402→
+   403→### 2.3 Database Migration Strategy
+   404→
+   405→```
+   406→MIGRATION WORKFLOW
+   407→═══════════════════
+   408→
+   409→  Developer writes migration
+   410→       │
+   411→       ▼
+   412→  Test on Neon dev branch
+   413→       │
+   414→       ▼
+   415→  PR to staging branch
+   416→       │
+   417→       ▼
+   418→  GitHub Actions runs:
+   419→    1. Create Neon branch from staging
+   420→    2. Run migration on branch
+   421→    3. Run tests against branch
+   422→    4. If pass: merge PR, run migration on staging
+   423→    5. Delete temporary Neon branch
+   424→       │
+   425→       ▼
+   426→  PR from staging to main
+   427→       │
+   428→       ▼
+   429→  Production deploy:
+   430→    1. GitHub Action runs migration on Neon main branch
+   431→    2. Vercel deploys new code
+   432→    3. Code handles both old and new schema (backward compatible)
+   433→```
+   434→
+   435→**Rules for safe migrations:**
+   436→
+   437→1. **Always additive.** Never DROP columns or tables in the same release as code changes. Use a two-phase approach: (a) deploy code that stops using the column, (b) drop the column in the next release.
+   438→2. **Always with defaults.** New columns must have DEFAULT values so existing rows are valid.
+   439→3. **Always idempotent.** Use `IF NOT EXISTS` and `IF EXISTS` so migrations can be re-run safely.
+   440→4. **Always tested.** Run `node scripts/migrate.mjs --dry-run` before applying.
+   441→5. **Never break reads.** The Vercel deployment is zero-downtime (atomic swap), but the database migration runs before the new code deploys. The old code must be able to read from the new schema.
+   442→
+   443→### 2.4 Deployment Strategy: Blue/Green via Vercel
+   444→
+   445→Vercel provides atomic deployments by default. Every deploy creates a new immutable deployment URL. The production alias (`africandatalayer.vercel.app`) is atomically swapped to point to the new deployment only after the build succeeds. This is effectively blue/green deployment.
+   446→
+   447→```
+   448→DEPLOYMENT FLOW
+   449→════════════════
+   450→
+   451→  git push origin main
+   452→       │
+   453→       ▼
+   454→  Vercel Build Phase
+   455→    1. Install dependencies (npm ci)
+   456→    2. Run build (vite build)
+   457→    3. Bundle API functions
+   458→    4. If build fails: STOP (old deployment stays live)
+   459→       │
+   460→       ▼
+   461→  Vercel Deploy Phase
+   462→    1. Upload static assets to CDN
+   463→    2. Deploy serverless functions
+   464→    3. Atomic alias swap: production URL → new deployment
+   465→    4. Old deployment stays available at its unique URL
+   466→       │
+   467→       ▼
+   468→  Post-Deploy Verification
+   469→    1. GitHub Action hits /api/health on new deployment
+   470→    2. If health check fails: alert on Slack/email
+   471→    3. Manual rollback if needed
+   472→```
+   473→
+   474→**Rollback procedure:**
+   475→
+   476→```bash
+   477→# Option 1: Vercel Dashboard
+   478→# Go to Deployments > find the last good deployment > "..." > "Promote to Production"
+   479→
+   480→# Option 2: Vercel CLI
+   481→vercel ls                          # List recent deployments
+   482→vercel promote <deployment-url>    # Promote a specific deployment to production
+   483→
+   484→# Option 3: Git revert (creates new deployment)
+   485→git revert HEAD
+   486→git push origin main
+   487→```
+   488→
+   489→**Rollback decision criteria:**
+   490→- `/api/health` returns non-200 for > 2 minutes after deploy
+   491→- Sentry error rate increases > 5x compared to pre-deploy baseline
+   492→- Field agents report inability to submit data
+   493→- Dashboard shows zero new submissions for > 30 minutes during active collection hours (08:00-18:00 WAT)
+   494→
+   495→### 2.5 Secret Management
+   496→
+   497→```
+   498→SECRET MANAGEMENT
+   499→══════════════════
+   500→
+   501→WHERE SECRETS LIVE:
+   502→  1. Vercel Environment Variables (primary)
+   503→     - Set via Dashboard or CLI: vercel env add <KEY> <environment>
+   504→     - Encrypted at rest
+   505→     - Injected into serverless function runtime
+   506→     - Scoped per environment (production, preview, development)
+   507→
+   508→  2. .env.local (local development only)
+   509→     - Created by: vercel env pull .env.local
+   510→     - In .gitignore (already)
+   511→     - Never committed to Git
+   512→
+   513→  3. GitHub Actions Secrets (CI only)
+   514→     - For: NEON_API_KEY (database branching in CI)
+   515→     - For: VERCEL_TOKEN (deployment verification)
+   516→     - For: SENTRY_AUTH_TOKEN (source map upload)
+   517→     - Set via: GitHub > Settings > Secrets and Variables > Actions
+   518→
+   519→SECRETS INVENTORY:
+   520→  ┌──────────────────────────┬──────────────────────────────────────┐
+   521→  │ Secret                   │ Where Used                           │
+   522→  ├──────────────────────────┼──────────────────────────────────────┤
+   523→  │ ADL_POSTGRES_URL         │ Vercel env, .env.local               │
+   524→  │ AUTH_SECRET              │ Vercel env, .env.local               │
+   525→  │ GOOGLE_CLIENT_ID         │ Vercel env, .env.local               │
+   526→  │ GOOGLE_CLIENT_SECRET     │ Vercel env, .env.local               │
+   527→  │ GEMINI_API_KEY           │ Vercel env, .env.local               │
+   528→  │ BLOB_READ_WRITE_TOKEN   │ Vercel env, .env.local               │
+   529→  │ EDGE_CONFIG              │ Vercel env, .env.local               │
+   530→  │ EDGE_CONFIG_ID           │ Vercel env, .env.local               │
+   531→  │ VERCEL_API_TOKEN         │ Vercel env, .env.local               │
+   532→  │ ADMIN_EMAIL              │ Vercel env, .env.local               │
+   533→  │ ADMIN_PASSWORD           │ Vercel env, .env.local               │
+   534→  │ SENTRY_DSN               │ Vercel env (new)                     │
+   535→  │ SENTRY_AUTH_TOKEN        │ GitHub Actions secret (new)          │
+   536→  │ NEON_API_KEY             │ GitHub Actions secret (new)          │
+   537→  └──────────────────────────┴──────────────────────────────────────┘
+   538→
+   539→ROTATION SCHEDULE:
+   540→  - AUTH_SECRET:           Rotate every 90 days
+   541→  - ADMIN_PASSWORD:        Rotate every 90 days
+   542→  - API keys (client):     Rotate on request or annually
+   543→  - Database passwords:    Rotate via Neon console (generates new connection string)
+   544→  - All others:            Rotate on suspected compromise
+   545→```
+   546→
+   547→---
+   548→
+   549→## 3. Observability Stack
+   550→
+   551→### 3.1 Application Metrics
+   552→
+   553→```
+   554→METRICS TO TRACK
+   555→═════════════════
+   556→
+   557→CATEGORY: FIELD AGENT SYNC HEALTH
+   558→──────────────────────────────────
+   559→Metric                          Source              Alert Threshold
+   560→────────────────────────────────────────────────────────────────────
+   561→sync_success_rate               Sentry + custom     < 90% over 1 hour
+   562→sync_latency_p95                Custom middleware    > 5s (excludes network)
+   563→queue_depth_per_agent           Client telemetry    > 50 items pending
+   564→failed_submissions_permanent    API response codes  > 5 in 1 hour
+   565→photo_upload_success_rate       API logs            < 85% over 24 hours
+   566→photo_upload_latency_p95        API logs            > 30s
+   567→offline_queue_age_max           Client telemetry    > 48 hours
+   568→idempotency_dedup_rate          API logs            > 20% (agents retrying excessively)
+   569→bandwidth_class_distribution    Client telemetry    (informational, no alert)
+   570→
+   571→CATEGORY: DATA QUALITY PIPELINE
+   572→────────────────────────────────
+   573→Metric                          Source              Alert Threshold
+   574→────────────────────────────────────────────────────────────────────
+   575→review_queue_depth              Database query      > 50 pending items
+   576→review_queue_age_max            Database query      > 72 hours oldest item
+   577→fraud_flag_rate                 API middleware      > 15% of submissions
+   578→geofence_rejection_rate         API middleware      > 10% of submissions
+   579→duplicate_detection_rate        Content hash        > 10% (agents re-submitting)
+   580→anomaly_alert_count             Snapshot engine     > 0 per weekly run (notify admin)
+   581→data_completeness_score         Snapshot engine     < 60% avg across verticals
+   582→
+   583→CATEGORY: API PERFORMANCE
+   584→─────────────────────────
+   585→Metric                          Source              Alert Threshold
+   586→────────────────────────────────────────────────────────────────────
+   587→api_response_time_p95           Vercel Analytics    > 3s for GET, > 5s for POST
+   588→api_error_rate_5xx              Vercel Logs         > 1% of requests
+   589→api_error_rate_4xx              Vercel Logs         > 20% of requests
+   590→cron_execution_success          Vercel Cron logs    Any failure
+   591→snapshot_engine_duration        Custom logging      > 60s (approaching timeout)
+   592→database_query_time_p95         pg middleware       > 2s
+   593→
+   594→CATEGORY: STORAGE
+   595→─────────────────
+   596→Metric                          Source              Alert Threshold
+   597→────────────────────────────────────────────────────────────────────
+   598→database_size_mb                Neon dashboard      > 400 MB (80% of free tier)
+   599→blob_storage_gb                 Vercel dashboard    > 4 GB (80% of Pro limit)
+   600→event_count_total               Database query      (informational)
+   601→photo_count_total               Database query      (informational)
+   602→```
+   603→
+   604→### 3.2 Infrastructure Metrics
+   605→
+   606→```
+   607→INFRASTRUCTURE MONITORING
+   608→══════════════════════════
+   609→
+   610→VERCEL PLATFORM
+   611→  Monitored automatically by Vercel:
+   612→    - Build success/failure
+   613→    - Function invocation count
+   614→    - Function duration (avg, p95, max)
+   615→    - Function memory usage
+   616→    - Bandwidth consumption
+   617→    - Edge cache hit rate
+   618→
+   619→  Access: Vercel Dashboard > Project > Analytics
+   620→  Export: Vercel REST API (for custom dashboards)
+   621→
+   622→NEON POSTGRESQL
+   623→  Monitored via Neon Console:
+   624→    - Active connections (max 20 on Free tier)
+   625→    - Compute hours consumed (max 190/month on Free)
+   626→    - Storage used (max 0.5 GB on Free)
+   627→    - Query latency (via pg_stat_statements)
+   628→    - Connection errors
+   629→
+   630→  Access: Neon Console > Project > Monitoring
+   631→
+   632→EXTERNAL UPTIME
+   633→  Monitored via UptimeRobot (free tier):
+   634→    - GET /api/health every 5 minutes
+   635→    - Alert via email + webhook on failure
+   636→    - Response time tracking
+   637→    - SSL certificate expiry warning
+   638→```
+   639→
+   640→### 3.3 Log Aggregation Strategy
+   641→
+   642→```
+   643→LOG ARCHITECTURE
+   644→═════════════════
+   645→
+   646→TIER 1: STRUCTURED APPLICATION LOGS (Vercel Serverless Logs)
+   647→────────────────────────────────────────────────────────────
+   648→  Where:     console.log/warn/error in API functions
+   649→  Retention: 1 hour (Vercel Pro) — sufficient for debugging live issues
+   650→  Format:    Structured JSON for machine parsing
+   651→
+   652→  Logging standard for all API routes:
+   653→
+   654→    // At the start of every API handler:
+   655→    console.log(JSON.stringify({
+   656→      event: 'api_request',
+   657→      method: req.method,
+   658→      path: req.url,
+   659→      userId: session?.userId || 'anonymous',
+   660→      userAgent: req.headers.get('user-agent'),
+   661→      ts: new Date().toISOString(),
+   662→    }));
+   663→
+   664→    // On success:
+   665→    console.log(JSON.stringify({
+   666→      event: 'api_response',
+   667→      path: req.url,
+   668→      status: 200,
+   669→      durationMs: Date.now() - startTime,
+   670→      ts: new Date().toISOString(),
+   671→    }));
+   672→
+   673→    // On error:
+   674→    console.error(JSON.stringify({
+   675→      event: 'api_error',
+   676→      path: req.url,
+   677→      status: 500,
+   678→      error: err.message,
+   679→      code: err.code,
+   680→      stack: err.stack,
+   681→      ts: new Date().toISOString(),
+   682→    }));
+   683→
+   684→  Access: vercel logs --follow
+   685→  Search: Vercel Dashboard > Logs (filter by function, status, time range)
+   686→
+   687→TIER 2: ERROR TRACKING (Sentry)
+   688→────────────────────────────────
+   689→  Where:     Client-side (React) + Server-side (API functions)
+   690→  Retention: 90 days (free tier)
+   691→  What:      Unhandled exceptions, handled errors, performance transactions
+   692→
+   693→  Client-side integration:
+   694→
+   695→    // lib/client/sentry.ts
+   696→    import * as Sentry from '@sentry/browser';
+   697→
+   698→    Sentry.init({
+   699→      dsn: import.meta.env.VITE_SENTRY_DSN,
+   700→      environment: import.meta.env.MODE,
+   701→      release: import.meta.env.VITE_COMMIT_SHA,
+   702→      tracesSampleRate: 0.1,    // 10% of transactions for performance
+   703→      replaysSessionSampleRate: 0,
+   704→      replaysOnErrorSampleRate: 0.1,
+   705→      beforeSend(event) {
+   706→        // Strip PII: do not send user GPS coordinates as breadcrumbs
+   707→        if (event.breadcrumbs) {
+   708→          event.breadcrumbs = event.breadcrumbs.filter(
+   709→            b => !b.data?.latitude && !b.data?.longitude
+   710→          );
+   711→        }
+   712→        return event;
+   713→      },
+   714→    });
+   715→
+   716→  Server-side integration:
+   717→
+   718→    // lib/server/sentry.ts
+   719→    import * as Sentry from '@sentry/node';
+   720→
+   721→    Sentry.init({
+   722→      dsn: process.env.SENTRY_DSN,
+   723→      environment: process.env.VERCEL_ENV || 'development',
+   724→      tracesSampleRate: 0.2,
+   725→    });
+   726→
+   727→    export function captureApiError(err: Error, context?: Record<string, unknown>) {
+   728→      Sentry.captureException(err, { extra: context });
+   729→    }
+   730→
+   731→TIER 3: AUDIT LOG (Database)
+   732→─────────────────────────────
+   733→  Where:     PostgreSQL table for compliance with Cameroon Law 2024/017
+   734→  Retention: 2 years
+   735→  What:      Admin actions (approve/reject/merge/delete), data exports, login events
+   736→
+   737→  CREATE TABLE IF NOT EXISTS audit_log (
+   738→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   739→    actor_id TEXT NOT NULL,
+   740→    action TEXT NOT NULL,
+   741→    resource_type TEXT NOT NULL,
+   742→    resource_id TEXT,
+   743→    details JSONB,
+   744→    ip_address TEXT,
+   745→    created_at TIMESTAMPTZ DEFAULT NOW()
+   746→  );
+   747→
+   748→  CREATE INDEX idx_audit_log_actor ON audit_log (actor_id, created_at DESC);
+   749→  CREATE INDEX idx_audit_log_action ON audit_log (action, created_at DESC);
+   750→```
+   751→
+   752→### 3.4 Alerting Rules and Thresholds
+   753→
+   754→```
+   755→ALERTING CONFIGURATION
+   756→═══════════════════════
+   757→
+   758→CHANNEL SETUP:
+   759→  1. Email: ops@africandatalayer.com (team distribution list)
+   760→  2. Slack/WhatsApp: #adl-alerts channel (for real-time awareness)
+   761→  3. SMS: +237 XXX XXX XXX (on-call engineer, critical only)
+   762→
+   763→ALERT DEFINITIONS:
+   764→
+   765→CRITICAL (page on-call, immediate response):
+   766→─────────────────────────────────────────────
+   767→Alert: API_DOWN
+   768→  Condition: /api/health returns non-200 for 3 consecutive checks (15 min)
+   769→  Source:    UptimeRobot
+   770→  Action:    Check Vercel status, check Neon status, check DNS
+   771→  Notify:    SMS + Slack + Email
+   772→
+   773→Alert: DATABASE_UNREACHABLE
+   774→  Condition: StorageUnavailableError rate > 50% of requests over 5 minutes
+   775→  Source:    Sentry error grouping
+   776→  Action:    Check Neon console, check connection pool, check compute hours
+   777→  Notify:    SMS + Slack + Email
+   778→
+   779→Alert: ZERO_SUBMISSIONS
+   780→  Condition: No POST /api/submissions in 4 hours during 08:00-18:00 WAT on weekdays
+   781→  Source:    Custom cron check (query point_events count)
+   782→  Action:    Check if agents are deployed, check sync health, contact field supervisor
+   783→  Notify:    Slack + Email
+   784→
+   785→
+   786→WARNING (investigate within 4 hours):
+   787→──────────────────────────────────────
+   788→Alert: HIGH_ERROR_RATE
+   789→  Condition: 5xx error rate > 5% of requests over 30 minutes
+   790→  Source:    Vercel Analytics / Sentry
+   791→  Action:    Review Vercel logs, check recent deployments, check database
+   792→  Notify:    Slack + Email
+   793→
+   794→Alert: SYNC_DEGRADATION
+   795→  Condition: Photo upload success rate < 80% over 24 hours
+   796→  Source:    Custom metric (count photo_url IS NOT NULL vs total events)
+   797→  Action:    Check Vercel Blob, check network conditions in Douala
+   798→  Notify:    Slack + Email
+   799→
+   800→Alert: REVIEW_QUEUE_BACKLOG
+   801→  Condition: > 50 items in review queue or oldest item > 72 hours
+   802→  Source:    Custom cron check (query point_events WHERE review_status = 'pending_review')
+   803→  Action:    Notify admin to process queue
+   804→  Notify:    Email
+   805→
+   806→Alert: STORAGE_APPROACHING_LIMIT
+   807→  Condition: Neon storage > 400 MB or Vercel Blob > 4 GB
+   808→  Source:    Weekly cron check
+   809→  Action:    Plan upgrade or archival
+   810→  Notify:    Email
+   811→
+   812→Alert: CRON_FAILURE
+   813→  Condition: Weekly snapshot cron fails (non-200 response)
+   814→  Source:    Vercel Cron logs
+   815→  Action:    Check snapshot engine, check database, re-run manually
+   816→  Notify:    Slack + Email
+   817→
+   818→
+   819→INFORMATIONAL (daily digest):
+   820→──────────────────────────────
+   821→Alert: DAILY_SUMMARY
+   822→  Condition: Sent at 19:00 WAT daily
+   823→  Content:   Submissions today, photos uploaded, sync failures, review queue depth,
+   824→             active agents, top contributing agent
+   825→  Source:    Custom cron job
+   826→  Notify:    Email
+   827→```
+   828→
+   829→### 3.5 Dashboard Designs
+   830→
+   831→**Dashboard 1: Operations Overview (for engineering team)**
+   832→
+   833→```
+   834→┌─────────────────────────────────────────────────────────────────┐
+   835→│  ADL Operations Dashboard                        Last 24 hours  │
+   836→├─────────────────────────────────────────────────────────────────┤
+   837→│                                                                 │
+   838→│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+   839→│  │ API Uptime   │  │ Submissions  │  │ Error Rate   │          │
+   840→│  │   99.8%      │  │   47 today   │  │   0.3%       │          │
+   841→│  │   ▲ 0.1%     │  │   ▲ 12%     │  │   ▼ 0.1%     │          │
+   842→│  └──────────────┘  └──────────────┘  └──────────────┘          │
+   843→│                                                                 │
+   844→│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+   845→│  │ Photos       │  │ Sync Success │  │ Review Queue │          │
+   846→│  │   38 / 47    │  │   94.2%      │  │   7 pending  │          │
+   847→│  │   80.9%      │  │   ▲ 2.1%     │  │   ▼ 3        │          │
+   848→│  └──────────────┘  └──────────────┘  └──────────────┘          │
+   849→│                                                                 │
+   850→│  API Response Time (p95)          │  Submissions by Hour        │
+   851→│  ┌─────────────────────────────┐  │  ┌─────────────────────┐   │
+   852→│  │     2.1s                    │  │  │ ████                │   │
+   853→│  │    ╱    ╲                   │  │  │ ██████████          │   │
+   854→│  │   ╱      ╲   1.4s          │  │  │ ████████████████    │   │
+   855→│  │  ╱        ╲─╱   ╲          │  │  │ ██████████████      │   │
+   856→│  │ ╱                 ╲  0.9s  │  │  │ ██████████          │   │
+   857→│  │╱                    ╲─     │  │  │ ████████            │   │
+   858→│  │ 06  08  10  12  14  16  18 │  │  │ 06 08 10 12 14 16  │   │
+   859→│  └─────────────────────────────┘  │  └─────────────────────┘   │
+   860→│                                                                 │
+   861→│  Database: 67 MB / 500 MB         │  Blob: 312 MB / 5 GB       │
+   862→│  ████████░░░░░░░░░░░░░ 13%        │  ██████░░░░░░░░░░░░░ 6%    │
+   863→│                                                                 │
+   864→└─────────────────────────────────────────────────────────────────┘
+   865→```
+   866→
+   867→**Dashboard 2: Field Agent Sync Health (for field supervisors)**
+   868→
+   869→```
+   870→┌─────────────────────────────────────────────────────────────────┐
+   871→│  Field Agent Sync Monitor                   Bonamoussadi Pilot  │
+   872→├─────────────────────────────────────────────────────────────────┤
+   873→│                                                                 │
+   874→│  Agent           Last Sync    Queue  Photos  Status             │
+   875→│  ──────────────────────────────────────────────────────────────  │
+   876→│  Kouam J.        5 min ago    0      12/12   ● Online           │
+   877→│  Ngo M.          12 min ago   3      8/10    ● Syncing          │
+   878→│  Talla P.        2 hours ago  15     4/7     ● Degraded         │
+   879→│  Fouda E.        6 hours ago  28     0/5     ● Offline          │
+   880→│  Mbarga L.       1 day ago    0      20/20   ● Last seen 18:00  │
+   881→│  Ndongo S.       3 min ago    1      15/16   ● Online           │
+   882→│                                                                 │
+   883→│  Sync Success Rate (7 days)   │  Queue Depth Distribution       │
+   884→│  ┌─────────────────────────┐  │  ┌─────────────────────────┐   │
+   885→│  │ 100% ─ ─ ─ ─ ─ ─ ─ ─  │  │  │ 0-5:    ████████ 12     │   │
+   886→│  │  95% ──────────────────  │  │  │ 6-15:   ████ 3          │   │
+   887→│  │  90% ─ ─ ─────────────  │  │  │ 16-30:  ██ 2            │   │
+   888→│  │  85% ─ ─ ─ ─ ─ ─ ─ ─  │  │  │ 31+:    █ 1             │   │
+   889→│  │ Mon Tue Wed Thu Fri Sat │  │  └─────────────────────────┘   │
+   890→│  └─────────────────────────┘  │                                 │
+   891→│                                                                 │
+   892→│  Connection Quality Today:     │  Photo Upload Failures:        │
+   893→│  4G:  ████████ 45%             │  Network timeout:  3           │
+   894→│  3G:  ██████████ 40%           │  File too large:   1           │
+   895→│  2G:  ████ 12%                 │  Server error:     0           │
+   896→│  Off: █ 3%                     │  Total failures:   4 / 47 (8%) │
+   897→│                                                                 │
+   898→└─────────────────────────────────────────────────────────────────┘
+   899→```
+   900→
+   901→**Dashboard 3: Data Quality Pipeline (for data managers)**
+   902→
+   903→```
+   904→┌─────────────────────────────────────────────────────────────────┐
+   905→│  Data Quality Pipeline                         Week of 2026-03  │
+   906→├─────────────────────────────────────────────────────────────────┤
+   907→│                                                                 │
+   908→│  Vertical        Points  New  Changed  Completeness  Anomalies  │
+   909→│  ────────────────────────────────────────────────────────────    │
+   910→│  Mobile Money    142     +8   22       78%           0          │
+   911→│  Pharmacy        32      +2   5        85%           1 ⚠        │
+   912→│  Fuel Station    8       +1   2        92%           0          │
+   913→│  Alcohol Outlet  95      +12  18       65%           0          │
+   914→│  Billboard       41      +3   8        71%           0          │
+   915→│  Transport Road  56      +4   31       80%           2 ⚠        │
+   916→│  Census Proxy    127     +6   15       55%           0          │
+   917→│                                                                 │
+   918→│  Review Queue:                                                   │
+   919→│  ┌────────────────────────────────────────────────────────────┐ │
+   920→│  │ ⚠ Pharmacy near Carrefour - potential duplicate (82% sim)  │ │
+   921→│  │ ⚠ Road segment R-014 - GPS mismatch (450m from photo GPS) │ │
+   922→│  │ ⚠ Transport Road - unusual 31 changes (z-score 2.4)       │ │
+   923→│  │ ● 4 more items pending review                              │ │
+   924→│  └────────────────────────────────────────────────────────────┘ │
+   925→│                                                                 │
+   926→│  Fraud Detection:                                                │
+   927→│  Submissions checked:  312                                       │
+   928→│  GPS match pass:       289 (92.6%)                              │
+   929→│  Geofence pass:        308 (98.7%)                              │
+   930→│  Flagged for review:   23 (7.4%)                                │
+   931→│  Confirmed fraud:      2 (0.6%)                                 │
+   932→│                                                                 │
+   933→└─────────────────────────────────────────────────────────────────┘
+   934→```
+   935→
+   936→### 3.6 Implementing the Metrics Collection
+   937→
+   938→Since ADL runs on Vercel serverless functions (no persistent process), metrics collection is done through:
+   939→
+   940→1. **Sentry transactions** for performance metrics (automatic with SDK)
+   941→2. **Structured console.log** for custom metrics (parsed in Vercel Logs)
+   942→3. **Database queries** for data quality metrics (run by cron jobs)
+   943→4. **Custom telemetry endpoint** for client-side metrics
+   944→
+   945→```typescript
+   946→// api/telemetry/index.ts (NEW)
+   947→// Receives client-side sync metrics from field agents
+   948→
+   949→export async function POST(req: Request): Promise<Response> {
+   950→  const body = await req.json();
+   951→
+   952→  // Validate telemetry payload
+   953→  const { agentId, metrics } = body;
+   954→  if (!agentId || !metrics) {
+   955→    return new Response('Invalid payload', { status: 400 });
+   956→  }
+   957→
+   958→  // Store in database for dashboard queries
+   959→  // Using point_events-style append-only pattern
+   960→  await query(
+   961→    `INSERT INTO agent_telemetry
+   962→     (agent_id, metric_type, value, metadata, created_at)
+   963→     VALUES ($1, $2, $3, $4, NOW())`,
+   964→    [agentId, metrics.type, metrics.value, JSON.stringify(metrics.metadata)]
+   965→  );
+   966→
+   967→  return new Response('OK', { status: 200 });
+   968→}
+   969→```
+   970→
+   971→```typescript
+   972→// lib/client/telemetry.ts (NEW)
+   973→// Sends sync health metrics to server
+   974→
+   975→export async function reportSyncMetrics(metrics: {
+   976→  queueDepth: number;
+   977→  photosPending: number;
+   978→  connectionClass: string;
+   979→  syncSuccessCount: number;
+   980→  syncFailureCount: number;
+   981→  oldestQueueItemAge: number; // minutes
+   982→}) {
+   983→  // Best-effort: do not block the sync loop
+   984→  try {
+   985→    await fetch('/api/telemetry', {
+   986→      method: 'POST',
+   987→      headers: { 'Content-Type': 'application/json' },
+   988→      body: JSON.stringify({
+   989→        agentId: getCurrentUserId(),
+   990→        metrics: {
+   991→          type: 'sync_health',
+   992→          value: metrics.queueDepth,
+   993→          metadata: metrics,
+   994→        },
+   995→      }),
+   996→    });
+   997→  } catch {
+   998→    // Silently ignore telemetry failures
+   999→  }
+  1000→}
+  1001→
+  1002→// Call every 5 minutes from the sync loop
+  1003→```
+  1004→
+  1005→---
+  1006→
+  1007→## 4. Runbooks
+  1008→
+  1009→### Runbook 1: Field Agent Cannot Sync Data
+  1010→
+  1011→```
+  1012→RUNBOOK: FIELD AGENT SYNC FAILURE
+  1013→═══════════════════════════════════
+  1014→
+  1015→SYMPTOMS:
+  1016→  - Agent reports "pending" items not clearing
+  1017→  - Sync status shows orange/red indicator
+  1018→  - Queue depth growing over time
+  1019→  - Agent dashboard shows stale data
+  1020→
+  1021→DIAGNOSIS STEPS:
+  1022→
+  1023→  Step 1: Determine scope
+  1024→    - Is it one agent or all agents?
+  1025→    - Check: Vercel Dashboard > Analytics > recent requests from Cameroon
+  1026→    - If ALL agents affected: likely infrastructure issue → jump to Step 4
+  1027→    - If ONE agent: likely device/network issue → continue
+  1028→
+  1029→  Step 2: Check agent's sync status
+  1030→    - Ask agent to tap the sync indicator and screenshot the detail panel
+  1031→    - Look for:
+  1032→      - Connection class (2G/3G/4G/Offline)
+  1033→      - Queue depth
+  1034→      - Last successful sync timestamp
+  1035→      - Any "failed" items with error messages
+  1036→
+  1037→  Step 3: Check agent's error messages
+  1038→    - If "Outside Bonamoussadi geofence":
+  1039→      Agent is physically outside the pilot zone. Data will be rejected.
+  1040→      Resolution: Agent must be within the bounding box (4.0755-4.0999 N, 9.7185-9.7602 E)
+  1041→
+  1042→    - If "invalid GPS" or fraud flag:
+  1043→      Agent's phone GPS may be inaccurate or spoofed.
+  1044→      Resolution: Ask agent to enable high-accuracy GPS mode, go outside for clear sky,
+  1045→      wait 30 seconds, try again.
+  1046→
+  1047→    - If "Network error" or "timeout":
+  1048→      Connectivity issue. Continue to Step 5.
+  1049→
+  1050→    - If "413 Payload Too Large":
+  1051→      Photo is too big even after compression.
+  1052→      Resolution: Check if compression is working. Agent should restart the app.
+  1053→
+  1054→  Step 4: Check infrastructure health
+  1055→    curl -s https://africandatalayer.vercel.app/api/health | jq .
+  1056→    Expected: { "status": "ok", "db": "ok", "ts": "..." }
+  1057→
+  1058→    If status is "error":
+  1059→      - Check Vercel status: https://www.vercel-status.com/
+  1060→      - Check Neon status: https://neonstatus.com/
+  1061→      - If Vercel is down: wait for recovery. Offline queue will catch up.
+  1062→      - If Neon is down: wait for recovery. Reads fall back to Edge Config.
+  1063→
+  1064→  Step 5: Network issues
+  1065→    - Cameroon network congestion is common, especially:
+  1066→      - 12:00-14:00 (lunch hour peak)
+  1067→      - 18:00-20:00 (evening peak)
+  1068→      - During heavy rain (cell tower interference)
+  1069→    - Resolution:
+  1070→      a. Agent continues capturing offline (data is safe in IndexedDB)
+  1071→      b. Agent syncs from a location with better connectivity later
+  1072→      c. If persistent: agent syncs from WiFi at the team office
+  1073→
+  1074→  Step 6: Force sync from better connection
+  1075→    - Agent goes to team office or WiFi hotspot
+  1076→    - Opens app, taps sync indicator, taps "Force Sync Now"
+  1077→    - Watches queue depth decrease
+  1078→    - If items still fail: screenshot error and escalate
+  1079→
+  1080→RESOLUTION:
+  1081→  - If infrastructure: wait for provider recovery + verify auto-catch-up
+  1082→  - If agent device: clear app cache, restart, retry
+  1083→  - If persistent: factory reset PWA (clear site data in Chrome)
+  1084→
+  1085→ESCALATION:
+  1086→  Level 1: Field supervisor (network/device issues)
+  1087→  Level 2: Engineering team (infrastructure issues)
+  1088→  Level 3: Vercel/Neon support (platform outages)
+  1089→
+  1090→RECOVERY VERIFICATION:
+  1091→  - Agent's queue depth returns to 0
+  1092→  - New submissions appear in admin dashboard
+  1093→  - Run: SELECT COUNT(*) FROM point_events WHERE user_id = '<agent_id>'
+  1094→    AND created_at > NOW() - INTERVAL '1 hour'
+  1095→```
+  1096→
+  1097→### Runbook 2: Photo Upload Failures
+  1098→
+  1099→```
+  1100→RUNBOOK: PHOTO UPLOAD FAILURES
+  1101→════════════════════════════════
+  1102→
+  1103→SYMPTOMS:
+  1104→  - Events created in point_events but photo_url is NULL
+  1105→  - Photo upload success rate drops below 85%
+  1106→  - Agents report "photo pending" status
+  1107→  - Dashboard photos section shows broken images
+  1108→
+  1109→DIAGNOSIS STEPS:
+  1110→
+  1111→  Step 1: Quantify the problem
+  1112→    SQL query:
+  1113→    SELECT
+  1114→      DATE(created_at) AS day,
+  1115→      COUNT(*) AS total_events,
+  1116→      COUNT(photo_url) AS with_photo,
+  1117→      ROUND(COUNT(photo_url)::numeric / COUNT(*) * 100, 1) AS photo_pct
+  1118→    FROM point_events
+  1119→    WHERE created_at > NOW() - INTERVAL '7 days'
+  1120→      AND source = 'field_agent'
+  1121→    GROUP BY DATE(created_at)
+  1122→    ORDER BY day DESC;
+  1123→
+  1124→    Healthy: > 85% photo attachment rate
+  1125→    Problem: < 70% photo attachment rate
+  1126→
+  1127→  Step 2: Check Vercel Blob storage
+  1128→    - Vercel Dashboard > Storage > Blob
+  1129→    - Check: is storage approaching the 5 GB limit?
+  1130→    - Check: are there recent failed uploads in the logs?
+  1131→
+  1132→    If storage is full:
+  1133→      Resolution: Archive old photos, upgrade plan, or migrate to Cloudflare R2
+  1134→
+  1135→  Step 3: Check photo sizes
+  1136→    SQL query:
+  1137→    SELECT
+  1138→      AVG(LENGTH(photo_url)) AS avg_url_length,
+  1139→      COUNT(CASE WHEN photo_url IS NOT NULL THEN 1 END) AS uploaded,
+  1140→      COUNT(CASE WHEN photo_url IS NULL AND source = 'field_agent' THEN 1 END) AS missing
+  1141→    FROM point_events
+  1142→    WHERE created_at > NOW() - INTERVAL '24 hours';
+  1143→
+  1144→    Check Vercel logs for rejected uploads:
+  1145→    vercel logs --filter "413\|payload\|too large" --since 24h
+  1146→
+  1147→    If photos are being rejected for size:
+  1148→      Resolution: Verify client-side compression is working.
+  1149→      Check: Is the compression config using quality 0.7 and max 1280px?
+  1150→
+  1151→  Step 4: Check network conditions
+  1152→    - Photo uploads require 3G+ connectivity (Priority 3 in sync engine)
+  1153→    - If most agents are on 2G, photos will be queued indefinitely
+  1154→    - Check agent telemetry for connection class distribution
+  1155→
+  1156→    If persistent 2G:
+  1157→      Resolution: Lower photo quality to 0.5, reduce max dimension to 800px,
+  1158→      or allow photo upload on 2G for small files (< 200KB)
+  1159→
+  1160→  Step 5: Check for Vercel Blob API errors
+  1161→    Vercel Dashboard > Logs > filter by "blob" or "upload"
+  1162→    Common errors:
+  1163→      - 403: Token expired or invalid → rotate BLOB_READ_WRITE_TOKEN
+  1164→      - 500: Vercel Blob service issue → check Vercel status page
+  1165→      - Timeout: Network too slow → photos will retry automatically
+  1166→
+  1167→RESOLUTION:
+  1168→  - Storage full: archive + upgrade
+  1169→  - Compression broken: fix client code, deploy
+  1170→  - Network: adjust quality settings, batch uploads to WiFi windows
+  1171→  - Token issue: rotate BLOB_READ_WRITE_TOKEN in Vercel env vars
+  1172→
+  1173→ESCALATION:
+  1174→  Level 1: Engineering team (code/config issues)
+  1175→  Level 2: Vercel support (platform issues)
+  1176→```
+  1177→
+  1178→### Runbook 3: Database Performance Degradation
+  1179→
+  1180→```
+  1181→RUNBOOK: DATABASE PERFORMANCE DEGRADATION
+  1182→═══════════════════════════════════════════
+  1183→
+  1184→SYMPTOMS:
+  1185→  - API response times spike (> 3s p95)
+  1186→  - /api/health returns slowly or times out
+  1187→  - Sentry shows StorageUnavailableError increase
+  1188→  - Dashboard fails to load or loads partially
+  1189→  - Snapshot engine cron fails or times out
+  1190→
+  1191→DIAGNOSIS STEPS:
+  1192→
+  1193→  Step 1: Check Neon dashboard
+  1194→    - Neon Console > Project > Monitoring
+  1195→    - Check: Active connections (max 20 on free tier)
+  1196→    - Check: Compute hours consumed (max 190/month)
+  1197→    - Check: CPU and memory usage
+  1198→
+  1199→    If compute hours exhausted:
+  1200→      Resolution: Upgrade to Launch plan ($19/mo) or wait for month reset.
+  1201→      Neon suspends compute after 190 hours on free tier.
+  1202→
+  1203→    If too many connections:
+  1204→      Resolution: Check POSTGRES_POOL_MAX (currently 5).
+  1205→      Reduce if multiple preview deployments are sharing the same branch.
+  1206→      Kill idle connections: SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+  1207→        WHERE state = 'idle' AND query_start < NOW() - INTERVAL '10 minutes';
+  1208→
+  1209→  Step 2: Identify slow queries
+  1210→    SQL query (if pg_stat_statements is enabled):
+  1211→    SELECT query, calls, mean_exec_time, total_exec_time
+  1212→    FROM pg_stat_statements
+  1213→    ORDER BY mean_exec_time DESC
+  1214→    LIMIT 10;
+  1215→
+  1216→    Common slow query patterns:
+  1217→    - Full table scan on point_events without index
+  1218→    - Snapshot engine projecting all events (expected to be slow at scale)
+  1219→    - Missing index on new columns (e.g., review_status, content_hash)
+  1220→
+  1221→  Step 3: Check table sizes
+  1222→    SELECT relname, pg_size_pretty(pg_total_relation_size(oid))
+  1223→    FROM pg_class
+  1224→    WHERE relkind = 'r'
+  1225→    ORDER BY pg_total_relation_size(oid) DESC;
+  1226→
+  1227→    If point_events > 50MB: consider partitioning by year
+  1228→    If snapshots > 100MB: archive old snapshots to Vercel Blob
+  1229→
+  1230→  Step 4: Check index health
+  1231→    SELECT indexrelname, idx_scan, idx_tup_read, idx_tup_fetch
+  1232→    FROM pg_stat_user_indexes
+  1233→    ORDER BY idx_scan ASC;
+  1234→
+  1235→    Unused indexes: drop to save space
+  1236→    Missing indexes: add based on slow query analysis
+  1237→
+  1238→  Step 5: Neon cold start
+  1239→    Neon free tier suspends compute after 5 minutes of inactivity.
+  1240→    First query after suspension takes 1-3 seconds (cold start).
+  1241→    This is expected behavior, not a bug.
+  1242→
+  1243→    If cold starts cause problems:
+  1244→      Resolution: Add a keep-alive query in the health check cron,
+  1245→      or upgrade to Neon Launch ($19/mo) for always-on compute.
+  1246→
+  1247→RESOLUTION:
+  1248→  - Compute hours exhausted: upgrade plan
+  1249→  - Connection pool exhaustion: reduce pool size, kill idle connections
+  1250→  - Slow queries: add indexes, optimize queries
+  1251→  - Cold start: keep-alive cron or upgrade
+  1252→  - Table bloat: VACUUM ANALYZE, archival
+  1253→
+  1254→ESCALATION:
+  1255→  Level 1: Engineering team (query optimization)
+  1256→  Level 2: Neon support (platform issues)
+  1257→```
+  1258→
+  1259→### Runbook 4: Supabase/Neon Outage
+  1260→
+  1261→```
+  1262→RUNBOOK: DATABASE OUTAGE (NEON)
+  1263→════════════════════════════════
+  1264→
+  1265→SYMPTOMS:
+  1266→  - /api/health returns { "status": "error", "db": "error" }
+  1267→  - All API POST requests fail with 503
+  1268→  - API GET requests may still work (Edge Config fallback)
+  1269→  - Sentry floods with StorageUnavailableError
+  1270→
+  1271→DIAGNOSIS STEPS:
+  1272→
+  1273→  Step 1: Confirm outage
+  1274→    - Check Neon status page: https://neonstatus.com/
+  1275→    - Check Vercel status page: https://www.vercel-status.com/
+  1276→    - Run: curl -s https://africandatalayer.vercel.app/api/health | jq .
+  1277→
+  1278→  Step 2: Verify fallback is active
+  1279→    - The Edge Config fallback (edgeFallbackStore.ts) should automatically
+  1280→      serve read requests from cached seed data.
+  1281→    - Verify: API GET endpoints return data (even if stale).
+  1282→    - Write operations (POST /api/submissions) will fail — this is expected.
+  1283→
+  1284→  Step 3: Communicate to field team
+  1285→    - Notify field supervisor: "Database maintenance in progress.
+  1286→      Agents can continue capturing. Data is saved locally and will
+  1287→      sync automatically when service resumes."
+  1288→    - Agents' offline queues will accumulate submissions.
+  1289→
+  1290→  Step 4: Monitor recovery
+  1291→    - Watch Neon status page for resolution
+  1292→    - When resolved, run: curl -s .../api/health | jq .
+  1293→    - Expect a burst of sync traffic as all agents flush their queues
+  1294→
+  1295→  Step 5: Post-recovery verification
+  1296→    - Check for data loss:
+  1297→      SELECT COUNT(*), MIN(created_at), MAX(created_at)
+  1298→      FROM point_events
+  1299→      WHERE created_at > NOW() - INTERVAL '24 hours';
+  1300→
+  1301→    - Check for duplicate submissions (idempotency keys should prevent these):
+  1302→      SELECT idempotency_key, COUNT(*)
+  1303→      FROM point_events
+  1304→      WHERE created_at > NOW() - INTERVAL '24 hours'
+  1305→      GROUP BY idempotency_key
+  1306→      HAVING COUNT(*) > 1;
+  1307→
+  1308→    - Re-run snapshot engine if outage spanned a Monday cron:
+  1309→      curl -s "https://africandatalayer.vercel.app/api/analytics?view=cron"
+  1310→
+  1311→RESOLUTION:
+  1312→  - Neon planned maintenance: wait for completion (usually < 30 min)
+  1313→  - Neon unplanned outage: wait for provider recovery
+  1314→  - If outage > 4 hours: consider emergency database restore from backup
+  1315→
+  1316→ESCALATION:
+  1317→  Level 1: Engineering team (verify fallback, communicate to field)
+  1318→  Level 2: Neon support (open ticket)
+  1319→  Level 3: Restore from backup (if data loss suspected)
+  1320→```
+  1321→
+  1322→### Runbook 5: Data Quality Alert (Anomalous Submissions)
+  1323→
+  1324→```
+  1325→RUNBOOK: DATA QUALITY ANOMALY
+  1326→═══════════════════════════════
+  1327→
+  1328→SYMPTOMS:
+  1329→  - Snapshot engine detects z-score > 2 for a vertical
+  1330→  - Unusual spike in new/removed/changed entities
+  1331→  - Admin dashboard shows anomaly warning badge
+  1332→  - Example: "Mobile money: 15 agents removed this week (z-score 3.1)"
+  1333→
+  1334→DIAGNOSIS STEPS:
+  1335→
+  1336→  Step 1: Identify the anomaly
+  1337→    SQL query:
+  1338→    SELECT vertical_id, metric, value, z_score, direction
+  1339→    FROM snapshot_stats
+  1340→    WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM snapshot_stats)
+  1341→      AND ABS(z_score) > 2
+  1342→    ORDER BY ABS(z_score) DESC;
+  1343→
+  1344→  Step 2: Determine if anomaly is real or data error
+  1345→    Check recent events for the affected vertical:
+  1346→    SELECT user_id, event_type, COUNT(*), MIN(created_at), MAX(created_at)
+  1347→    FROM point_events
+  1348→    WHERE category = '<affected_vertical>'
+  1349→      AND created_at > NOW() - INTERVAL '7 days'
+  1350→    GROUP BY user_id, event_type
+  1351→    ORDER BY COUNT(*) DESC;
+  1352→
+  1353→    Red flags:
+  1354→    - One agent submitted > 50% of the changes (possible fraud or error)
+  1355→    - All changes in a 10-minute window (possible bulk upload error)
+  1356→    - All changes have identical details (copy-paste submissions)
+  1357→
+  1358→  Step 3: Cross-reference with field reality
+  1359→    - Contact field supervisor: "Did something unusual happen in Bonamoussadi
+  1360→      this week? Municipal crackdown? New business openings? Seasonal change?"
+  1361→    - Check: is it rainy season? (flooding can close many road segments at once)
+  1362→    - Check: was there a regulatory event? (e.g., pharmacy inspection closing informal sellers)
+  1363→
+  1364→  Step 4: Resolve
+  1365→    If REAL anomaly (confirmed by field supervisor):
+  1366→      - Accept the data
+  1367→      - Add context note to the snapshot_stats record
+  1368→      - Adjust z-score baseline if this is a new normal
+  1369→
+  1370→    If DATA ERROR (one agent submitted bad data):
+  1371→      - Flag the agent's submissions for review
+  1372→      - Use admin review queue to approve/reject individually
+  1373→      - If systematic fraud: deactivate agent, investigate
+  1374→
+  1375→    If SYSTEM ERROR (bug in snapshot engine):
+  1376→      - Check snapshot engine logs
+  1377→      - Re-run snapshot: curl "...api/analytics?view=cron"
+  1378→      - Fix bug, deploy
+  1379→
+  1380→RESOLUTION:
+  1381→  - Real anomaly: document and accept
+  1382→  - Data error: review and correct via admin queue
+  1383→  - System error: fix and re-run
+  1384→
+  1385→ESCALATION:
+  1386→  Level 1: Data manager (anomaly review)
+  1387→  Level 2: Field supervisor (ground truth verification)
+  1388→  Level 3: Engineering team (system errors)
+  1389→```
+  1390→
+  1391→### Runbook 6: New Vertical Onboarding
+  1392→
+  1393→```
+  1394→RUNBOOK: ADDING A NEW DATA VERTICAL
+  1395→═════════════════════════════════════
+  1396→
+  1397→CONTEXT: Adding a new vertical (e.g., "water_point", "school", "clinic")
+  1398→to the ADL platform.
+  1399→
+  1400→STEPS:
+  1401→
+  1402→  Step 1: Define the vertical schema (Data team)
+  1403→    - Add to shared/verticals.ts:
+  1404→      {
+  1405→        id: 'water_point',
+  1406→        labelEn: 'Water Point',
+  1407→        labelFr: 'Point d\'eau',
+  1408→        emoji: '💧',
+  1409→        createRequiredFields: ['name', 'waterType'],
+  1410→        enrichableFields: ['isActive', 'waterQuality', 'operatingHours'],
+  1411→        allFields: ['name', 'waterType', 'isActive', 'waterQuality',
+  1412→                    'operatingHours', 'provider', 'isFree'],
+  1413→      }
+  1414→
+  1415→  Step 2: Update type definitions
+  1416→    - Add to shared/types.ts: new detail interface for the vertical
+  1417→    - Add to the VerticalId union type
+  1418→
+  1419→  Step 3: Update geofence (if needed)
+  1420→    - If the vertical operates in a different area, update shared/geofence.ts
+  1421→    - Usually: same Bonamoussadi bounding box applies
+  1422→
+  1423→  Step 4: Add UI components
+  1424→    - Add vertical icon to components/shared/VerticalIcon.tsx
+  1425→    - Add capture form fields to ContributionFlow.tsx
+  1426→    - Add to filter options in Home.tsx, Analytics.tsx, DeltaDashboard.tsx
+  1427→
+  1428→  Step 5: Update snapshot engine
+  1429→    - lib/server/snapshotEngine.ts: add vertical to snapshot projection
+  1430→    - lib/server/pointProjection.ts: add validation rules for new fields
+  1431→    - Verify: does projectPointsFromEvents() handle the new category?
+  1432→
+  1433→  Step 6: Write tests
+  1434→    - Add validation tests to tests/submissionsValidation.test.ts
+  1435→    - Test: createRequiredFields are enforced
+  1436→    - Test: enrichableFields are validated
+  1437→    - Test: snapshot projection includes new vertical
+  1438→
+  1439→  Step 7: Database migration (if new columns needed)
+  1440→    - Usually: no migration needed (JSONB details field handles new data)
+  1441→    - If new indexed field: add migration file
+  1442→
+  1443→  Step 8: Deploy
+  1444→    - Create PR: feature/add-water-point-vertical
+  1445→    - CI runs tests
+  1446→    - Preview deployment for QA
+  1447→    - Merge to staging, verify
+  1448→    - Merge to main, deploy to production
+  1449→
+  1450→  Step 9: Train field agents
+  1451→    - Update capture training materials
+  1452→    - Brief field supervisor on new vertical requirements
+  1453→    - Assign zones for new vertical collection
+  1454→
+  1455→  Step 10: Verify data flow
+  1456→    - Submit test data for new vertical
+  1457→    - Verify it appears in dashboard
+  1458→    - Verify snapshot engine includes it in weekly run
+  1459→    - Verify delta computation works
+  1460→
+  1461→ESTIMATED EFFORT: 2-3 developer days
+  1462→RISK: Low (JSONB schema is flexible; no database migration usually needed)
+  1463→```
+  1464→
+  1465→### Runbook 7: New City/Zone Expansion
+  1466→
+  1467→```
+  1468→RUNBOOK: EXPANDING TO A NEW CITY OR ZONE
+  1469→══════════════════════════════════════════
+  1470→
+  1471→CONTEXT: Expanding data collection from Bonamoussadi to a new area
+  1472→(e.g., Akwa in Douala, or Yaounde).
+  1473→
+  1474→STEPS:
+  1475→
+  1476→  Step 1: Define new geofence
+  1477→    - Determine bounding box for the new zone
+  1478→    - Add to shared/geofence.ts:
+  1479→
+  1480→      export const ZONES = {
+  1481→        bonamoussadi: {
+  1482→          minLat: 4.0755, maxLat: 4.0999,
+  1483→          minLng: 9.7185, maxLng: 9.7602,
+  1484→          label: 'Bonamoussadi',
+  1485→        },
+  1486→        akwa: {
+  1487→          minLat: 4.0400, maxLat: 4.0600,
+  1488→          minLng: 9.6900, maxLng: 9.7200,
+  1489→          label: 'Akwa',
+  1490→        },
+  1491→      };
+  1492→
+  1493→      export function isWithinAnyZone(coords: { latitude: number; longitude: number }): string | null {
+  1494→        for (const [zoneId, bounds] of Object.entries(ZONES)) {
+  1495→          if (coords.latitude >= bounds.minLat && coords.latitude <= bounds.maxLat &&
+  1496→              coords.longitude >= bounds.minLng && coords.longitude <= bounds.maxLng) {
+  1497→            return zoneId;
+  1498→          }
+  1499→        }
+  1500→        return null;
+  1501→      }
+  1502→
+  1503→  Step 2: Update API geofence validation
+  1504→    - api/submissions/index.ts: replace isWithinBonamoussadi() with isWithinAnyZone()
+  1505→    - Return the zone_id in the response for client-side zone awareness
+  1506→
+  1507→  Step 3: Seed data for new zone
+  1508→    - Run OSM Overpass query for the new bounding box:
+  1509→      [out:json][timeout:25];
+  1510→      area["name"="Akwa"]->.searchArea;
+  1511→      (
+  1512→        node["amenity"~"pharmacy|fuel|bank"](area.searchArea);
+  1513→        node["shop"~"alcohol|kiosk"](area.searchArea);
+  1514→      );
+  1515→      out body;
+  1516→    - Import via: node scripts/import-bonamoussadi-csv.mjs (renamed to import-osm-data.mjs)
+  1517→
+  1518→  Step 4: Create zone assignments
+  1519→    - Use admin API to create assignments for field agents in the new zone
+  1520→    - Assign verticals based on zone characteristics
+  1521→
+  1522→  Step 5: Database considerations
+  1523→    - No schema changes needed (zone_id derived from coordinates)
+  1524→    - Add zone_id column to point_events if query filtering by zone becomes slow:
+  1525→      ALTER TABLE point_events ADD COLUMN zone_id TEXT;
+  1526→      CREATE INDEX idx_point_events_zone ON point_events (zone_id, created_at);
+  1527→
+  1528→  Step 6: Infrastructure scaling
+  1529→    - Check: Does the current infrastructure handle 2x data volume?
+  1530→    - Neon free tier: 0.5 GB. With two zones: may need upgrade to Launch ($19/mo)
+  1531→    - Vercel: bandwidth may increase. Monitor usage.
+  1532→    - Vercel Blob: photo storage doubles. Monitor against 5 GB limit.
+  1533→
+  1534→  Step 7: Update dashboards
+  1535→    - Add zone filter to all dashboard views
+  1536→    - Add zone-specific metrics and comparisons
+  1537→    - Update the Leaflet map default center and zoom to include new zone
+  1538→
+  1539→  Step 8: Recruit and train field agents
+  1540→    - Recruit agents who know the new zone
+  1541→    - Provide the same training as Bonamoussadi pilot
+  1542→    - Assign zone-specific mobile data bundles
+  1543→
+  1544→  Step 9: Deploy and verify
+  1545→    - Deploy geofence update
+  1546→    - Test with submissions from new zone
+  1547→    - Verify snapshot engine processes both zones
+  1548→    - Verify delta computation separates or aggregates by zone
+  1549→
+  1550→ESTIMATED EFFORT: 1-2 developer weeks
+  1551→DEPENDENCIES: Field team recruitment for new zone
+  1552→RISK: Medium (scaling may hit free tier limits; new zone may have different
+  1553→      network conditions requiring sync engine tuning)
+  1554→```
+  1555→
+  1556→---
+  1557→
+  1558→## 5. Implementation Roadmap
+  1559→
+  1560→### Phase 1: Pilot Infrastructure (Weeks -2 to 0, before pilot launch)
+  1561→
+  1562→**Goal:** Make the existing system production-ready for a 6-week pilot with 10-20 field agents in Bonamoussadi.
+  1563→
+  1564→| Task | Description | Effort | Dependency | Risk |
+  1565→|---|---|---|---|---|
+  1566→| **P1.1** Set up CI pipeline | GitHub Actions: lint, typecheck, test on PR | 1 day | None | Low |
+  1567→| **P1.2** Add ESLint + Prettier | Configure linting and formatting rules | 0.5 day | None | Low |
+  1568→| **P1.3** Add `test` script to package.json | `"test": "node --test tests/*.test.ts"` with TypeScript loader | 0.5 day | None | Low |
+  1569→| **P1.4** Integrate Sentry | Client-side + server-side error tracking | 1 day | None | Low |
+  1570→| **P1.5** Set up staging environment | Neon staging branch + Vercel preview config | 1 day | None | Low |
+  1571→| **P1.6** Create migration framework | `scripts/migrate.mjs` + initial migration files | 1 day | P1.5 | Low |
+  1572→| **P1.7** Run database migrations | `content_hash`, `collection_assignments`, `api_keys`, `monthly_stats` tables | 0.5 day | P1.6 | Medium |
+  1573→| **P1.8** Add structured logging | Consistent JSON logging in all API routes | 1 day | None | Low |
+  1574→| **P1.9** Set up uptime monitoring | UptimeRobot on `/api/health` with email alerts | 0.5 day | None | Low |
+  1575→| **P1.10** Add enhanced cron jobs | Daily road snapshot, monthly rollup, weekly backup | 1 day | P1.7 | Low |
+  1576→| **P1.11** Add `vercel.json` headers | Cache-Control headers for API routes | 0.5 day | None | Low |
+  1577→| **P1.12** Write operational runbooks | Document in `docs/runbooks/` (markdown) | 1 day | None | Low |
+  1578→| **P1.13** Create `.env.example` update | Add new env vars (SENTRY_DSN, etc.) | 0.5 day | P1.4 | Low |
+  1579→
+  1580→**Phase 1 total estimated effort:** 10 developer-days (2 weeks for 1 developer)
+  1581→
+  1582→**Phase 1 deliverables:**
+  1583→- CI pipeline running on every PR
+  1584→- Sentry error tracking in production
+  1585→- Staging environment with separate database
+  1586→- Database migration framework
+  1587→- Uptime monitoring with alerts
+  1588→- Operational runbooks documented
+  1589→
+  1590→### Phase 2: Production Hardening (Weeks 1-3 of pilot)
+  1591→
+  1592→**Goal:** Harden the system based on real-world pilot data. Fix issues discovered during first week of field operations.
+  1593→
+  1594→| Task | Description | Effort | Dependency | Risk |
+  1595→|---|---|---|---|---|
+  1596→| **P2.1** Enhance offline queue | Add priority levels, photo staging store, local POI cache | 3 days | P1.7 | Medium |
+  1597→| **P2.2** Add bandwidth-aware sync | Navigator.connection API + HEAD probe + priority filtering | 2 days | P2.1 | Medium |
+  1598→| **P2.3** Build sync status UI | Persistent indicator + detail panel (as designed by Cloud Architect) | 2 days | P2.1 | Low |
+  1599→| **P2.4** Add content-hash dedup | Server-side SHA-256 dedup on submissions | 1 day | P1.7 | Low |
+  1600→| **P2.5** Build admin review queue | API endpoints + UI for flagged submissions | 3 days | P1.7 | Medium |
+  1601→| **P2.6** Build client data API | `/api/data/*` endpoints with API key auth | 2 days | P1.7 | Medium |
+  1602→| **P2.7** Add client telemetry | `/api/telemetry` endpoint + client-side metrics collection | 1 day | P2.2 | Low |
+  1603→| **P2.8** Build ops dashboard | Grafana-like view using Recharts (already in deps) | 3 days | P2.7 | Medium |
+  1604→| **P2.9** Weekly backup automation | Cron-triggered `pg_dump` to Vercel Blob | 1 day | P1.10 | Low |
+  1605→| **P2.10** Tune sync engine | Adjust timeouts, backoff, compression based on field data | 2 days | P2.2 | Medium |
+  1606→| **P2.11** Add E2E test skeleton | Playwright setup with mobile viewport + offline simulation | 2 days | P1.1 | Low |
+  1607→
+  1608→**Phase 2 total estimated effort:** 22 developer-days (3 weeks for 1-2 developers)
+  1609→
+  1610→**Phase 2 deliverables:**
+  1611→- Bandwidth-aware offline sync with priority levels
+  1612→- Admin review queue for flagged submissions
+  1613→- Client-facing data API with API key authentication
+  1614→- Operations dashboard
+  1615→- Automated weekly database backups
+  1616→- E2E test framework
+  1617→
+  1618→### Phase 3: Scale-Ready Infrastructure (Weeks 4-6 of pilot + post-pilot)
+  1619→
+  1620→**Goal:** Prepare for expansion beyond Bonamoussadi. Multi-zone support, performance optimization, cost efficiency.
+  1621→
+  1622→| Task | Description | Effort | Dependency | Risk |
+  1623→|---|---|---|---|---|
+  1624→| **P3.1** Multi-zone geofence | Replace single bounding box with zone registry | 2 days | None | Low |
+  1625→| **P3.2** Zone-based assignments | Update assignment system for multi-zone | 1 day | P3.1 | Low |
+  1626→| **P3.3** Dashboard zone filtering | Add zone selector to all dashboards | 2 days | P3.1 | Low |
+  1627→| **P3.4** Database partitioning | Partition point_events by created_at (yearly) | 2 days | None | Medium |
+  1628→| **P3.5** Photo archival pipeline | Compress old photos to thumbnails, move originals to cold storage | 2 days | None | Medium |
+  1629→| **P3.6** Cloudflare R2 migration | Migrate photo storage from Vercel Blob to R2 (if > 5 GB) | 3 days | P3.5 | Medium |
+  1630→| **P3.7** API rate limiting | Per-client rate limits for data consumer API | 1 day | P2.6 | Low |
+  1631→| **P3.8** Audit logging | Compliance logging for Cameroon Law 2024/017 | 2 days | None | Low |
+  1632→| **P3.9** Load testing | Simulate 100+ agents, 1000+ daily submissions | 2 days | P3.4 | Low |
+  1633→| **P3.10** Native app evaluation | Decision on PWA vs React Native based on pilot feedback | 3 days | None | Medium |
+  1634→| **P3.11** Neon upgrade evaluation | Determine if free tier is sufficient or upgrade needed | 0.5 day | None | Low |
+  1635→| **P3.12** Performance optimization | Index tuning, query optimization based on real workload | 2 days | P3.9 | Medium |
+  1636→
+  1637→**Phase 3 total estimated effort:** 22.5 developer-days (3-4 weeks for 1-2 developers)
+  1638→
+  1639→**Phase 3 deliverables:**
+  1640→- Multi-zone support ready for new city expansion
+  1641→- Database partitioned for long-term growth
+  1642→- Photo storage cost-optimized
+  1643→- Load tested for 10x scale
+  1644→- Decision document on native app migration
+  1645→- Audit logging for regulatory compliance
+  1646→
+  1647→### Implementation Timeline
+  1648→
+  1649→```
+  1650→TIMELINE (14 weeks total)
+  1651→══════════════════════════
+  1652→
+  1653→Week -2  │ P1: CI, linting, Sentry, staging env
+  1654→Week -1  │ P1: Migrations, monitoring, runbooks, cron
+  1655→─────────┼──────────────────────────────────────────
+  1656→Week 1   │ PILOT STARTS │ P2: Enhanced offline queue, bandwidth sync
+  1657→Week 2   │              │ P2: Admin review queue, sync status UI
+  1658→Week 3   │              │ P2: Data API, telemetry, ops dashboard
+  1659→Week 4   │              │ P2: Backup automation, sync tuning, E2E tests
+  1660→Week 5   │              │ P3: Multi-zone geofence, partitioning
+  1661→Week 6   │ PILOT ENDS   │ P3: Photo archival, R2 eval, load testing
+  1662→─────────┼──────────────────────────────────────────
+  1663→Week 7-8 │ POST-PILOT   │ P3: Native app eval, audit logging, optimization
+  1664→```
+  1665→
+  1666→---
+  1667→
+  1668→## 6. Developer Experience
+  1669→
+  1670→### 6.1 Local Development Setup Guide
+  1671→
+  1672→```bash
+  1673→# ═══════════════════════════════════════════════════
+  1674→# ADL Local Development Setup
+  1675→# ═══════════════════════════════════════════════════
+  1676→
+  1677→# Prerequisites:
+  1678→# - Node.js 20+ (recommended: install via nvm)
+  1679→# - Git
+  1680→# - VS Code (recommended)
+  1681→# - Vercel CLI
+  1682→
+  1683→# 1. Clone the repository
+  1684→git clone https://github.com/<org>/africandatalayer.git
+  1685→cd africandatalayer
+  1686→
+  1687→# 2. Install dependencies
+  1688→npm install
+  1689→
+  1690→# 3. Install Vercel CLI (if not already installed)
+  1691→npm install -g vercel
+  1692→
+  1693→# 4. Link to Vercel project
+  1694→vercel link
+  1695→# Select: "Link to existing project"
+  1696→# Project: africandatalayer
+  1697→
+  1698→# 5. Pull environment variables
+  1699→vercel env pull .env.local
+  1700→# This creates .env.local with all required secrets for local development.
+  1701→# The database URL will point to the Neon dev branch.
+  1702→
+  1703→# 6. Start the development server
+  1704→npm run dev
+  1705→# Frontend: http://localhost:5173
+  1706→# API proxy: localhost:5173/api/* → Vercel dev server
+  1707→
+  1708→# Alternative: run with Vercel dev for full serverless function emulation
+  1709→vercel dev
+  1710→# This runs both frontend and API functions locally, matching production behavior.
+  1711→
+  1712→# 7. Run tests
+  1713→npm test
+  1714→# Runs all tests in tests/*.test.ts using Node.js built-in test runner
+  1715→
+  1716→# 8. Run type checking
+  1717→npx tsc --noEmit
+  1718→# Type-checks all TypeScript files without emitting output
+  1719→
+  1720→# 9. Run linting (after P1.2 is complete)
+  1721→npx eslint .
+  1722→npx prettier --check .
+  1723→
+  1724→# 10. Run database migrations against dev branch
+  1725→ADL_POSTGRES_URL="<dev-branch-url>" node scripts/migrate.mjs
+  1726→
+  1727→# ═══════════════════════════════════════════════════
+  1728→# Common development tasks
+  1729→# ═══════════════════════════════════════════════════
+  1730→
+  1731→# Seed test data
+  1732→npm run seed:submissions
+  1733→
+  1734→# Import OSM data for Bonamoussadi
+  1735→npm run import:bonamoussadi
+  1736→
+  1737→# Backfill EXIF fraud data
+  1738→npm run backfill:exif
+  1739→
+  1740→# View Vercel logs in real-time
+  1741→vercel logs --follow
+  1742→
+  1743→# Deploy preview (without pushing to Git)
+  1744→vercel deploy
+  1745→
+  1746→# Open Neon console for SQL queries
+  1747→# https://console.neon.tech/ > select project > select dev branch > SQL Editor
+  1748→```
+  1749→
+  1750→**VS Code recommended extensions (`.vscode/extensions.json`):**
+  1751→
+  1752→```json
+  1753→{
+  1754→  "recommendations": [
+  1755→    "dbaeumer.vscode-eslint",
+  1756→    "esbenp.prettier-vscode",
+  1757→    "bradlc.vscode-tailwindcss",
+  1758→    "ms-vscode.vscode-typescript-next",
+  1759→    "streetsidesoftware.code-spell-checker"
+  1760→  ]
+  1761→}
+  1762→```
+  1763→
+  1764→**VS Code workspace settings (`.vscode/settings.json`):**
+  1765→
+  1766→```json
+  1767→{
+  1768→  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  1769→  "editor.formatOnSave": true,
+  1770→  "editor.codeActionsOnSave": {
+  1771→    "source.fixAll.eslint": "explicit"
+  1772→  },
+  1773→  "typescript.tsdk": "node_modules/typescript/lib",
+  1774→  "files.exclude": {
+  1775→    "node_modules": true,
+  1776→    "dist": true
+  1777→  }
+  1778→}
+  1779→```
+  1780→
+  1781→### 6.2 Testing Strategy
+  1782→
+  1783→```
+  1784→TESTING PYRAMID
+  1785→════════════════
+  1786→
+  1787→         ┌──────────┐
+  1788→         │   E2E    │  Playwright (Phase 2)
+  1789→         │  ~10     │  Critical user flows
+  1790→         │  tests   │  Mobile viewport + offline
+  1791→         ├──────────┤
+  1792→         │          │
+  1793→         │ Integra- │  Node.js test runner
+  1794→         │  tion    │  API endpoint tests
+  1795→         │  ~30     │  Database interaction
+  1796→         │  tests   │  Sync engine tests
+  1797→         ├──────────┤
+  1798→         │          │
+  1799→         │  Unit    │  Node.js test runner (existing)
+  1800→         │  ~50+    │  Pure function tests
+  1801→         │  tests   │  Validation, projection, geofence
+  1802→         │          │  fraud detection, identifier gen
+  1803→         └──────────┘
+  1804→```
+  1805→
+  1806→**Unit tests (existing + additions):**
+  1807→
+  1808→```
+  1809→tests/
+  1810→├── submissionsValidation.test.ts    (existing - geofence, validation)
+  1811→├── submissionFraud.test.ts          (existing - fraud detection)
+  1812→├── submissionVisibility.test.ts     (existing - access control)
+  1813→├── pointProjection.test.ts          (existing - event projection)
+  1814→├── identifierNormalization.test.ts  (existing - ID generation)
+  1815→├── deviceProfile.test.ts            (existing - device fingerprinting)
+  1816→├── importBonamoussadiCsv.test.ts    (existing - CSV import)
+  1817→├── aiSearchApi.test.ts              (existing - Gemini integration)
+  1818→├── contentHash.test.ts              (NEW - dedup hash computation)
+  1819→├── priorityQueue.test.ts            (NEW - sync priority ordering)
+  1820→├── photoCompression.test.ts         (NEW - compression config)
+  1821→├── bandwidthDetection.test.ts       (NEW - connection classification)
+  1822→├── zoneGeofence.test.ts             (NEW - multi-zone geofence)
+  1823→└── deltaComputation.test.ts         (NEW - snapshot delta logic)
+  1824→```
+  1825→
+  1826→**Integration tests (new):**
+  1827→
+  1828→```
+  1829→tests/integration/
+  1830→├── submissionApi.test.ts            (POST + GET /api/submissions)
+  1831→├── analyticsApi.test.ts             (GET /api/analytics)
+  1832→├── healthApi.test.ts                (GET /api/health)
+  1833→├── reviewQueue.test.ts              (admin review workflow)
+  1834→├── dataExport.test.ts               (CSV + GeoJSON export)
+  1835→├── snapshotEngine.test.ts           (full snapshot cycle)
+  1836→└── migrationRunner.test.ts          (migration idempotency)
+  1837→```
+  1838→
+  1839→**E2E tests (Phase 2, Playwright):**
+  1840→
+  1841→```
+  1842→e2e/
+  1843→├── login.spec.ts                    (email/password login flow)
+  1844→├── submission.spec.ts               (create POI with photo)
+  1845→├── offline-sync.spec.ts             (capture offline, sync when online)
+  1846→├── admin-review.spec.ts             (review flagged submission)
+  1847→├── dashboard.spec.ts                (analytics dashboard loads)
+  1848→└── mobile-viewport.spec.ts          (responsive design on 360x640)
+  1849→```
+  1850→
+  1851→**Add to `package.json`:**
+  1852→
+  1853→```json
+  1854→{
+  1855→  "scripts": {
+  1856→    "dev": "vite",
+  1857→    "build": "vite build",
+  1858→    "preview": "vite preview",
+  1859→    "test": "node --import tsx --test tests/*.test.ts",
+  1860→    "test:watch": "node --import tsx --test --watch tests/*.test.ts",
+  1861→    "test:integration": "node --import tsx --test tests/integration/*.test.ts",
+  1862→    "test:e2e": "npx playwright test",
+  1863→    "lint": "eslint .",
+  1864→    "lint:fix": "eslint . --fix",
+  1865→    "format": "prettier --write .",
+  1866→    "format:check": "prettier --check .",
+  1867→    "typecheck": "tsc --noEmit",
+  1868→    "migrate": "node scripts/migrate.mjs",
+  1869→    "migrate:dry": "node scripts/migrate.mjs --dry-run",
+  1870→    "seed:submissions": "node scripts/seed-edge-submissions.mjs",
+  1871→    "import:bonamoussadi": "node scripts/import-bonamoussadi-csv.mjs",
+  1872→    "migrate:edge-to-postgres": "node scripts/migrate-edge-config-to-postgres.mjs",
+  1873→    "backfill:exif": "node scripts/backfill-fraud-exif.mjs"
+  1874→  }
+  1875→}
+  1876→```
+  1877→
+  1878→### 6.3 CI/CD Pipeline
+  1879→
+  1880→**GitHub Actions workflow (`.github/workflows/ci.yml`):**
+  1881→
+  1882→```yaml
+  1883→name: CI
+  1884→
+  1885→on:
+  1886→  pull_request:
+  1887→    branches: [main, staging]
+  1888→  push:
+  1889→    branches: [main, staging]
+  1890→
+  1891→jobs:
+  1892→  lint-and-typecheck:
+  1893→    runs-on: ubuntu-latest
+  1894→    steps:
+  1895→      - uses: actions/checkout@v4
+  1896→      - uses: actions/setup-node@v4
+  1897→        with:
+  1898→          node-version: 20
+  1899→          cache: npm
+  1900→      - run: npm ci
+  1901→      - run: npx eslint .
+  1902→      - run: npx prettier --check .
+  1903→      - run: npx tsc --noEmit
+  1904→
+  1905→  test:
+  1906→    runs-on: ubuntu-latest
+  1907→    steps:
+  1908→      - uses: actions/checkout@v4
+  1909→      - uses: actions/setup-node@v4
+  1910→        with:
+  1911→          node-version: 20
+  1912→          cache: npm
+  1913→      - run: npm ci
+  1914→      - run: npm test
+  1915→        env:
+  1916→          ADL_POSTGRES_URL: ${{ secrets.NEON_TEST_DATABASE_URL }}
+  1917→
+  1918→  build:
+  1919→    runs-on: ubuntu-latest
+  1920→    needs: [lint-and-typecheck, test]
+  1921→    steps:
+  1922→      - uses: actions/checkout@v4
+  1923→      - uses: actions/setup-node@v4
+  1924→        with:
+  1925→          node-version: 20
+  1926→          cache: npm
+  1927→      - run: npm ci
+  1928→      - run: npm run build
+  1929→      - uses: actions/upload-artifact@v4
+  1930→        with:
+  1931→          name: build
+  1932→          path: dist/
+  1933→
+  1934→  verify-deploy:
+  1935→    runs-on: ubuntu-latest
+  1936→    needs: build
+  1937→    if: github.ref == 'refs/heads/main'
+  1938→    steps:
+  1939→      - name: Wait for Vercel deployment
+  1940→        run: sleep 60
+  1941→
+  1942→      - name: Health check
+  1943→        run: |
+  1944→          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+  1945→            https://africandatalayer.vercel.app/api/health)
+  1946→          if [ "$STATUS" != "200" ]; then
+  1947→            echo "Health check failed with status $STATUS"
+  1948→            exit 1
+  1949→          fi
+  1950→          echo "Health check passed"
+  1951→
+  1952→  upload-sourcemaps:
+  1953→    runs-on: ubuntu-latest
+  1954→    needs: build
+  1955→    if: github.ref == 'refs/heads/main'
+  1956→    steps:
+  1957→      - uses: actions/checkout@v4
+  1958→      - uses: actions/download-artifact@v4
+  1959→        with:
+  1960→          name: build
+  1961→          path: dist/
+  1962→      - name: Upload source maps to Sentry
+  1963→        run: |
+  1964→          npx @sentry/cli sourcemaps upload \
+  1965→            --org adl \
+  1966→            --project africandatalayer \
+  1967→            --release ${{ github.sha }} \
+  1968→            dist/assets/
+  1969→        env:
+  1970→          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+  1971→```
+  1972→
+  1973→**Migration CI (`.github/workflows/migrate.yml`):**
+  1974→
+  1975→```yaml
+  1976→name: Database Migration
+  1977→
+  1978→on:
+  1979→  push:
+  1980→    branches: [staging]
+  1981→    paths:
+  1982→      - 'migrations/**'
+  1983→
+  1984→jobs:
+  1985→  migrate-staging:
+  1986→    runs-on: ubuntu-latest
+  1987→    steps:
+  1988→      - uses: actions/checkout@v4
+  1989→      - uses: actions/setup-node@v4
+  1990→        with:
+  1991→          node-version: 20
+  1992→          cache: npm
+  1993→      - run: npm ci
+  1994→      - name: Dry run migration
+  1995→        run: node scripts/migrate.mjs --dry-run
+  1996→        env:
+  1997→          ADL_POSTGRES_URL: ${{ secrets.NEON_STAGING_DATABASE_URL }}
+  1998→      - name: Apply migration
+  1999→        run: node scripts/migrate.mjs
+  2000→        env:
+  2001→          ADL_POSTGRES_URL: ${{ secrets.NEON_STAGING_DATABASE_URL }}
+  2002→```
+  2003→
+  2004→### 6.4 Code Review and Merge Process
+  2005→
+  2006→```
+  2007→CODE REVIEW PROCESS
+  2008→═════════════════════
+  2009→
+  2010→BRANCHING MODEL:
+  2011→  main        ← production (auto-deploys to Vercel)
+  2012→  staging     ← staging (preview deployment, migration testing)
+  2013→  feature/*   ← feature branches (preview deployments)
+  2014→  fix/*       ← bug fix branches
+  2015→  chore/*     ← maintenance branches
+  2016→
+  2017→PR WORKFLOW:
+  2018→
+  2019→  1. Developer creates feature branch from staging
+  2020→     git checkout staging && git pull
+  2021→     git checkout -b feature/add-bandwidth-sync
+  2022→
+  2023→  2. Developer pushes and creates PR to staging
+  2024→     git push -u origin feature/add-bandwidth-sync
+  2025→     gh pr create --base staging --title "Add bandwidth-aware sync engine"
+  2026→
+  2027→  3. CI runs automatically:
+  2028→     - Lint check (ESLint)
+  2029→     - Format check (Prettier)
+  2030→     - Type check (tsc --noEmit)
+  2031→     - Unit tests
+  2032→     - Build verification
+  2033→     - Vercel preview deployment
+  2034→
+  2035→  4. Code review requirements:
+  2036→     - At least 1 approval required
+  2037→     - All CI checks must pass
+  2038→     - No merge conflicts
+  2039→     - Preview deployment tested for visual regression
+  2040→
+  2041→  5. Merge to staging:
+  2042→     - Squash and merge (clean history)
+  2043→     - Delete feature branch
+  2044→     - If migration files present: migration runs on staging DB
+  2045→
+  2046→  6. Staging verification:
+  2047→     - Test on staging preview URL
+  2048→     - Verify new functionality works
+  2049→     - Check Sentry for new errors
+  2050→
+  2051→  7. PR from staging to main:
+  2052→     - Create PR: staging → main
+  2053→     - Abbreviated review (already reviewed in step 4)
+  2054→     - Merge (regular merge commit to preserve staging history)
+  2055→     - Vercel auto-deploys to production
+  2056→
+  2057→  8. Post-deploy verification:
+  2058→     - Health check (automated in CI)
+  2059→     - Monitor Sentry error rate
+  2060→     - Spot-check affected features
+  2061→
+  2062→CODE REVIEW CHECKLIST:
+  2063→  □ Does it have tests?
+  2064→  □ Does it handle errors gracefully?
+  2065→  □ Does it work offline? (if client-side)
+  2066→  □ Are new environment variables documented in .env.example?
+  2067→  □ Are database changes backward-compatible?
+  2068→  □ Does it respect the data protection law? (no PII in logs)
+  2069→  □ Is the TypeScript strict? (no `any` without justification)
+  2070→  □ Are API responses consistent with existing patterns?
+  2071→  □ Does it have structured logging?
+  2072→```
+  2073→
+  2074→### 6.5 Documentation Standards
+  2075→
+  2076→```
+  2077→DOCUMENTATION STANDARDS
+  2078→═══════════════════════
+  2079→
+  2080→CODE DOCUMENTATION:
+  2081→  - Every exported function: JSDoc comment with @param, @returns, @throws
+  2082→  - Every API route: document request/response format at top of file
+  2083→  - Every database query: inline comment explaining what it does and why
+  2084→  - Complex algorithms: block comments explaining the approach
+  2085→
+  2086→FILE DOCUMENTATION:
+  2087→  - New files: 2-3 line comment at the top explaining the file's purpose
+  2088→  - Example:
+  2089→    // lib/client/bandwidthDetector.ts
+  2090→    // Measures network quality using Navigator.connection API and HEAD probe.
+  2091→    // Used by the sync engine to determine which queue priorities to flush.
+  2092→
+  2093→API DOCUMENTATION:
+  2094→  - Maintained in api/README.md (create if needed)
+  2095→  - Each endpoint: method, path, auth required, request body, response body
+  2096→  - Updated when endpoints change
+  2097→
+  2098→RUNBOOK DOCUMENTATION:
+  2099→  - Maintained in docs/runbooks/ (markdown files)
+  2100→  - One file per runbook
+  2101→  - Template: Symptoms, Diagnosis, Resolution, Escalation
+  2102→
+  2103→ARCHITECTURE DECISIONS:
+  2104→  - Maintained in research/ directory (this file and predecessors)
+  2105→  - Each ADR: context, decision, consequences, status
+  2106→
+  2107→CHANGELOG:
+  2108→  - Maintained in CHANGELOG.md at project root
+  2109→  - Format: Keep a Changelog (https://keepachangelog.com/)
+  2110→  - Updated on each PR to main
+  2111→```
+  2112→
+  2113→---
+  2114→
+  2115→## Summary: Implementation Priorities
+  2116→
+  2117→| Priority | What | Why | Effort |
+  2118→|---|---|---|---|
+  2119→| **Immediate** (Week -2) | CI pipeline + linting + tests in CI | Prevent regressions before pilot | 2 days |
+  2120→| **Immediate** (Week -2) | Sentry integration | Catch field errors early | 1 day |
+  2121→| **Immediate** (Week -1) | Staging environment + migrations | Safe deployment workflow | 2 days |
+  2122→| **Immediate** (Week -1) | Uptime monitoring + alerting | Know when things break | 0.5 day |
+  2123→| **Week 1-2** | Enhanced offline sync + photo staging | Core field agent experience | 5 days |
+  2124→| **Week 2-3** | Admin review queue + data API | Quality control + commercial value | 5 days |
+  2125→| **Week 3-4** | Ops dashboard + telemetry | Visibility into field operations | 4 days |
+  2126→| **Week 4-6** | Backup automation + E2E tests | Production resilience | 3 days |
+  2127→| **Post-pilot** | Multi-zone + scaling prep | Growth readiness | 10+ days |
+  2128→
+  2129→**Total new tooling cost:** $0/month additional (Sentry free, UptimeRobot free, GitHub Actions free)
+  2130→**Total infrastructure cost:** $20/month (unchanged -- Vercel Pro)
+  2131→**Total implementation effort:** ~54 developer-days across 3 phases
+  2132→
+  2133→---
+  2134→
+  2135→## Sources and References
+  2136→
+  2137→- Vercel Cron documentation: https://vercel.com/docs/cron-jobs
+  2138→- Vercel Environment Variables: https://vercel.com/docs/environment-variables
+  2139→- Neon Branching: https://neon.tech/docs/introduction/branching
+  2140→- Sentry JavaScript SDK: https://docs.sentry.io/platforms/javascript/
+  2141→- Sentry Node.js SDK: https://docs.sentry.io/platforms/node/
+  2142→- GitHub Actions: https://docs.github.com/en/actions
+  2143→- Node.js built-in test runner: https://nodejs.org/api/test.html
+  2144→- Playwright: https://playwright.dev/
+  2145→- ESLint flat config: https://eslint.org/docs/latest/use/configure/configuration-files-new
+  2146→- UptimeRobot: https://uptimerobot.com/
+  2147→- Cameroon Data Protection Law 2024/017: https://prc.cm/en/multimedia/documents/10271-law-n-2024-017-of-23-12-2024-web
+  2148→- Keep a Changelog: https://keepachangelog.com/
+  2149→- Cloudflare R2 pricing: https://developers.cloudflare.com/r2/pricing/
+  2150→

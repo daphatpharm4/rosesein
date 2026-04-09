@@ -1,0 +1,1338 @@
+     1→import { put } from "@vercel/blob";
+     2→import { requireUser } from "../../lib/auth.js";
+     3→import {
+     4→  getUserProfile,
+     5→  insertPointEvent,
+     6→  isStorageUnavailableError,
+     7→} from "../../lib/server/storage/index.js";
+     8→import {
+     9→  filterEnrichDetails,
+    10→  listCreateMissingFields,
+    11→  normalizeEnrichPayload,
+    12→  projectPointsFromEvents,
+    13→} from "../../lib/server/pointProjection.js";
+    14→import { computeConfidenceScore } from "../../lib/server/confidenceScore.js";
+    15→import { buildDedupCandidates } from "../../lib/server/dedup.js";
+    16→import { errorResponse, jsonResponse } from "../../lib/server/http.js";
+    17→import { query } from "../../lib/server/db.js";
+    18→import { diffCategorySets, parseConstraintCategories } from "../../lib/server/schemaGuard.js";
+    19→import { incrementAssignmentsForEvent } from "../../lib/server/collectionAssignments.js";
+    20→import { completeIdempotencyKey, hashIdempotencyPayload, reserveIdempotencyKey } from "../../lib/server/idempotency.js";
+    21→import { stripPiiDetails } from "../../lib/server/privacy.js";
+    22→import { consumeRateLimit } from "../../lib/server/rateLimit.js";
+    23→import { logSecurityEvent } from "../../lib/server/securityAudit.js";
+    24→import { captureServerException } from "../../lib/server/sentry.js";
+    25→import {
+    26→  blockStatusFromCode,
+    27→  computeEventContentHash,
+    28→  computeImageSha256,
+    29→  evaluateSubmissionRisk,
+    30→  hashIpIdentifier,
+    31→  logBlockedSubmission,
+    32→  persistSubmissionRiskArtifacts,
+    33→} from "../../lib/server/submissionRisk.js";
+    34→import {
+    35→  filterEventsForViewer,
+    36→  redactEventUserIds,
+    37→  resolveAdminViewAccess,
+    38→  toSubmissionAuthContext,
+    39→  normalizeActorId,
+    40→} from "../../lib/server/submissionAccess.js";
+    41→import { buildReadableEvents } from "../../lib/server/submissionEvents.js";
+    42→import { reconcileUserProfileXp } from "../../lib/server/xp.js";
+    43→import {
+    44→  DEFAULT_SUBMISSION_GPS_MATCH_THRESHOLD_KM,
+    45→  applyClientExifFallback,
+    46→  buildPhotoFraudMetadata,
+    47→  buildSubmissionFraudCheck,
+    48→  extractPhotoMetadata,
+    49→  extractPhotoMetadataFromUrl,
+    50→  haversineKm,
+    51→  isPhotoMetadataEffectivelyEmpty,
+    52→  parseSubmissionFraudCheck,
+    53→} from "../../lib/server/submissionFraud.js";
+    54→import { createFraudAlert } from "../../lib/server/fraudAlerts.js";
+    55→import { getTrustTier } from "../../lib/server/userTrust.js";
+    56→import { submissionInputSchema } from "../../lib/server/validation.js";
+    57→import { BONAMOUSSADI_BOUNDS, isWithinBonamoussadi, isWithinCameroon } from "../../shared/geofence.js";
+    58→import type {
+    59→  AdminSubmissionEvent,
+    60→  ClientDeviceInfo,
+    61→  ClientExifData,
+    62→  ConsentStatus,
+    63→  GpsIntegrityReport,
+    64→  MapScope,
+    65→  PointEvent,
+    66→  PointEventType,
+    67→  SubmissionCategory,
+    68→  DedupDecision,
+    69→  SubmissionDetails,
+    70→  SubmissionFraudCheck,
+    71→  SubmissionInput,
+    72→  SubmissionLocation,
+    73→} from "../../shared/types.js";
+    74→import { VERTICAL_IDS, isValidCategory, normalizeCategoryAlias } from "../../shared/verticals.js";
+    75→import { BASE_EVENT_XP } from "../../shared/xp.js";
+    76→import { generatePointId } from "../../lib/shared/pointId.js";
+    77→const allowedEventTypes: PointEventType[] = ["CREATE_EVENT", "ENRICH_EVENT"];
+    78→const IP_PHOTO_MATCH_KM = Number(process.env.IP_PHOTO_MATCH_KM ?? "50") || 50;
+    79→const SUBMISSION_PHOTO_MATCH_KM = DEFAULT_SUBMISSION_GPS_MATCH_THRESHOLD_KM;
+    80→const MAX_FORENSICS_FALLBACK_LOOKUPS = Number(process.env.ADMIN_FORENSICS_FALLBACK_LIMIT ?? "25") || 25;
+    81→const MAX_IMAGE_BYTES = Number(process.env.MAX_SUBMISSION_IMAGE_BYTES ?? "8388608") || 8388608;
+    82→const INLINE_IMAGE_REGEX = /^data:(image\/[a-z0-9.+-]+);base64,/i;
+    83→const allowedImageMime = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif"]);
+    84→const allowedMapScopes: ReadonlySet<MapScope> = new Set(["bonamoussadi", "cameroon", "global"]);
+    85→const PUBLIC_READ_CACHE_CONTROL = "public, s-maxage=30, stale-while-revalidate=300";
+    86→const EXPECTED_SUBMISSION_CATEGORIES = [...VERTICAL_IDS].sort((a, b) => a.localeCompare(b));
+    87→const SUBMISSION_RATE_LIMIT_PER_HOUR = Number(process.env.SUBMISSION_RATE_LIMIT_PER_HOUR ?? "60") || 60;
+    88→const SUBMISSION_IP_RATE_LIMIT_PER_HOUR = Number(process.env.SUBMISSION_IP_RATE_LIMIT_PER_HOUR ?? "120") || 120;
+    89→
+    90→function parseLocation(input: unknown): SubmissionLocation | null {
+    91→  if (!input || typeof input !== "object") return null;
+    92→  const location = input as { latitude?: unknown; longitude?: unknown };
+    93→  const latitude = typeof location.latitude === "string" ? Number(location.latitude) : (location.latitude as number);
+    94→  const longitude = typeof location.longitude === "string" ? Number(location.longitude) : (location.longitude as number);
+    95→  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    96→  return { latitude, longitude };
+    97→}
+    98→
+    99→function trimString(input: unknown, maxLen = 256): string | null {
+   100→  if (typeof input !== "string") return null;
+   101→  const value = input.trim();
+   102→  if (!value) return null;
+   103→  return value.slice(0, maxLen);
+   104→}
+   105→
+   106→function sanitizeClientDevice(input: unknown): ClientDeviceInfo | null {
+   107→  if (!input || typeof input !== "object") return null;
+   108→  const raw = input as Record<string, unknown>;
+   109→  const deviceId = trimString(raw.deviceId, 128);
+   110→  if (!deviceId) return null;
+   111→  const platform = trimString(raw.platform, 64);
+   112→  const userAgent = trimString(raw.userAgent, 256);
+   113→  const memory = typeof raw.deviceMemoryGb === "number" && Number.isFinite(raw.deviceMemoryGb) ? raw.deviceMemoryGb : null;
+   114→  const cpu = typeof raw.hardwareConcurrency === "number" && Number.isFinite(raw.hardwareConcurrency) ? raw.hardwareConcurrency : null;
+   115→  const isLowEnd = raw.isLowEnd === true;
+   116→
+   117→  return {
+   118→    deviceId,
+   119→    platform: platform ?? undefined,
+   120→    userAgent: userAgent ?? undefined,
+   121→    deviceMemoryGb: memory,
+   122→    hardwareConcurrency: cpu,
+   123→    isLowEnd,
+   124→  };
+   125→}
+   126→
+   127→function normalizeCategory(input: string | undefined): SubmissionCategory | null {
+   128→  if (!input) return null;
+   129→  const raw = input.trim();
+   130→  const resolved = normalizeCategoryAlias(raw);
+   131→  if (resolved && isValidCategory(resolved)) return resolved as SubmissionCategory;
+   132→  return null;
+   133→}
+   134→
+   135→function normalizeEventType(input: unknown): PointEventType {
+   136→  if (typeof input === "string" && allowedEventTypes.includes(input as PointEventType)) {
+   137→    return input as PointEventType;
+   138→  }
+   139→  return "CREATE_EVENT";
+   140→}
+   141→
+   142→function normalizeDedupDecision(input: unknown): DedupDecision | null {
+   143→  if (typeof input !== "string") return null;
+   144→  const normalized = input.trim().toLowerCase();
+   145→  if (normalized === "allow_create" || normalized === "use_existing") return normalized;
+   146→  return null;
+   147→}
+   148→
+   149→function normalizeMapScope(input: string | null): MapScope {
+   150→  if (!input) return "bonamoussadi";
+   151→  const normalized = input.trim().toLowerCase();
+   152→  if (!allowedMapScopes.has(normalized as MapScope)) return "bonamoussadi";
+   153→  return normalized as MapScope;
+   154→}
+   155→
+   156→function normalizeConsentStatus(input: unknown): ConsentStatus | null {
+   157→  if (typeof input !== "string") return null;
+   158→  const normalized = input.trim().toLowerCase();
+   159→  if (
+   160→    normalized === "obtained" ||
+   161→    normalized === "refused_pii_only" ||
+   162→    normalized === "not_required" ||
+   163→    normalized === "withdrawn"
+   164→  ) {
+   165→    return normalized;
+   166→  }
+   167→  return null;
+   168→}
+   169→
+   170→function sanitizeGpsIntegrity(input: unknown): GpsIntegrityReport | null {
+   171→  if (!input || typeof input !== "object") return null;
+   172→  const raw = input as Record<string, unknown>;
+   173→  const gpsAccuracyMeters =
+   174→    typeof raw.gpsAccuracyMeters === "number" && Number.isFinite(raw.gpsAccuracyMeters) ? raw.gpsAccuracyMeters : null;
+   175→  const gpsTimestamp = typeof raw.gpsTimestamp === "number" && Number.isFinite(raw.gpsTimestamp) ? raw.gpsTimestamp : null;
+   176→  const timeDeltaMs = typeof raw.timeDeltaMs === "number" && Number.isFinite(raw.timeDeltaMs) ? raw.timeDeltaMs : null;
+   177→  const networkType = trimString(raw.networkType, 32);
+   178→
+   179→  return {
+   180→    mockLocationDetected: raw.mockLocationDetected === true,
+   181→    mockLocationMethod: trimString(raw.mockLocationMethod, 160),
+   182→    hasAccelerometerData: raw.hasAccelerometerData === true,
+   183→    hasGyroscopeData: raw.hasGyroscopeData === true,
+   184→    accelerometerSampleCount:
+   185→      typeof raw.accelerometerSampleCount === "number" && Number.isFinite(raw.accelerometerSampleCount)
+   186→        ? Math.max(0, Math.round(raw.accelerometerSampleCount))
+   187→        : 0,
+   188→    motionDetectedDuringCapture: raw.motionDetectedDuringCapture === true,
+   189→    gpsAccuracyMeters,
+   190→    networkType,
+   191→    gpsTimestamp,
+   192→    deviceTimestamp:
+   193→      typeof raw.deviceTimestamp === "number" && Number.isFinite(raw.deviceTimestamp) ? raw.deviceTimestamp : Date.now(),
+   194→    timeDeltaMs,
+   195→  };
+   196→}
+   197→
+   198→function stripBase64Prefix(imageBase64: string): string {
+   199→  const commaIndex = imageBase64.indexOf(",");
+   200→  return commaIndex === -1 ? imageBase64 : imageBase64.slice(commaIndex + 1);
+   201→}
+   202→
+   203→function mimeToExtension(mime: string): string {
+   204→  switch (mime) {
+   205→    case "image/png":
+   206→      return "png";
+   207→    case "image/webp":
+   208→      return "webp";
+   209→    case "image/heic":
+   210→      return "heic";
+   211→    case "image/heif":
+   212→      return "heif";
+   213→    default:
+   214→      return "jpg";
+   215→  }
+   216→}
+   217→
+   218→function parseImagePayload(imageBase64: string): { imageBuffer: Buffer; mime: string; ext: string } | null {
+   219→  const match = imageBase64.match(INLINE_IMAGE_REGEX);
+   220→  if (!match) return null;
+   221→
+   222→  const mime = match[1]?.toLowerCase() ?? "";
+   223→  if (!allowedImageMime.has(mime)) return null;
+   224→
+   225→  const base64 = stripBase64Prefix(imageBase64);
+   226→  const imageBuffer = Buffer.from(base64, "base64");
+   227→  if (!imageBuffer.length) return null;
+   228→
+   229→  return { imageBuffer, mime, ext: mimeToExtension(mime) };
+   230→}
+   231→
+   232→async function uploadSubmissionPhoto(
+   233→  eventId: string,
+   234→  imageBuffer: Buffer,
+   235→  mime: string,
+   236→  ext: string,
+   237→): Promise<string> {
+   238→  const pathname = `submissions/${eventId}-${Date.now()}.${ext}`;
+   239→  const token = process.env.BLOB_READ_WRITE_TOKEN;
+   240→  const uploaded = await put(pathname, imageBuffer, {
+   241→    access: "public",
+   242→    contentType: mime,
+   243→    addRandomSuffix: false,
+   244→    token: token || undefined,
+   245→  });
+   246→  return uploaded.url;
+   247→}
+   248→
+   249→function normalizeIp(raw: string | null): string | null {
+   250→  if (!raw) return null;
+   251→  const first = raw.split(",")[0]?.trim();
+   252→  if (!first) return null;
+   253→  const cleaned = first.replace(/^\[|\]$/g, "");
+   254→  if (cleaned.startsWith("::ffff:")) return cleaned.slice(7);
+   255→  if (/^\d+\.\d+\.\d+\.\d+:\d+$/.test(cleaned)) return cleaned.split(":")[0] ?? null;
+   256→  return cleaned;
+   257→}
+   258→
+   259→function isPrivateIp(ip: string): boolean {
+   260→  if (ip === "127.0.0.1" || ip === "::1") return true;
+   261→  if (ip.startsWith("10.")) return true;
+   262→  if (ip.startsWith("192.168.")) return true;
+   263→  if (ip.startsWith("172.")) {
+   264→    const second = Number(ip.split(".")[1]);
+   265→    if (second >= 16 && second <= 31) return true;
+   266→  }
+   267→  if (ip.startsWith("fc") || ip.startsWith("fd")) return true;
+   268→  if (ip.startsWith("fe80:")) return true;
+   269→  return false;
+   270→}
+   271→
+   272→interface IpApiResponse {
+   273→  latitude?: unknown;
+   274→  longitude?: unknown;
+   275→  asn?: unknown;
+   276→  org?: unknown;
+   277→}
+   278→
+   279→interface IpLookupResult {
+   280→  ip: string;
+   281→  location: SubmissionLocation | null;
+   282→  asn: string | null;
+   283→  org: string | null;
+   284→  isDatacenter: boolean;
+   285→  isVpn: boolean;
+   286→  isTor: boolean;
+   287→}
+   288→
+   289→function toLowerText(input: unknown): string {
+   290→  if (typeof input !== "string") return "";
+   291→  return input.trim().toLowerCase();
+   292→}
+   293→
+   294→function classifyIpOrg(orgRaw: string): { isDatacenter: boolean; isVpn: boolean; isTor: boolean } {
+   295→  const org = orgRaw.toLowerCase();
+   296→  const isDatacenter =
+   297→    org.includes("hosting") ||
+   298→    org.includes("cloud") ||
+   299→    org.includes("digitalocean") ||
+   300→    org.includes("aws") ||
+   301→    org.includes("amazon") ||
+   302→    org.includes("google cloud") ||
+   303→    org.includes("azure") ||
+   304→    org.includes("linode") ||
+   305→    org.includes("ovh");
+   306→  const isVpn =
+   307→    org.includes("vpn") ||
+   308→    org.includes("private internet") ||
+   309→    org.includes("nord") ||
+   310→    org.includes("expressvpn") ||
+   311→    org.includes("surfshark") ||
+   312→    org.includes("proxy");
+   313→  const isTor = org.includes("tor");
+   314→  return { isDatacenter, isVpn, isTor };
+   315→}
+   316→
+   317→async function fetchIpInfo(ip: string): Promise<IpLookupResult> {
+   318→  const target = `https://ipapi.co/${ip}/json/`;
+   319→  const controller = new AbortController();
+   320→  const timeout = setTimeout(() => controller.abort(), 3000);
+   321→  try {
+   322→    const res = await fetch(target, { signal: controller.signal });
+   323→    if (!res.ok) {
+   324→      return {
+   325→        ip,
+   326→        location: null,
+   327→        asn: null,
+   328→        org: null,
+   329→        isDatacenter: false,
+   330→        isVpn: false,
+   331→        isTor: false,
+   332→      };
+   333→    }
+   334→    const data = (await res.json()) as IpApiResponse;
+   335→    const latitude = Number(data?.latitude);
+   336→    const longitude = Number(data?.longitude);
+   337→    const org = toLowerText(data?.org) || null;
+   338→    const asn = typeof data?.asn === "string" && data.asn.trim() ? data.asn.trim().toLowerCase() : null;
+   339→    const classification = classifyIpOrg(org ?? "");
+   340→    return {
+   341→      ip,
+   342→      location: Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : null,
+   343→      asn,
+   344→      org,
+   345→      isDatacenter: classification.isDatacenter,
+   346→      isVpn: classification.isVpn,
+   347→      isTor: classification.isTor,
+   348→    };
+   349→  } catch {
+   350→    return {
+   351→      ip,
+   352→      location: null,
+   353→      asn: null,
+   354→      org: null,
+   355→      isDatacenter: false,
+   356→      isVpn: false,
+   357→      isTor: false,
+   358→    };
+   359→  } finally {
+   360→    clearTimeout(timeout);
+   361→  }
+   362→}
+   363→
+   364→async function getIpInfo(request: Request): Promise<IpLookupResult | null> {
+   365→  const forwarded = request.headers.get("x-forwarded-for");
+   366→  const realIp = request.headers.get("x-real-ip");
+   367→  const vercelIp = request.headers.get("x-vercel-forwarded-for");
+   368→  const ip = normalizeIp(vercelIp ?? forwarded ?? realIp);
+   369→  if (!ip || isPrivateIp(ip)) return null;
+   370→  return await fetchIpInfo(ip);
+   371→}
+   372→
+   373→function currentRequestIp(request: Request): string | null {
+   374→  return normalizeIp(
+   375→    request.headers.get("x-vercel-forwarded-for") ??
+   376→      request.headers.get("x-forwarded-for") ??
+   377→      request.headers.get("x-real-ip"),
+   378→  );
+   379→}
+   380→
+   381→function validateCreatePayload(category: SubmissionCategory, details: SubmissionDetails): string | null {
+   382→  const missing = listCreateMissingFields(category, details);
+   383→  if (missing.length > 0) return `Missing required fields: ${missing.join(", ")}`;
+   384→  return null;
+   385→}
+   386→
+   387→function withReviewFlags(existing: string[], additions: string[]): string[] {
+   388→  return Array.from(new Set([...existing, ...additions].filter((value) => value.length > 0)));
+   389→}
+   390→
+   391→function getUserDisplayName(userId: string, name: string | null, email: string | null): string {
+   392→  if (name && name.trim()) return name.trim();
+   393→  if (email) {
+   394→    const atIndex = email.indexOf("@");
+   395→    if (atIndex > 0) return email.slice(0, atIndex);
+   396→    return email;
+   397→  }
+   398→  return userId || "Contributor";
+   399→}
+   400→
+   401→function getEventFraudCheck(event: PointEvent): SubmissionFraudCheck | null {
+   402→  const details = event.details as Record<string, unknown> | undefined;
+   403→  return parseSubmissionFraudCheck(details?.fraudCheck);
+   404→}
+   405→
+   406→function getSecondaryPhotoUrl(event: PointEvent): string | null {
+   407→  const details = event.details as Record<string, unknown> | undefined;
+   408→  const secondPhotoUrl = details?.secondPhotoUrl;
+   409→  if (typeof secondPhotoUrl !== "string") return null;
+   410→  const normalized = secondPhotoUrl.trim();
+   411→  return normalized || null;
+   412→}
+   413→
+   414→function getReviewStatus(event: PointEvent): string {
+   415→  const details = event.details as Record<string, unknown> | undefined;
+   416→  const status = typeof details?.reviewStatus === "string" ? details.reviewStatus.trim().toLowerCase() : "";
+   417→  return status || "auto_approved";
+   418→}
+   419→
+   420→function getReviewFlags(event: PointEvent): string[] {
+   421→  const details = event.details as Record<string, unknown> | undefined;
+   422→  const raw = details?.reviewFlags;
+   423→  if (!Array.isArray(raw)) return [];
+   424→  return raw
+   425→    .map((value) => (typeof value === "string" ? value.trim() : ""))
+   426→    .filter((value) => value.length > 0);
+   427→}
+   428→
+   429→function isPendingReview(event: PointEvent): boolean {
+   430→  if (getReviewStatus(event) === "pending_review") return true;
+   431→  return getReviewFlags(event).length > 0;
+   432→}
+   433→
+   434→function shouldRunFallbackFraudCheck(event: PointEvent, fraudCheck: SubmissionFraudCheck | null): boolean {
+   435→  const primaryUrl = typeof event.photoUrl === "string" ? event.photoUrl.trim() : "";
+   436→  const secondaryUrl = getSecondaryPhotoUrl(event);
+   437→  if (!fraudCheck) return Boolean(primaryUrl || secondaryUrl);
+   438→  if (primaryUrl && isPhotoMetadataEffectivelyEmpty(fraudCheck.primaryPhoto)) return true;
+   439→  if (secondaryUrl && isPhotoMetadataEffectivelyEmpty(fraudCheck.secondaryPhoto)) return true;
+   440→  return false;
+   441→}
+   442→
+   443→function mergePhotoFraudMetadata(
+   444→  existing: SubmissionFraudCheck["primaryPhoto"],
+   445→  recovered: SubmissionFraudCheck["primaryPhoto"],
+   446→  hasPhotoUrl: boolean,
+   447→): SubmissionFraudCheck["primaryPhoto"] {
+   448→  if (!hasPhotoUrl) return existing ?? null;
+   449→  if (existing && !isPhotoMetadataEffectivelyEmpty(existing)) return existing;
+   450→  if (recovered) return recovered;
+   451→  return existing ?? null;
+   452→}
+   453→
+   454→async function buildFallbackFraudCheck(
+   455→  event: PointEvent,
+   456→  existingFraudCheck: SubmissionFraudCheck | null,
+   457→): Promise<SubmissionFraudCheck | null> {
+   458→  const primaryUrl = typeof event.photoUrl === "string" ? event.photoUrl.trim() : "";
+   459→  const secondaryUrl = getSecondaryPhotoUrl(event);
+   460→  if (!primaryUrl && !secondaryUrl) return existingFraudCheck;
+   461→
+   462→  const needsPrimaryRecovery = Boolean(primaryUrl) && isPhotoMetadataEffectivelyEmpty(existingFraudCheck?.primaryPhoto);
+   463→  const needsSecondaryRecovery = Boolean(secondaryUrl) && isPhotoMetadataEffectivelyEmpty(existingFraudCheck?.secondaryPhoto);
+   464→  const primaryExtracted = needsPrimaryRecovery ? await extractPhotoMetadataFromUrl(primaryUrl) : null;
+   465→  const secondaryExtracted = needsSecondaryRecovery ? await extractPhotoMetadataFromUrl(secondaryUrl) : null;
+   466→  const recoveredPrimaryPhoto = buildPhotoFraudMetadata({
+   467→    extracted: primaryExtracted,
+   468→    submissionLocation: event.location,
+   469→    ipLocation: null,
+   470→    submissionMatchThresholdKm: SUBMISSION_PHOTO_MATCH_KM,
+   471→    ipMatchThresholdKm: IP_PHOTO_MATCH_KM,
+   472→  });
+   473→  const recoveredSecondaryPhoto = buildPhotoFraudMetadata({
+   474→    extracted: secondaryExtracted,
+   475→    submissionLocation: event.location,
+   476→    ipLocation: null,
+   477→    submissionMatchThresholdKm: SUBMISSION_PHOTO_MATCH_KM,
+   478→    ipMatchThresholdKm: IP_PHOTO_MATCH_KM,
+   479→  });
+   480→  const primaryPhoto = mergePhotoFraudMetadata(existingFraudCheck?.primaryPhoto ?? null, recoveredPrimaryPhoto, Boolean(primaryUrl));
+   481→  const secondaryPhoto = mergePhotoFraudMetadata(
+   482→    existingFraudCheck?.secondaryPhoto ?? null,
+   483→    recoveredSecondaryPhoto,
+   484→    Boolean(secondaryUrl),
+   485→  );
+   486→  if (!primaryPhoto && !secondaryPhoto) return null;
+   487→
+   488→  return buildSubmissionFraudCheck({
+   489→    submissionLocation: existingFraudCheck?.submissionLocation ?? event.location,
+   490→    effectiveLocation: existingFraudCheck?.effectiveLocation ?? event.location,
+   491→    ipLocation: existingFraudCheck?.ipLocation ?? null,
+   492→    primaryPhoto,
+   493→    secondaryPhoto,
+   494→    submissionMatchThresholdKm: existingFraudCheck?.submissionMatchThresholdKm ?? SUBMISSION_PHOTO_MATCH_KM,
+   495→    ipMatchThresholdKm: existingFraudCheck?.ipMatchThresholdKm ?? IP_PHOTO_MATCH_KM,
+   496→  });
+   497→}
+   498→
+   499→async function buildAdminSubmissionEvents(events: PointEvent[]): Promise<AdminSubmissionEvent[]> {
+   500→  const sortedEvents = [...events].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+   501→  const userIds = Array.from(
+   502→    new Set(
+   503→      sortedEvents
+   504→        .map((event) => normalizeActorId(event.userId))
+   505→        .filter((value) => value.length > 0),
+   506→    ),
+   507→  );
+   508→
+   509→  const profileEntries = await Promise.all(
+   510→    userIds.map(async (userId) => [userId, await getUserProfile(userId)] as const),
+   511→  );
+   512→  const profileByUserId = new Map(profileEntries);
+   513→  const output: AdminSubmissionEvent[] = [];
+   514→  let fallbackLookups = 0;
+   515→
+   516→  for (const event of sortedEvents) {
+   517→    const normalizedUserId = normalizeActorId(event.userId);
+   518→    const profile = profileByUserId.get(normalizedUserId) ?? null;
+   519→    const emailFromProfile = typeof profile?.email === "string" ? profile.email.trim().toLowerCase() : "";
+   520→    const email = emailFromProfile || (normalizedUserId.includes("@") ? normalizedUserId : null);
+   521→    const name = getUserDisplayName(normalizedUserId, profile?.name ?? null, email);
+   522→    let fraudCheck = getEventFraudCheck(event);
+   523→    if (shouldRunFallbackFraudCheck(event, fraudCheck) && fallbackLookups < MAX_FORENSICS_FALLBACK_LOOKUPS) {
+   524→      fallbackLookups += 1;
+   525→      try {
+   526→        fraudCheck = await buildFallbackFraudCheck(event, fraudCheck);
+   527→      } catch {
+   528→        fraudCheck = fraudCheck ?? null;
+   529→      }
+   530→    }
+   531→
+   532→    output.push({
+   533→      event,
+   534→      user: {
+   535→        id: normalizedUserId || event.userId,
+   536→        name,
+   537→        email,
+   538→        trustScore: profile?.trustScore ?? 50,
+   539→        trustTier: profile?.trustTier ?? "standard",
+   540→        suspendedUntil: profile?.suspendedUntil ?? null,
+   541→      },
+   542→      fraudCheck,
+   543→    });
+   544→  }
+   545→
+   546→  return output;
+   547→}
+   548→
+   549→type SchemaGuardView = {
+   550→  ok: boolean | null;
+   551→  expected: string[];
+   552→  actual: string[];
+   553→  missing: string[];
+   554→  extra: string[];
+   555→  reason?: string;
+   556→};
+   557→
+   558→async function buildSchemaGuardView(): Promise<SchemaGuardView> {
+   559→  const fallback: SchemaGuardView = {
+   560→    ok: null,
+   561→    expected: EXPECTED_SUBMISSION_CATEGORIES,
+   562→    actual: [],
+   563→    missing: EXPECTED_SUBMISSION_CATEGORIES,
+   564→    extra: [],
+   565→  };
+   566→
+   567→  try {
+   568→    const result = await query<{ constraint_definition: string | null }>(
+   569→      `
+   570→        SELECT pg_get_constraintdef(c.oid) AS constraint_definition
+   571→        FROM pg_constraint c
+   572→        JOIN pg_class rel ON rel.oid = c.conrelid
+   573→        JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+   574→        WHERE ns.nspname = 'public'
+   575→          AND rel.relname = 'point_events'
+   576→          AND c.conname = 'point_events_category_check'
+   577→        LIMIT 1
+   578→      `,
+   579→    );
+   580→    const definition = result.rows[0]?.constraint_definition ?? null;
+   581→    if (!definition) {
+   582→      return { ...fallback, reason: "constraint_not_found" };
+   583→    }
+   584→    const actual = parseConstraintCategories(definition);
+   585→    const diff = diffCategorySets(EXPECTED_SUBMISSION_CATEGORIES, actual);
+   586→    return {
+   587→      ok: diff.ok,
+   588→      expected: diff.expected,
+   589→      actual: diff.actual,
+   590→      missing: diff.missing,
+   591→      extra: diff.extra,
+   592→    };
+   593→  } catch (error) {
+   594→    if (isStorageUnavailableError(error)) {
+   595→      return { ...fallback, reason: "storage_unavailable" };
+   596→    }
+   597→    return { ...fallback, reason: "query_failed" };
+   598→  }
+   599→}
+   600→
+   601→export async function GET(request: Request): Promise<Response> {
+   602→  const auth = await requireUser(request);
+   603→  const authContext = toSubmissionAuthContext(auth);
+   604→  const url = new URL(request.url);
+   605→  const view = url.searchParams.get("view");
+   606→  const lat = url.searchParams.get("lat");
+   607→  const lng = url.searchParams.get("lng");
+   608→  const radius = url.searchParams.get("radius");
+   609→  const requestedScope = normalizeMapScope(url.searchParams.get("scope"));
+   610→  const canUseExpandedScope = requestedScope !== "bonamoussadi";
+   611→  if (canUseExpandedScope && !authContext) return errorResponse("Unauthorized", 401);
+   612→  if (canUseExpandedScope && !authContext.isAdmin) return errorResponse("Forbidden", 403);
+   613→  const effectiveScope = canUseExpandedScope ? requestedScope : "bonamoussadi";
+   614→  const canUsePublicCache = !authContext && !canUseExpandedScope;
+   615→
+   616→  try {
+   617→    if (view === "schema_guard") {
+   618→      const adminAccess = resolveAdminViewAccess(authContext);
+   619→      if (adminAccess === "unauthorized") return errorResponse("Unauthorized", 401);
+   620→      if (adminAccess === "forbidden") return errorResponse("Forbidden", 403);
+   621→      return jsonResponse(await buildSchemaGuardView(), { status: 200 });
+   622→    }
+   623→
+   624→    const allEvents = await buildReadableEvents();
+   625→    const scopedEvents = allEvents.filter((event) => {
+   626→      if (effectiveScope === "global") return true;
+   627→      if (effectiveScope === "cameroon") return isWithinCameroon(event.location);
+   628→      return isWithinBonamoussadi(event.location);
+   629→    });
+   630→
+   631→    if (view === "events") {
+   632→      if (!authContext) {
+   633→        return jsonResponse(redactEventUserIds(scopedEvents), {
+   634→          status: 200,
+   635→          headers: {
+   636→            "cache-control": PUBLIC_READ_CACHE_CONTROL,
+   637→          },
+   638→        });
+   639→      }
+   640→      const responseEvents = filterEventsForViewer(scopedEvents, authContext);
+   641→      return jsonResponse(responseEvents, { status: 200 });
+   642→    }
+   643→
+   644→    if (view === "admin_events") {
+   645→      const adminAccess = resolveAdminViewAccess(authContext);
+   646→      if (adminAccess === "unauthorized") return errorResponse("Unauthorized", 401);
+   647→      if (adminAccess === "forbidden") return errorResponse("Forbidden", 403);
+   648→      const adminEvents = await buildAdminSubmissionEvents(scopedEvents);
+   649→      return jsonResponse(adminEvents, { status: 200 });
+   650→    }
+   651→
+   652→    if (view === "review_queue") {
+   653→      const adminAccess = resolveAdminViewAccess(authContext);
+   654→      if (adminAccess === "unauthorized") return errorResponse("Unauthorized", 401);
+   655→      if (adminAccess === "forbidden") return errorResponse("Forbidden", 403);
+   656→      const pending = scopedEvents.filter((event) => isPendingReview(event));
+   657→      const adminEvents = await buildAdminSubmissionEvents(pending);
+   658→      return jsonResponse(adminEvents, { status: 200 });
+   659→    }
+   660→
+   661→    let projected = projectPointsFromEvents(scopedEvents);
+   662→
+   663→    if (view === "dedup_candidates") {
+   664→      if (!authContext) return errorResponse("Unauthorized", 401);
+   665→      const category = normalizeCategory(url.searchParams.get("category") ?? undefined);
+   666→      if (!category) return errorResponse("Invalid category", 400);
+   667→      const latitude = Number(url.searchParams.get("lat"));
+   668→      const longitude = Number(url.searchParams.get("lng"));
+   669→      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+   670→        return errorResponse("lat and lng are required", 400);
+   671→      }
+   672→      const name = trimString(url.searchParams.get("name"), 160);
+   673→      const probeDetails: SubmissionDetails = {};
+   674→      if (name) {
+   675→        probeDetails.name = name;
+   676→        probeDetails.siteName = name;
+   677→        probeDetails.roadName = name;
+   678→      }
+   679→      const result = buildDedupCandidates(
+   680→        category,
+   681→        { latitude, longitude },
+   682→        probeDetails,
+   683→        projected,
+   684→      );
+   685→      return jsonResponse(result);
+   686→    }
+   687→
+   688→    if (lat && lng && radius) {
+   689→      const latitude = Number(lat);
+   690→      const longitude = Number(lng);
+   691→      const radiusKm = Number(radius);
+   692→      if (Number.isFinite(latitude) && Number.isFinite(longitude) && Number.isFinite(radiusKm)) {
+   693→        projected = projected.filter((point) => haversineKm(point.location, { latitude, longitude }) <= radiusKm);
+   694→      }
+   695→    }
+   696→
+   697→    return jsonResponse(projected, {
+   698→      status: 200,
+   699→      headers: canUsePublicCache
+   700→        ? {
+   701→            "cache-control": PUBLIC_READ_CACHE_CONTROL,
+   702→          }
+   703→        : undefined,
+   704→    });
+   705→  } catch (error) {
+   706→    if (isStorageUnavailableError(error)) {
+   707→      return errorResponse("Storage service temporarily unavailable", 503, { code: "storage_unavailable" });
+   708→    }
+   709→    throw error;
+   710→  }
+   711→}
+   712→
+   713→export async function POST(request: Request): Promise<Response> {
+   714→  const auth = await requireUser(request);
+   715→  if (!auth) return errorResponse("Unauthorized", 401);
+   716→  const authContext = toSubmissionAuthContext(auth);
+   717→  const isAdminUser = authContext?.isAdmin === true;
+   718→
+   719→  let rawBody: unknown;
+   720→  try {
+   721→    rawBody = await request.json();
+   722→  } catch {
+   723→    return errorResponse("Invalid JSON body", 400);
+   724→  }
+   725→
+   726→  const validation = submissionInputSchema.safeParse(rawBody);
+   727→  if (!validation.success) {
+   728→    return errorResponse(validation.error.issues[0]?.message ?? "Invalid submission payload", 400);
+   729→  }
+   730→
+   731→  const body = validation.data as SubmissionInput;
+   732→  const category = normalizeCategory(body?.category as string | undefined);
+   733→  if (!category) {
+   734→    return errorResponse("Invalid category", 400);
+   735→  }
+   736→
+   737→  const userProfile = await getUserProfile(auth.id);
+   738→  if (userProfile?.suspendedUntil && new Date(userProfile.suspendedUntil).getTime() > Date.now()) {
+   739→    return errorResponse("Your account is temporarily suspended from submitting data", 403);
+   740→  }
+   741→
+   742→  const userRate = await consumeRateLimit({
+   743→    route: "POST /api/submissions",
+   744→    key: auth.id,
+   745→    windowSeconds: 60 * 60,
+   746→    max: SUBMISSION_RATE_LIMIT_PER_HOUR,
+   747→    request,
+   748→    userId: auth.id,
+   749→  });
+   750→  if (!userRate.allowed) {
+   751→    return jsonResponse(
+   752→      { error: "Submission rate limit exceeded. Please try again later.", code: "rate_limited" },
+   753→      { status: 429, headers: { "retry-after": String(userRate.retryAfterSeconds) } },
+   754→    );
+   755→  }
+   756→
+   757→  const requestIp = currentRequestIp(request);
+   758→  if (requestIp) {
+   759→    const ipRate = await consumeRateLimit({
+   760→      route: "POST /api/submissions:ip",
+   761→      key: requestIp,
+   762→      windowSeconds: 60 * 60,
+   763→      max: SUBMISSION_IP_RATE_LIMIT_PER_HOUR,
+   764→      request,
+   765→      userId: auth.id,
+   766→    });
+   767→    if (!ipRate.allowed) {
+   768→      return jsonResponse(
+   769→        { error: "Submission rate limit exceeded for this network. Please try again later.", code: "rate_limited" },
+   770→        { status: 429, headers: { "retry-after": String(ipRate.retryAfterSeconds) } },
+   771→      );
+   772→    }
+   773→  }
+   774→
+   775→  const eventType = normalizeEventType(body?.eventType);
+   776→  const submissionBody = body as unknown as Record<string, unknown>;
+   777→  const dedupDecision = normalizeDedupDecision(submissionBody?.dedupDecision);
+   778→  const dedupTargetPointId =
+   779→    typeof submissionBody?.dedupTargetPointId === "string"
+   780→      ? (submissionBody.dedupTargetPointId as string).trim()
+   781→      : "";
+   782→  const location = parseLocation(body?.location);
+   783→  const consentStatus = normalizeConsentStatus(body.consentStatus) ?? "not_required";
+   784→  const consentRecordedAt = body.consentRecordedAt ?? new Date().toISOString();
+   785→  let details = normalizeEnrichPayload(
+   786→    category,
+   787→    body?.details && typeof body.details === "object" ? ({ ...(body.details as SubmissionDetails) } as SubmissionDetails) : {},
+   788→  );
+   789→  if (consentStatus === "refused_pii_only") {
+   790→    details = {
+   791→      ...stripPiiDetails(details),
+   792→      consentStatus,
+   793→      consentRecordedAt,
+   794→    };
+   795→  }
+   796→  const requestUserAgent = trimString(request.headers.get("user-agent"), 256);
+   797→  const clientDevice = sanitizeClientDevice((details as Record<string, unknown>).clientDevice);
+   798→  if (clientDevice) {
+   799→    if (!clientDevice.userAgent && requestUserAgent) clientDevice.userAgent = requestUserAgent;
+   800→    details.clientDevice = clientDevice;
+   801→  } else if ("clientDevice" in details) {
+   802→    delete details.clientDevice;
+   803→  }
+   804→  const gpsIntegrity = sanitizeGpsIntegrity(body.gpsIntegrity);
+   805→  if (gpsIntegrity) {
+   806→    details.gpsIntegrity = gpsIntegrity;
+   807→  }
+   808→  if (consentStatus) {
+   809→    details.consentStatus = consentStatus;
+   810→    details.consentRecordedAt = consentRecordedAt;
+   811→  }
+   812→
+   813→  const imageBase64 = body?.imageBase64 as string | undefined;
+   814→  if (!imageBase64) return errorResponse("Photo is required", 400);
+   815→  const parsedPhoto = parseImagePayload(imageBase64);
+   816→  if (!parsedPhoto) return errorResponse("Invalid photo format", 400);
+   817→  if (parsedPhoto.imageBuffer.byteLength > MAX_IMAGE_BYTES) {
+   818→    return errorResponse(`Photo exceeds maximum size of ${Math.round(MAX_IMAGE_BYTES / (1024 * 1024))}MB`, 400);
+   819→  }
+   820→
+   821→  const ipInfo = await getIpInfo(request);
+   822→  const ipLocation = ipInfo?.location ?? null;
+   823→  const ipHash = ipInfo?.ip ? hashIpIdentifier(ipInfo.ip) : null;
+   824→  const clientExif = (body as unknown as Record<string, unknown>)?.clientExif as ClientExifData | null | undefined;
+   825→  const clientPhotoEvidenceSha256 =
+   826→    typeof body.photoEvidenceSha256 === "string" && body.photoEvidenceSha256.trim() ? body.photoEvidenceSha256.trim() : null;
+   827→  let photoLocation: SubmissionLocation | null = null;
+   828→  let primaryPhotoMetadata: Awaited<ReturnType<typeof extractPhotoMetadata>> | null;
+   829→
+   830→  try {
+   831→    primaryPhotoMetadata = await extractPhotoMetadata(parsedPhoto.imageBuffer, {
+   832→      source: "upload_buffer",
+   833→      mime: parsedPhoto.mime,
+   834→      ext: parsedPhoto.ext,
+   835→      byteLength: parsedPhoto.imageBuffer.byteLength,
+   836→    });
+   837→    primaryPhotoMetadata = applyClientExifFallback(primaryPhotoMetadata, clientExif);
+   838→    if (primaryPhotoMetadata.gps) {
+   839→      photoLocation = primaryPhotoMetadata.gps;
+   840→      if (location) {
+   841→        const distance = haversineKm(location, photoLocation);
+   842→        if (distance > SUBMISSION_PHOTO_MATCH_KM) return errorResponse("Photo GPS coordinates do not match submission location", 400);
+   843→      }
+   844→      if (ipLocation) {
+   845→        const distance = haversineKm(ipLocation, photoLocation);
+   846→        if (distance > IP_PHOTO_MATCH_KM) return errorResponse("Photo location does not match IP location", 400);
+   847→      }
+   848→    } else if (!location && !ipLocation) {
+   849→      return errorResponse("Photo is missing GPS metadata", 400);
+   850→    }
+   851→  } catch {
+   852→    primaryPhotoMetadata = {
+   853→      gps: null,
+   854→      capturedAt: null,
+   855→      deviceMake: null,
+   856→      deviceModel: null,
+   857→      exifStatus: "parse_error",
+   858→      exifReason: `Unexpected EXIF extraction failure (mime=${parsedPhoto.mime}; ext=${parsedPhoto.ext}; bytes=${parsedPhoto.imageBuffer.byteLength})`,
+   859→      exifSource: "upload_buffer",
+   860→    };
+   861→    primaryPhotoMetadata = applyClientExifFallback(primaryPhotoMetadata, clientExif);
+   862→    if (!primaryPhotoMetadata.gps && !location && !ipLocation) {
+   863→      return errorResponse("Unable to read photo GPS metadata", 400);
+   864→    }
+   865→    if (primaryPhotoMetadata.gps) {
+   866→      photoLocation = primaryPhotoMetadata.gps;
+   867→    }
+   868→  }
+   869→
+   870→  const finalLocation = photoLocation ?? location ?? ipLocation;
+   871→  if (!finalLocation) return errorResponse("Missing or invalid location", 400);
+   872→  if (!isAdminUser && !isWithinBonamoussadi(finalLocation)) {
+   873→    return errorResponse(
+   874→      `Location outside Bonamoussadi bounds (${BONAMOUSSADI_BOUNDS.south},${BONAMOUSSADI_BOUNDS.west})-(${BONAMOUSSADI_BOUNDS.north},${BONAMOUSSADI_BOUNDS.east})`,
+   875→      400,
+   876→    );
+   877→  }
+   878→
+   879→  const idempotencyKey = trimString(request.headers.get("x-idempotency-key"), 160);
+   880→  if (idempotencyKey) {
+   881→    const requestHash = hashIdempotencyPayload(body);
+   882→    const reservation = await reserveIdempotencyKey({
+   883→      userId: auth.id,
+   884→      idempotencyKey,
+   885→      requestHash,
+   886→    });
+   887→    if (reservation.status === "conflict") {
+   888→      await logSecurityEvent({
+   889→        eventType: "idempotency_conflict",
+   890→        userId: auth.id,
+   891→        request,
+   892→        details: { idempotencyKey },
+   893→      });
+   894→      return errorResponse("This idempotency key was already used for a different submission", 409, {
+   895→        code: "idempotency_conflict",
+   896→      });
+   897→    }
+   898→    if (reservation.status === "replay" && reservation.eventId) {
+   899→      const replayEvent = (await buildReadableEvents()).find((event) => event.id === reservation.eventId);
+   900→      if (replayEvent) {
+   901→        return jsonResponse(replayEvent, { status: reservation.responseStatus });
+   902→      }
+   903→    }
+   904→  }
+   905→
+   906→  try {
+   907→    const existingEvents = await buildReadableEvents();
+   908→    const projectedExisting = projectPointsFromEvents(existingEvents);
+   909→    let pointId = typeof body.pointId === "string" && body.pointId.trim()
+   910→      ? body.pointId.trim()
+   911→      : generatePointId(category, finalLocation.latitude, finalLocation.longitude);
+   912→    let effectiveEventType: PointEventType = eventType;
+   913→    let allowGaplessEnrich = false;
+   914→    const dedupResult = eventType === "CREATE_EVENT"
+   915→      ? buildDedupCandidates(category, finalLocation, details, projectedExisting)
+   916→      : null;
+   917→
+   918→    if (eventType === "CREATE_EVENT" && dedupDecision === "use_existing") {
+   919→      const chosenPointId = dedupTargetPointId || dedupResult?.bestCandidatePointId;
+   920→      if (!chosenPointId) {
+   921→        return errorResponse("dedupTargetPointId is required when dedupDecision=use_existing", 400);
+   922→      }
+   923→      const candidate = dedupResult?.candidates.find((item) => item.pointId === chosenPointId);
+   924→      if (!candidate) {
+   925→        return errorResponse("dedupTargetPointId is not a valid nearby candidate", 400);
+   926→      }
+   927→      const target = projectedExisting.find((point) => point.pointId === chosenPointId);
+   928→      if (!target) return errorResponse("Target point not found", 404);
+   929→      if (target.category !== category) return errorResponse("Category mismatch for target point", 400);
+   930→      pointId = chosenPointId;
+   931→      effectiveEventType = "ENRICH_EVENT";
+   932→      allowGaplessEnrich = true;
+   933→      details.dedupResolution = "use_existing";
+   934→      details.dedupMatchScore = candidate.matchScore;
+   935→      details.dedupDistanceMeters = candidate.distanceMeters;
+   936→    }
+   937→
+   938→    if (eventType === "CREATE_EVENT" && dedupDecision !== "allow_create" && dedupDecision !== "use_existing") {
+   939→      if (dedupResult?.shouldPrompt && dedupResult.candidates.length > 0) {
+   940→        const topCandidate = dedupResult.candidates[0];
+   941→        const topLabel = topCandidate?.siteName || topCandidate?.pointId || "nearby point";
+   942→        return jsonResponse(
+   943→          {
+   944→            error: `Potential duplicate detected near ${topLabel}`,
+   945→            code: "dedup_candidate",
+   946→            dedup: dedupResult,
+   947→          },
+   948→          { status: 409 },
+   949→        );
+   950→      }
+   951→    }
+   952→
+   953→    if (effectiveEventType === "CREATE_EVENT") {
+   954→      const createError = validateCreatePayload(category, details);
+   955→      if (createError) return errorResponse(createError, 400);
+   956→    } else {
+   957→      if (!allowGaplessEnrich) {
+   958→        if (!body.pointId || typeof body.pointId !== "string" || !body.pointId.trim()) {
+   959→          return errorResponse("pointId is required for ENRICH_EVENT", 400);
+   960→        }
+   961→        pointId = body.pointId.trim();
+   962→      }
+   963→
+   964→      const target = projectedExisting.find((point) => point.pointId === pointId);
+   965→      if (!target) return errorResponse("Target point not found", 404);
+   966→      if (target.category !== category) return errorResponse("Category mismatch for target point", 400);
+   967→
+   968→      const filteredDetails = filterEnrichDetails(category, details);
+   969→      if (!Object.keys(filteredDetails).length && !allowGaplessEnrich) {
+   970→        return errorResponse("ENRICH_EVENT must include at least one enrichable field", 400);
+   971→      }
+   972→      if (allowGaplessEnrich) {
+   973→        filteredDetails.dedupResolution = "use_existing";
+   974→        filteredDetails.dedupTargetPointId = pointId;
+   975→        filteredDetails.dedupReviewedAt = new Date().toISOString();
+   976→      }
+   977→      Object.assign(details, filteredDetails);
+   978→      for (const key of Object.keys(details)) {
+   979→        if (!Object.prototype.hasOwnProperty.call(filteredDetails, key)) {
+   980→          delete details[key];
+   981→        }
+   982→      }
+   983→      if (clientDevice) {
+   984→        details.clientDevice = clientDevice;
+   985→      }
+   986→    }
+   987→
+   988→    let riskEvaluation;
+   989→    try {
+   990→      riskEvaluation = await evaluateSubmissionRisk({
+   991→        userId: auth.id,
+   992→        isAdmin: isAdminUser,
+   993→        pointId,
+   994→        eventType: effectiveEventType,
+   995→        category,
+   996→        details,
+   997→        finalLocation,
+   998→        submissionLocation: location,
+   999→        ipLocation,
+  1000→        photoMetadata: {
+  1001→          gps: primaryPhotoMetadata?.gps ?? null,
+  1002→          capturedAt: primaryPhotoMetadata?.capturedAt ?? null,
+  1003→          deviceMake: primaryPhotoMetadata?.deviceMake ?? null,
+  1004→          deviceModel: primaryPhotoMetadata?.deviceModel ?? null,
+  1005→        },
+  1006→        clientDevice,
+  1007→        imageBuffer: parsedPhoto.imageBuffer,
+  1008→        ipHash,
+  1009→        ipReputation: ipInfo
+  1010→          ? {
+  1011→              asn: ipInfo.asn,
+  1012→              org: ipInfo.org,
+  1013→              isDatacenter: ipInfo.isDatacenter,
+  1014→              isVpn: ipInfo.isVpn,
+  1015→              isTor: ipInfo.isTor,
+  1016→            }
+  1017→          : null,
+  1018→        hasSecondaryPhoto: Boolean(body?.secondImageBase64),
+  1019→      });
+  1020→    } catch (riskError) {
+  1021→      console.warn("Submission risk engine fallback activated", riskError);
+  1022→      riskEvaluation = {
+  1023→        shouldBlock: false,
+  1024→        blockCode: null,
+  1025→        blockReason: null,
+  1026→        imageHash: computeImageSha256(parsedPhoto.imageBuffer),
+  1027→        contentHash: computeEventContentHash({
+  1028→          pointId,
+  1029→          category,
+  1030→          eventType: effectiveEventType,
+  1031→          location: finalLocation,
+  1032→          details,
+  1033→        }),
+  1034→        reviewStatus: "pending_review",
+  1035→        reviewFlags: ["risk_engine_unavailable"],
+  1036→        riskScore: 55,
+  1037→        exifTrustScore: 0,
+  1038→        velocity: {
+  1039→          user15m: 0,
+  1040→          device15m: null,
+  1041→          ip15m: null,
+  1042→          deviceDistinctUsers15m: null,
+  1043→          ipDistinctUsers15m: null,
+  1044→        },
+  1045→        impossibleTravelSpeedKmh: null,
+  1046→        riskComponents: {
+  1047→          locationRisk: 0,
+  1048→          photoRisk: 0,
+  1049→          temporalRisk: 0,
+  1050→          userRisk: 0,
+  1051→          behavioralRisk: 0,
+  1052→        },
+  1053→      };
+  1054→    }
+  1055→
+  1056→    const supplementalReviewFlags: string[] = [];
+  1057→    let effectiveReviewStatus = riskEvaluation.reviewStatus;
+  1058→    let effectiveRiskScore = riskEvaluation.riskScore;
+  1059→
+  1060→    if (clientPhotoEvidenceSha256 && clientPhotoEvidenceSha256 !== riskEvaluation.imageHash) {
+  1061→      supplementalReviewFlags.push("client_photo_hash_mismatch");
+  1062→      effectiveRiskScore = Math.max(effectiveRiskScore, 70);
+  1063→      effectiveReviewStatus = "pending_review";
+  1064→    }
+  1065→
+  1066→    if (gpsIntegrity?.mockLocationDetected) {
+  1067→      supplementalReviewFlags.push("mock_location_detected");
+  1068→      effectiveRiskScore = Math.max(effectiveRiskScore, 75);
+  1069→      effectiveReviewStatus = "pending_review";
+  1070→    }
+  1071→    if (gpsIntegrity?.gpsAccuracyMeters !== null && gpsIntegrity?.gpsAccuracyMeters !== undefined && gpsIntegrity.gpsAccuracyMeters > 75) {
+  1072→      supplementalReviewFlags.push("poor_gps_accuracy");
+  1073→      effectiveRiskScore = Math.max(effectiveRiskScore, 45);
+  1074→      effectiveReviewStatus = "pending_review";
+  1075→    }
+  1076→    if ((userProfile?.trustScore ?? 50) <= 20) {
+  1077→      supplementalReviewFlags.push("restricted_agent");
+  1078→      effectiveRiskScore = Math.max(effectiveRiskScore, 65);
+  1079→      effectiveReviewStatus = "pending_review";
+  1080→    }
+  1081→    if (consentStatus === "refused_pii_only") {
+  1082→      supplementalReviewFlags.push("consent_refused_pii_only");
+  1083→    }
+  1084→
+  1085→    riskEvaluation.reviewFlags = withReviewFlags(riskEvaluation.reviewFlags, supplementalReviewFlags);
+  1086→    riskEvaluation.reviewStatus = effectiveReviewStatus;
+  1087→    riskEvaluation.riskScore = effectiveRiskScore;
+  1088→
+  1089→    if (riskEvaluation.shouldBlock) {
+  1090→      const blockCode = riskEvaluation.blockCode ?? "blocked";
+  1091→      try {
+  1092→        await logBlockedSubmission({
+  1093→          userId: auth.id,
+  1094→          blockCode,
+  1095→          riskScore: riskEvaluation.riskScore,
+  1096→          riskComponents: riskEvaluation.riskComponents,
+  1097→          notes: riskEvaluation.blockReason,
+  1098→        });
+  1099→      } catch (auditError) {
+  1100→        console.warn("Unable to write blocked submission audit log", auditError);
+  1101→      }
+  1102→      await createFraudAlert({
+  1103→        userId: auth.id,
+  1104→        alertCode: blockCode,
+  1105→        severity: "high",
+  1106→        payload: {
+  1107→          reason: riskEvaluation.blockReason,
+  1108→          riskScore: riskEvaluation.riskScore,
+  1109→          reviewFlags: riskEvaluation.reviewFlags,
+  1110→        },
+  1111→      });
+  1112→      return errorResponse(
+  1113→        riskEvaluation.blockReason ?? "Submission blocked by fraud controls",
+  1114→        blockStatusFromCode(blockCode),
+  1115→      );
+  1116→    }
+  1117→
+  1118→    const eventId = crypto.randomUUID();
+  1119→    let photoUrl: string | undefined;
+  1120→    try {
+  1121→      photoUrl = await uploadSubmissionPhoto(eventId, parsedPhoto.imageBuffer, parsedPhoto.mime, parsedPhoto.ext);
+  1122→    } catch (error) {
+  1123→      const raw = error instanceof Error ? error.message : String(error);
+  1124→      const lower = raw.toLowerCase();
+  1125→      if (lower.includes("blob") && lower.includes("token")) return errorResponse("Blob storage is not configured", 500);
+  1126→      return errorResponse("Unable to store photo", 500);
+  1127→    }
+  1128→    details.hasPhoto = true;
+  1129→
+  1130→    let secondaryPhotoMetadata: Awaited<ReturnType<typeof extractPhotoMetadata>> | null = null;
+  1131→    const secondImageBase64 = body?.secondImageBase64 as string | undefined;
+  1132→    if (secondImageBase64) {
+  1133→      const parsedSecondPhoto = parseImagePayload(secondImageBase64);
+  1134→      if (!parsedSecondPhoto) return errorResponse("Invalid photo format", 400);
+  1135→      if (parsedSecondPhoto.imageBuffer.byteLength > MAX_IMAGE_BYTES) {
+  1136→        return errorResponse(`Photo exceeds maximum size of ${Math.round(MAX_IMAGE_BYTES / (1024 * 1024))}MB`, 400);
+  1137→      }
+  1138→
+  1139→      try {
+  1140→        secondaryPhotoMetadata = await extractPhotoMetadata(parsedSecondPhoto.imageBuffer, {
+  1141→          source: "upload_buffer",
+  1142→          mime: parsedSecondPhoto.mime,
+  1143→          ext: parsedSecondPhoto.ext,
+  1144→          byteLength: parsedSecondPhoto.imageBuffer.byteLength,
+  1145→        });
+  1146→      } catch {
+  1147→        secondaryPhotoMetadata = {
+  1148→          gps: null,
+  1149→          capturedAt: null,
+  1150→          deviceMake: null,
+  1151→          deviceModel: null,
+  1152→          exifStatus: "parse_error",
+  1153→          exifReason: `Unexpected EXIF extraction failure (mime=${parsedSecondPhoto.mime}; ext=${parsedSecondPhoto.ext}; bytes=${parsedSecondPhoto.imageBuffer.byteLength})`,
+  1154→          exifSource: "upload_buffer",
+  1155→        };
+  1156→      }
+  1157→
+  1158→      try {
+  1159→        const secondPhotoUrl = await uploadSubmissionPhoto(
+  1160→          `${eventId}-second`,
+  1161→          parsedSecondPhoto.imageBuffer,
+  1162→          parsedSecondPhoto.mime,
+  1163→          parsedSecondPhoto.ext,
+  1164→        );
+  1165→        details.secondPhotoUrl = secondPhotoUrl;
+  1166→        details.hasSecondaryPhoto = true;
+  1167→      } catch {
+  1168→        return errorResponse("Unable to store photo", 500);
+  1169→      }
+  1170→    }
+  1171→
+  1172→    const primaryPhotoFraud = buildPhotoFraudMetadata({
+  1173→      extracted: primaryPhotoMetadata,
+  1174→      submissionLocation: location,
+  1175→      ipLocation,
+  1176→      submissionMatchThresholdKm: SUBMISSION_PHOTO_MATCH_KM,
+  1177→      ipMatchThresholdKm: IP_PHOTO_MATCH_KM,
+  1178→    });
+  1179→    const secondaryPhotoFraud = buildPhotoFraudMetadata({
+  1180→      extracted: secondaryPhotoMetadata,
+  1181→      submissionLocation: location,
+  1182→      ipLocation,
+  1183→      submissionMatchThresholdKm: SUBMISSION_PHOTO_MATCH_KM,
+  1184→      ipMatchThresholdKm: IP_PHOTO_MATCH_KM,
+  1185→    });
+  1186→    details.fraudCheck = buildSubmissionFraudCheck({
+  1187→      submissionLocation: location,
+  1188→      effectiveLocation: finalLocation,
+  1189→      ipLocation,
+  1190→      primaryPhoto: primaryPhotoFraud,
+  1191→      secondaryPhoto: secondaryPhotoFraud,
+  1192→      submissionMatchThresholdKm: SUBMISSION_PHOTO_MATCH_KM,
+  1193→      ipMatchThresholdKm: IP_PHOTO_MATCH_KM,
+  1194→    });
+  1195→    details.imageSha256 = riskEvaluation.imageHash;
+  1196→    details.contentHash = riskEvaluation.contentHash;
+  1197→    details.reviewStatus = riskEvaluation.reviewStatus;
+  1198→    details.reviewFlags = riskEvaluation.reviewFlags;
+  1199→    details.riskScore = riskEvaluation.riskScore;
+  1200→    details.riskComponents = riskEvaluation.riskComponents as unknown as Record<string, unknown>;
+  1201→    details.exifTrustScore = riskEvaluation.exifTrustScore;
+  1202→    details.velocitySignals = riskEvaluation.velocity as unknown as Record<string, unknown>;
+  1203→    details.consentStatus = consentStatus;
+  1204→    details.consentRecordedAt = consentRecordedAt;
+  1205→    if (gpsIntegrity) details.gpsIntegrity = gpsIntegrity;
+  1206→    if (clientPhotoEvidenceSha256) details.photoEvidenceSha256 = clientPhotoEvidenceSha256;
+  1207→    if (userProfile?.trustScore !== undefined) {
+  1208→      details.agentTrustScore = userProfile.trustScore;
+  1209→      details.agentTrustTier = getTrustTier(userProfile.trustScore);
+  1210→    }
+  1211→    details.ipHash = ipHash ?? undefined;
+  1212→    if (ipInfo) {
+  1213→      details.ipReputation = {
+  1214→        asn: ipInfo.asn,
+  1215→        org: ipInfo.org,
+  1216→        isDatacenter: ipInfo.isDatacenter,
+  1217→        isVpn: ipInfo.isVpn,
+  1218→        isTor: ipInfo.isTor,
+  1219→      };
+  1220→    }
+  1221→
+  1222→    const xpAwarded = riskEvaluation.reviewStatus === "auto_approved" ? BASE_EVENT_XP : 0;
+  1223→    details.xpAwarded = xpAwarded;
+  1224→
+  1225→    const now = new Date().toISOString();
+  1226→    const newEvent: PointEvent = {
+  1227→      id: eventId,
+  1228→      pointId,
+  1229→      eventType: effectiveEventType,
+  1230→      userId: auth.id,
+  1231→      category,
+  1232→      location: finalLocation,
+  1233→      details,
+  1234→      photoUrl,
+  1235→      createdAt: now,
+  1236→      source: typeof details.source === "string" ? details.source : undefined,
+  1237→      externalId: typeof details.externalId === "string" ? details.externalId : undefined,
+  1238→      consentStatus,
+  1239→      consentRecordedAt,
+  1240→    };
+  1241→
+  1242→    const projectedWithNewEvent = projectPointsFromEvents([...existingEvents, newEvent]);
+  1243→    const projectedPoint = projectedWithNewEvent.find((point) => point.pointId === pointId);
+  1244→    if (projectedPoint) {
+  1245→      const confidenceScore = computeConfidenceScore(projectedPoint, new Date(now));
+  1246→      newEvent.details = { ...newEvent.details, confidenceScore, lastSeenAt: now };
+  1247→    }
+  1248→
+  1249→    await insertPointEvent(newEvent);
+  1250→    if (idempotencyKey) {
+  1251→      await completeIdempotencyKey({
+  1252→        userId: auth.id,
+  1253→        idempotencyKey,
+  1254→        eventId,
+  1255→      });
+  1256→    }
+  1257→    try {
+  1258→      await incrementAssignmentsForEvent(newEvent);
+  1259→    } catch (assignmentError) {
+  1260→      console.warn("Unable to update assignment progress from submission", assignmentError);
+  1261→    }
+  1262→    try {
+  1263→      await persistSubmissionRiskArtifacts({
+  1264→        eventId,
+  1265→        pointId,
+  1266→        userId: auth.id,
+  1267→        imageHash: riskEvaluation.imageHash,
+  1268→        contentHash: riskEvaluation.contentHash,
+  1269→        reviewStatus: riskEvaluation.reviewStatus,
+  1270→        reviewFlags: riskEvaluation.reviewFlags,
+  1271→        riskScore: riskEvaluation.riskScore,
+  1272→        riskComponents: riskEvaluation.riskComponents,
+  1273→        clientDevice,
+  1274→      });
+  1275→    } catch (riskPersistError) {
+  1276→      console.warn("Unable to persist submission risk artifacts", riskPersistError);
+  1277→    }
+  1278→    if (riskEvaluation.reviewStatus === "pending_review" || riskEvaluation.reviewFlags.length > 0) {
+  1279→      await createFraudAlert({
+  1280→        eventId,
+  1281→        userId: auth.id,
+  1282→        alertCode: "submission_pending_review",
+  1283→        severity: riskEvaluation.riskScore >= 70 ? "high" : "medium",
+  1284→        payload: {
+  1285→          category,
+  1286→          riskScore: riskEvaluation.riskScore,
+  1287→          reviewFlags: riskEvaluation.reviewFlags,
+  1288→        },
+  1289→      });
+  1290→      await logSecurityEvent({
+  1291→        eventType: "submission_flagged",
+  1292→        userId: auth.id,
+  1293→        request,
+  1294→        details: {
+  1295→          eventId,
+  1296→          riskScore: riskEvaluation.riskScore,
+  1297→          reviewFlags: riskEvaluation.reviewFlags,
+  1298→        },
+  1299→      });
+  1300→    }
+  1301→
+  1302→    const exifDeviceMake = primaryPhotoMetadata?.deviceMake ?? null;
+  1303→    const exifDeviceModel = primaryPhotoMetadata?.deviceModel ?? null;
+  1304→    const logPayload = {
+  1305→      eventId,
+  1306→      userId: auth.id,
+  1307→      category,
+  1308→      reviewStatus: riskEvaluation.reviewStatus,
+  1309→      reviewFlags: riskEvaluation.reviewFlags,
+  1310→      riskScore: riskEvaluation.riskScore,
+  1311→      deviceId: clientDevice?.deviceId ?? null,
+  1312→      clientPlatform: clientDevice?.platform ?? null,
+  1313→      clientUserAgent: clientDevice?.userAgent ?? requestUserAgent ?? null,
+  1314→      clientMemoryGb: clientDevice?.deviceMemoryGb ?? null,
+  1315→      clientCpuCores: clientDevice?.hardwareConcurrency ?? null,
+  1316→      clientIsLowEnd: clientDevice?.isLowEnd ?? null,
+  1317→      exifDeviceMake,
+  1318→      exifDeviceModel,
+  1319→    };
+  1320→    if (process.env.NODE_ENV !== "production") {
+  1321→      console.info("[SUBMISSION_DEVICE]", JSON.stringify(logPayload));
+  1322→    }
+  1323→
+  1324→    const profile = await getUserProfile(auth.id);
+  1325→    if (profile) {
+  1326→      await reconcileUserProfileXp(auth.id, { profile });
+  1327→    }
+  1328→
+  1329→    return jsonResponse(newEvent, { status: 201 });
+  1330→  } catch (error) {
+  1331→    if (isStorageUnavailableError(error)) {
+  1332→      return errorResponse("Storage service temporarily unavailable", 503, { code: "storage_unavailable" });
+  1333→    }
+  1334→    captureServerException(error, { route: "submissions_post", userId: auth.id });
+  1335→    throw error;
+  1336→  }
+  1337→}
+  1338→

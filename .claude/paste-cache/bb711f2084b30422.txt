@@ -1,0 +1,9 @@
+❯ /plan , Create an agent team to research and propose the best data acquisition strategy automated workflow for Cameroon (Bonamoussadi) for these verticals: billboards, alcohol,   
+census, fuel, mobile money, pharmacy, and transport roads (including blocked roads).Final output must include:                                                                       
+1) Vertical-by-vertical matrix: data needed, actors, products/services, likely problems, data gaps, and delta method                                                                 
+2) Recommended collection mix per vertical (field ops, satellite, partner data, public data, competitor tracking)                                                                    
+3) 6-week pilot plan for Bonamoussadi with budget, team roles, and KPIs                                                                                                              
+4) Priority company/org contact list (local + international) per vertical                                                                                                            
+5) Risk register and mitigation plan                                                                                                                                                 
+6) 80/20 focus: define the top 20% of data points that produce 80% of client value                                                                                                   
+7) Clear validation SOP: capture -> verify -> score confidence -> publish deltacreate a dedicated folder called workflow and put all delivarbles inside 

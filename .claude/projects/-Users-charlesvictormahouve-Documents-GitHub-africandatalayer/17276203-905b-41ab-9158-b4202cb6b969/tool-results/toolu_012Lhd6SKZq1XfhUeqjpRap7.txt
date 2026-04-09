@@ -1,0 +1,1029 @@
+     1→import React, { useEffect, useMemo, useState } from 'react';
+     2→import {
+     3→  ArrowLeft,
+     4→  Camera,
+     5→  CheckCircle,
+     6→  MapPin,
+     7→  ShieldCheck
+     8→} from 'lucide-react';
+     9→import { categoryLabel as getCategoryLabel, VERTICALS } from '../../shared/verticals';
+    10→import VerticalIcon from '../shared/VerticalIcon';
+    11→import { enqueueSubmission, flushOfflineQueue, getQueueStats, type QueueSyncSummary } from '../../lib/client/offlineQueue';
+    12→import { detectLowEndDevice, getClientDeviceInfo } from '../../lib/client/deviceProfile';
+    13→import { sendSubmissionPayload, toSubmissionSyncError } from '../../lib/client/submissionSync';
+    14→import type { ClientExifData, SubmissionCategory, SubmissionInput } from '../../shared/types';
+    15→import { Category, ContributionMode, DataPoint } from '../../types';
+    16→import exifr from 'exifr';
+    17→
+    18→interface Props {
+    19→  onBack: () => void;
+    20→  onComplete: () => void;
+    21→  language: 'en' | 'fr';
+    22→  mode: ContributionMode;
+    23→  seedPoint: DataPoint | null;
+    24→}
+    25→
+    26→type Vertical = SubmissionCategory;
+    27→
+    28→const providerOptions = ['MTN', 'Orange', 'Airtel'];
+    29→const paymentMethodOptions = ['Cash', 'Mobile Money', 'Card'];
+    30→const fuelTypeOptions = ['Super', 'Diesel', 'Gas'];
+    31→const openingHourPresets = ['08:00 - 20:00', '09:00 - 19:00', '24/7'];
+    32→// Vercel serverless payload limit is 4.5MB; base64 adds ~33% overhead.
+    33→// Keep raw threshold at 3MB so base64 + JSON stays under 4.5MB.
+    34→const MAX_SUBMISSION_IMAGE_BYTES = 3 * 1024 * 1024;
+    35→const MAX_UPLOAD_DIMENSION = 1600;
+    36→const IMAGE_QUALITY_LOW_END = 0.72;
+    37→const IMAGE_QUALITY_DEFAULT = 0.82;
+    38→const JPEG_MIME_TYPES = new Set(['image/jpeg', 'image/jpg']);
+    39→
+    40→function dataUrlToBytes(dataUrl: string): Uint8Array | null {
+    41→  const commaIndex = dataUrl.indexOf(',');
+    42→  if (commaIndex === -1) return null;
+    43→  const base64 = dataUrl.slice(commaIndex + 1);
+    44→  if (!base64) return null;
+    45→  const binary = atob(base64);
+    46→  const bytes = new Uint8Array(binary.length);
+    47→  for (let i = 0; i < binary.length; i += 1) {
+    48→    bytes[i] = binary.charCodeAt(i);
+    49→  }
+    50→  return bytes;
+    51→}
+    52→
+    53→function bytesToDataUrl(bytes: Uint8Array, mime: string): string {
+    54→  let binary = '';
+    55→  for (let i = 0; i < bytes.length; i += 1) {
+    56→    binary += String.fromCharCode(bytes[i] ?? 0);
+    57→  }
+    58→  return `data:${mime};base64,${btoa(binary)}`;
+    59→}
+    60→
+    61→function extractJpegExifSegment(bytes: Uint8Array): Uint8Array | null {
+    62→  if (bytes.length < 4) return null;
+    63→  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+    64→
+    65→  let offset = 2;
+    66→  while (offset + 4 <= bytes.length) {
+    67→    if (bytes[offset] !== 0xff) {
+    68→      offset += 1;
+    69→      continue;
+    70→    }
+    71→
+    72→    const marker = bytes[offset + 1];
+    73→    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+    74→      offset += 2;
+    75→      continue;
+    76→    }
+    77→    if (marker === 0xda || marker === 0xd9) break;
+    78→
+    79→    const segmentLength = ((bytes[offset + 2] ?? 0) << 8) | (bytes[offset + 3] ?? 0);
+    80→    if (segmentLength < 2) break;
+    81→    const segmentEnd = offset + 2 + segmentLength;
+    82→    if (segmentEnd > bytes.length) break;
+    83→
+    84→    if (marker === 0xe1 && segmentLength >= 8) {
+    85→      const signature = String.fromCharCode(
+    86→        bytes[offset + 4] ?? 0,
+    87→        bytes[offset + 5] ?? 0,
+    88→        bytes[offset + 6] ?? 0,
+    89→        bytes[offset + 7] ?? 0,
+    90→        bytes[offset + 8] ?? 0,
+    91→        bytes[offset + 9] ?? 0,
+    92→      );
+    93→      if (signature === 'Exif\0\0') {
+    94→        return bytes.slice(offset, segmentEnd);
+    95→      }
+    96→    }
+    97→
+    98→    offset = segmentEnd;
+    99→  }
+   100→
+   101→  return null;
+   102→}
+   103→
+   104→function injectExifIntoJpeg(compressedBytes: Uint8Array, exifSegment: Uint8Array): Uint8Array | null {
+   105→  if (compressedBytes.length < 2) return null;
+   106→  if (compressedBytes[0] !== 0xff || compressedBytes[1] !== 0xd8) return null;
+   107→  if (!exifSegment.length) return null;
+   108→
+   109→  const merged = new Uint8Array(compressedBytes.length + exifSegment.length);
+   110→  merged[0] = compressedBytes[0];
+   111→  merged[1] = compressedBytes[1];
+   112→  merged.set(exifSegment, 2);
+   113→  merged.set(compressedBytes.slice(2), 2 + exifSegment.length);
+   114→  return merged;
+   115→}
+   116→
+   117→async function preserveJpegExif(originalFile: File, compressedDataUrl: string): Promise<string> {
+   118→  if (!JPEG_MIME_TYPES.has((originalFile.type || '').toLowerCase())) return compressedDataUrl;
+   119→
+   120→  const originalBytes = new Uint8Array(await originalFile.arrayBuffer());
+   121→  const exifSegment = extractJpegExifSegment(originalBytes);
+   122→  if (!exifSegment) return compressedDataUrl;
+   123→
+   124→  const compressedBytes = dataUrlToBytes(compressedDataUrl);
+   125→  if (!compressedBytes) return compressedDataUrl;
+   126→  if (extractJpegExifSegment(compressedBytes)) return compressedDataUrl;
+   127→
+   128→  const merged = injectExifIntoJpeg(compressedBytes, exifSegment);
+   129→  if (!merged) return compressedDataUrl;
+   130→  return bytesToDataUrl(merged, 'image/jpeg');
+   131→}
+   132→
+   133→function parseDeviceFromUserAgent(): { make: string | null; model: string | null } {
+   134→  const ua = navigator.userAgent;
+   135→  // iPhone detection
+   136→  const iphoneMatch = ua.match(/iPhone/);
+   137→  if (iphoneMatch) return { make: 'Apple', model: 'iPhone' };
+   138→  // iPad detection
+   139→  const ipadMatch = ua.match(/iPad/);
+   140→  if (ipadMatch) return { make: 'Apple', model: 'iPad' };
+   141→  // Android device detection
+   142→  const androidMatch = ua.match(/;\s*([^;)]+)\s+Build\//);
+   143→  if (androidMatch) return { make: null, model: androidMatch[1]?.trim() ?? null };
+   144→  return { make: null, model: null };
+   145→}
+   146→
+   147→async function extractClientExif(
+   148→  file: File,
+   149→  deviceLocation: { latitude: number; longitude: number } | null,
+   150→): Promise<ClientExifData | null> {
+   151→  // Step 1: Try extracting EXIF from the raw file (works on Android, some iOS versions)
+   152→  let lat: number | null = null;
+   153→  let lng: number | null = null;
+   154→  let capturedAt: string | null = null;
+   155→  let deviceMake: string | null = null;
+   156→  let deviceModel: string | null = null;
+   157→
+   158→  try {
+   159→    const buffer = await file.arrayBuffer();
+   160→    const [exifData, gpsData] = await Promise.all([
+   161→      exifr.parse(buffer, { gps: true, exif: true, tiff: true, pick: [
+   162→        'latitude', 'longitude', 'GPSLatitude', 'GPSLongitude',
+   163→        'DateTimeOriginal', 'DateTimeDigitized', 'CreateDate', 'ModifyDate',
+   164→        'Make', 'Model',
+   165→      ] }).catch(() => null),
+   166→      exifr.gps(buffer).catch(() => null),
+   167→    ]);
+   168→    const merged = { ...(exifData ?? {}), ...(gpsData ?? {}) } as Record<string, unknown>;
+   169→    lat = typeof merged.latitude === 'number' ? merged.latitude : null;
+   170→    lng = typeof merged.longitude === 'number' ? merged.longitude : null;
+   171→    const rawDate = merged.DateTimeOriginal ?? merged.DateTimeDigitized ?? merged.CreateDate ?? merged.ModifyDate;
+   172→    if (rawDate instanceof Date) {
+   173→      capturedAt = rawDate.toISOString();
+   174→    } else if (typeof rawDate === 'string' && rawDate.trim()) {
+   175→      const m = rawDate.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+   176→      capturedAt = m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}` : rawDate;
+   177→    }
+   178→    deviceMake = typeof merged.Make === 'string' ? merged.Make : null;
+   179→    deviceModel = typeof merged.Model === 'string' ? merged.Model : null;
+   180→  } catch {
+   181→    // EXIF parsing failed entirely -- fall through to device fallback
+   182→  }
+   183→
+   184→  // Step 2: Fill gaps with browser APIs (critical for iOS which strips EXIF from <input capture>)
+   185→  if (lat == null && lng == null && deviceLocation) {
+   186→    lat = deviceLocation.latitude;
+   187→    lng = deviceLocation.longitude;
+   188→  }
+   189→  if (!capturedAt) {
+   190→    capturedAt = new Date().toISOString();
+   191→  }
+   192→  if (!deviceMake && !deviceModel) {
+   193→    const parsed = parseDeviceFromUserAgent();
+   194→    deviceMake = parsed.make;
+   195→    deviceModel = parsed.model;
+   196→  }
+   197→
+   198→  if (lat == null && lng == null && !capturedAt && !deviceMake && !deviceModel) return null;
+   199→  return { latitude: lat, longitude: lng, capturedAt, deviceMake, deviceModel };
+   200→}
+   201→
+   202→const pointTypeToVertical = (type: Category): Vertical => {
+   203→  if (type === Category.PHARMACY) return 'pharmacy';
+   204→  if (type === Category.FUEL) return 'fuel_station';
+   205→  return 'mobile_money';
+   206→};
+   207→
+   208→const ContributionFlow: React.FC<Props> = ({ onBack, onComplete, language, mode, seedPoint }) => {
+   209→  const t = (en: string, fr: string) => (language === 'fr' ? fr : en);
+   210→  const [vertical, setVertical] = useState<Vertical>(() => (seedPoint ? pointTypeToVertical(seedPoint.type) : 'pharmacy'));
+   211→  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+   212→  const [photoFile, setPhotoFile] = useState<File | null>(null);
+   213→  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+   214→  const [showManualLocation, setShowManualLocation] = useState(false);
+   215→  const [manualLatitude, setManualLatitude] = useState('');
+   216→  const [manualLongitude, setManualLongitude] = useState('');
+   217→  const [photoError, setPhotoError] = useState('');
+   218→  const [locationError, setLocationError] = useState('');
+   219→  const [errorMessage, setErrorMessage] = useState('');
+   220→  const [syncMessage, setSyncMessage] = useState('');
+   221→  const [isSubmitting, setIsSubmitting] = useState(false);
+   222→  const [submitted, setSubmitted] = useState(false);
+   223→
+   224→  const [siteName, setSiteName] = useState(seedPoint?.name ?? '');
+   225→  const [openingHours, setOpeningHours] = useState(seedPoint?.openingHours ?? '');
+   226→  const [isOpenNow, setIsOpenNow] = useState(seedPoint?.isOpenNow ?? true);
+   227→  const [isOnDuty, setIsOnDuty] = useState(seedPoint?.isOnDuty ?? false);
+   228→  const [providers, setProviders] = useState<string[]>(seedPoint?.providers ?? []);
+   229→  const [merchantId, setMerchantId] = useState(seedPoint?.merchantId ?? '');
+   230→  const [merchantProvider, setMerchantProvider] = useState(seedPoint?.providers?.[0] ?? providerOptions[0]);
+   231→  const [paymentMethods, setPaymentMethods] = useState<string[]>(seedPoint?.paymentMethods ?? []);
+   232→  const [hasFuelAvailable, setHasFuelAvailable] = useState(seedPoint?.hasFuelAvailable ?? true);
+   233→  const [fuelTypes, setFuelTypes] = useState<string[]>(seedPoint?.fuelTypes ?? (seedPoint?.fuelType ? [seedPoint.fuelType] : []));
+   234→  const [priceFuelType, setPriceFuelType] = useState(seedPoint?.fuelType ?? fuelTypeOptions[0]);
+   235→  const [priceValue, setPriceValue] = useState(seedPoint?.price ? String(seedPoint.price) : '');
+   236→  const [quality, setQuality] = useState(seedPoint?.quality ?? 'Standard');
+   237→  const [isLowEndDevice] = useState<boolean>(() => detectLowEndDevice());
+   238→
+   239→  const gaps = useMemo(() => seedPoint?.gaps ?? [], [seedPoint]);
+   240→  const isEnrichMode = mode === 'ENRICH' && Boolean(seedPoint);
+   241→  const gapLabel = (gap: string) => {
+   242→    const labels: Record<string, { en: string; fr: string }> = {
+   243→      openingHours: { en: 'Opening Hours', fr: 'Heures d\'ouverture' },
+   244→      isOpenNow: { en: 'Open Now Status', fr: 'Statut ouvert maintenant' },
+   245→      isOnDuty: { en: 'On-call Pharmacy', fr: 'Pharmacie de garde' },
+   246→      merchantIdByProvider: { en: 'Merchant IDs', fr: 'ID marchands' },
+   247→      paymentMethods: { en: 'Payment Methods', fr: 'Moyens de paiement' },
+   248→      providers: { en: 'Providers', fr: 'Operateurs' },
+   249→      fuelTypes: { en: 'Fuel Types', fr: 'Types de carburant' },
+   250→      pricesByFuel: { en: 'Fuel Prices', fr: 'Prix carburant' },
+   251→      quality: { en: 'Quality', fr: 'Qualite' },
+   252→      hasFuelAvailable: { en: 'Fuel Availability', fr: 'Disponibilite carburant' }
+   253→    };
+   254→    const label = labels[gap];
+   255→    if (!label) return gap;
+   256→    return language === 'fr' ? label.fr : label.en;
+   257→  };
+   258→
+   259→  useEffect(() => {
+   260→    if (seedPoint) {
+   261→      setVertical(pointTypeToVertical(seedPoint.type));
+   262→    }
+   263→  }, [seedPoint]);
+   264→
+   265→  useEffect(() => {
+   266→    if (!navigator.geolocation) return;
+   267→    navigator.geolocation.getCurrentPosition(
+   268→      (pos) => setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+   269→      () => setLocation(null),
+   270→      { enableHighAccuracy: true, timeout: 10000 }
+   271→    );
+   272→  }, []);
+   273→
+   274→  useEffect(() => {
+   275→    return () => {
+   276→      if (photoPreview) URL.revokeObjectURL(photoPreview);
+   277→    };
+   278→  }, [photoPreview]);
+   279→
+   280→  useEffect(() => {
+   281→    const onOnline = async () => {
+   282→      await syncQueuedItems();
+   283→    };
+   284→    window.addEventListener('online', onOnline);
+   285→    return () => window.removeEventListener('online', onOnline);
+   286→  }, []);
+   287→
+   288→  const syncQueuedItems = async (): Promise<QueueSyncSummary | null> => {
+   289→    try {
+   290→      const summary = await flushOfflineQueue(sendSubmissionPayload);
+   291→      if (summary.permanentFailures > 0) {
+   292→        const reason = summary.permanentFailureMessages[0] ?? t('Submission rejected by server validation.', 'Soumission rejetee par la validation serveur.');
+   293→        const rejectedMessage = t(
+   294→          `${summary.permanentFailures} queued item(s) were rejected: ${reason}`,
+   295→          `${summary.permanentFailures} element(s) en file ont ete rejetes : ${reason}`
+   296→        );
+   297→        if (summary.failed > 0) {
+   298→          setSyncMessage(`${rejectedMessage} ${t(`${summary.failed} item(s) still pending sync.`, `${summary.failed} element(s) en attente de synchronisation.`)}`);
+   299→        } else {
+   300→          setSyncMessage(rejectedMessage);
+   301→        }
+   302→      } else if (summary.failed > 0) {
+   303→        setSyncMessage(t(`Saved offline. ${summary.failed} item(s) still pending sync.`, `${summary.failed} element(s) en attente de synchronisation.`));
+   304→      } else if (summary.synced > 0) {
+   305→        setSyncMessage(t('Saved offline and synced successfully.', 'Enregistre hors ligne puis synchronise avec succes.'));
+   306→      } else {
+   307→        const stats = await getQueueStats();
+   308→        if (stats.total > 0) {
+   309→          setSyncMessage(t(`${stats.total} item(s) queued for sync.`, `${stats.total} element(s) en file de synchronisation.`));
+   310→        }
+   311→      }
+   312→      return summary;
+   313→    } catch (error) {
+   314→      setSyncMessage(error instanceof Error ? error.message : t('Saved offline. Sync will retry automatically.', 'Enregistre hors ligne. La synchronisation reessaiera automatiquement.'));
+   315→      return null;
+   316→    }
+   317→  };
+   318→
+   319→  const getCurrentLocation = () =>
+   320→    new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
+   321→      if (!navigator.geolocation) {
+   322→        reject(new Error(t('Geolocation not supported.', 'Geolocalisation non supportee.')));
+   323→        return;
+   324→      }
+   325→      navigator.geolocation.getCurrentPosition(
+   326→        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+   327→        () => reject(new Error(t('Unable to access location.', 'Impossible d\'acceder a la localisation.'))),
+   328→        { enableHighAccuracy: true, timeout: 10000 }
+   329→      );
+   330→    });
+   331→
+   332→  const retryLocation = async () => {
+   333→    setLocationError('');
+   334→    try {
+   335→      const current = await getCurrentLocation();
+   336→      setLocation(current);
+   337→      setShowManualLocation(false);
+   338→    } catch {
+   339→      setLocation(null);
+   340→      setLocationError(t('Unable to access location. Use manual fallback coordinates.', 'Impossible d\'acceder a la localisation. Utilisez les coordonnees manuelles.'));
+   341→      setShowManualLocation(true);
+   342→    }
+   343→  };
+   344→
+   345→  const parseManualLocation = () => {
+   346→    const latRaw = manualLatitude.trim();
+   347→    const lngRaw = manualLongitude.trim();
+   348→    if (!latRaw && !lngRaw) return null;
+   349→    const latitude = Number(latRaw);
+   350→    const longitude = Number(lngRaw);
+   351→    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+   352→    return { latitude, longitude };
+   353→  };
+   354→
+   355→  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+   356→    const file = event.target.files?.[0];
+   357→    if (!file) return;
+   358→    setPhotoFile(file);
+   359→    setPhotoError('');
+   360→    const nextPreview = URL.createObjectURL(file);
+   361→    setPhotoPreview((prev) => {
+   362→      if (prev) URL.revokeObjectURL(prev);
+   363→      return nextPreview;
+   364→    });
+   365→  };
+   366→
+   367→  const fileToBase64 = async (file: File) => {
+   368→    const readAsDataUrl = (target: Blob) =>
+   369→      new Promise<string>((resolve, reject) => {
+   370→        const reader = new FileReader();
+   371→        reader.onload = () => {
+   372→          if (typeof reader.result === 'string') {
+   373→            resolve(reader.result);
+   374→            return;
+   375→          }
+   376→          reject(new Error('Unable to read file.'));
+   377→        };
+   378→        reader.onerror = () => reject(new Error('Unable to read file.'));
+   379→        reader.readAsDataURL(target);
+   380→      });
+   381→
+   382→    if (!file.type.startsWith('image/')) {
+   383→      return await readAsDataUrl(file);
+   384→    }
+   385→
+   386→    // Keep original capture when possible so EXIF (GPS/time/device) reaches server-side forensics.
+   387→    if (file.size <= MAX_SUBMISSION_IMAGE_BYTES) {
+   388→      return await readAsDataUrl(file);
+   389→    }
+   390→
+   391→    const loadImage = (objectUrl: string) =>
+   392→      new Promise<HTMLImageElement>((resolve, reject) => {
+   393→        const img = new Image();
+   394→        img.onload = () => resolve(img);
+   395→        img.onerror = () => reject(new Error('Unable to decode image.'));
+   396→        img.src = objectUrl;
+   397→      });
+   398→
+   399→    const objectUrl = URL.createObjectURL(file);
+   400→    try {
+   401→      const img = await loadImage(objectUrl);
+   402→      const maxDimension = Math.max(img.width, img.height);
+   403→      const scale = maxDimension > MAX_UPLOAD_DIMENSION ? MAX_UPLOAD_DIMENSION / maxDimension : 1;
+   404→      const width = Math.max(1, Math.round(img.width * scale));
+   405→      const height = Math.max(1, Math.round(img.height * scale));
+   406→      const canvas = document.createElement('canvas');
+   407→      canvas.width = width;
+   408→      canvas.height = height;
+   409→      const ctx = canvas.getContext('2d');
+   410→      if (!ctx) {
+   411→        return await readAsDataUrl(file);
+   412→      }
+   413→      ctx.drawImage(img, 0, 0, width, height);
+   414→      const quality = isLowEndDevice ? IMAGE_QUALITY_LOW_END : IMAGE_QUALITY_DEFAULT;
+   415→      const compressed = canvas.toDataURL('image/jpeg', quality);
+   416→      return await preserveJpegExif(file, compressed);
+   417→    } catch {
+   418→      return await readAsDataUrl(file);
+   419→    } finally {
+   420→      URL.revokeObjectURL(objectUrl);
+   421→    }
+   422→  };
+   423→
+   424→  const toggleListValue = (current: string[], value: string): string[] => {
+   425→    return current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+   426→  };
+   427→
+   428→  const buildCreateDetails = (): Record<string, unknown> => {
+   429→    const clientDevice = getClientDeviceInfo();
+   430→    if (vertical === 'pharmacy') {
+   431→      return {
+   432→        name: siteName.trim(),
+   433→        isOpenNow,
+   434→        openingHours: openingHours.trim() || undefined,
+   435→        clientDevice
+   436→      };
+   437→    }
+   438→    if (vertical === 'mobile_money') {
+   439→      return {
+   440→        providers,
+   441→        openingHours: openingHours.trim() || undefined,
+   442→        paymentMethods: paymentMethods.length ? paymentMethods : undefined,
+   443→        merchantIdByProvider: merchantId.trim() ? { [merchantProvider]: merchantId.trim() } : undefined,
+   444→        clientDevice
+   445→      };
+   446→    }
+   447→    const parsedPrice = Number(priceValue);
+   448→    return {
+   449→      name: siteName.trim(),
+   450→      hasFuelAvailable,
+   451→      fuelTypes: fuelTypes.length ? fuelTypes : undefined,
+   452→      pricesByFuel: Number.isFinite(parsedPrice) ? { [priceFuelType]: parsedPrice } : undefined,
+   453→      quality,
+   454→      openingHours: openingHours.trim() || undefined,
+   455→      paymentMethods: paymentMethods.length ? paymentMethods : undefined,
+   456→      clientDevice
+   457→    };
+   458→  };
+   459→
+   460→  const buildEnrichDetails = (): Record<string, unknown> => {
+   461→    const details: Record<string, unknown> = { clientDevice: getClientDeviceInfo() };
+   462→    for (const gap of gaps) {
+   463→      if (gap === 'openingHours' && openingHours.trim()) details.openingHours = openingHours.trim();
+   464→      if (gap === 'isOpenNow') details.isOpenNow = isOpenNow;
+   465→      if (gap === 'isOnDuty') details.isOnDuty = isOnDuty;
+   466→      if (gap === 'providers' && providers.length) details.providers = providers;
+   467→      if (gap === 'merchantIdByProvider' && merchantId.trim()) details.merchantIdByProvider = { [merchantProvider]: merchantId.trim() };
+   468→      if (gap === 'paymentMethods' && paymentMethods.length) details.paymentMethods = paymentMethods;
+   469→      if (gap === 'fuelTypes' && fuelTypes.length) details.fuelTypes = fuelTypes;
+   470→      if (gap === 'pricesByFuel' && Number.isFinite(Number(priceValue))) details.pricesByFuel = { [priceFuelType]: Number(priceValue) };
+   471→      if (gap === 'quality' && quality) details.quality = quality;
+   472→      if (gap === 'hasFuelAvailable') details.hasFuelAvailable = hasFuelAvailable;
+   473→    }
+   474→    return details;
+   475→  };
+   476→
+   477→  const validateBeforeSubmit = (details: Record<string, unknown>): boolean => {
+   478→    setPhotoError('');
+   479→    setLocationError('');
+   480→    setErrorMessage('');
+   481→
+   482→    if (!photoFile) {
+   483→      setPhotoError(t('Please capture a live photo before submitting.', 'Veuillez capturer une photo en direct avant de soumettre.'));
+   484→      return false;
+   485→    }
+   486→
+   487→    if (!location && !parseManualLocation()) {
+   488→      setLocationError(t('GPS is required. Retry location or enter fallback coordinates.', 'Le GPS est requis. Reessayez la localisation ou saisissez des coordonnees de secours.'));
+   489→      return false;
+   490→    }
+   491→
+   492→    if (!isEnrichMode) {
+   493→      if (vertical === 'pharmacy' && !siteName.trim()) {
+   494→        setErrorMessage(t('Pharmacy name is required.', 'Le nom de la pharmacie est requis.'));
+   495→        return false;
+   496→      }
+   497→      if (vertical === 'mobile_money' && providers.length === 0) {
+   498→        setErrorMessage(t('Select at least one provider.', 'Selectionnez au moins un operateur.'));
+   499→        return false;
+   500→      }
+   501→      if (vertical === 'fuel_station' && !siteName.trim()) {
+   502→        setErrorMessage(t('Fuel station name is required.', 'Le nom de la station-service est requis.'));
+   503→        return false;
+   504→      }
+   505→    } else if (Object.keys(details).filter((field) => field !== 'clientDevice').length === 0) {
+   506→      setErrorMessage(t('Fill at least one gap field to enrich this point.', 'Renseignez au moins un champ manquant pour enrichir ce point.'));
+   507→      return false;
+   508→    }
+   509→
+   510→    return true;
+   511→  };
+   512→
+   513→  const handleSubmit = async () => {
+   514→    if (!photoFile) {
+   515→      setPhotoError(t('Please capture a live photo before submitting.', 'Veuillez capturer une photo en direct avant de soumettre.'));
+   516→      return;
+   517→    }
+   518→
+   519→    const manual = parseManualLocation();
+   520→    if ((manualLatitude.trim() || manualLongitude.trim()) && !manual) {
+   521→      setLocationError(t('Enter a valid latitude and longitude.', 'Entrez une latitude et une longitude valides.'));
+   522→      return;
+   523→    }
+   524→
+   525→    const details = isEnrichMode ? buildEnrichDetails() : buildCreateDetails();
+   526→    if (!validateBeforeSubmit(details)) return;
+   527→
+   528→    setSyncMessage('');
+   529→    setIsSubmitting(true);
+   530→    try {
+   531→      const [imageBase64, clientExif] = await Promise.all([
+   532→        fileToBase64(photoFile),
+   533→        extractClientExif(photoFile, location ?? manual ?? null),
+   534→      ]);
+   535→      const payload: SubmissionInput = {
+   536→        eventType: isEnrichMode ? 'ENRICH_EVENT' : 'CREATE_EVENT',
+   537→        category: vertical,
+   538→        pointId: isEnrichMode && seedPoint ? seedPoint.id : undefined,
+   539→        location: location ?? manual ?? undefined,
+   540→        details,
+   541→        imageBase64,
+   542→        clientExif,
+   543→      };
+   544→
+   545→      const queuedItem = await enqueueSubmission(payload);
+   546→      let summary: QueueSyncSummary | null = null;
+   547→      if (navigator.onLine) {
+   548→        summary = await syncQueuedItems();
+   549→      } else {
+   550→        const stats = await getQueueStats();
+   551→        setSyncMessage(t(`Saved offline. ${stats.total} item(s) pending sync.`, `Enregistre hors ligne. ${stats.total} element(s) en attente de synchronisation.`));
+   552→      }
+   553→
+   554→      if (summary && summary.permanentFailureIds.includes(queuedItem.id)) {
+   555→        const reason = summary.permanentFailureMessages[0] ?? t('Submission rejected by server validation.', 'Soumission rejetee par la validation serveur.');
+   556→        setErrorMessage(reason);
+   557→        return;
+   558→      }
+   559→
+   560→      setSubmitted(true);
+   561→    } catch (error) {
+   562→      const syncError = toSubmissionSyncError(error);
+   563→      setErrorMessage(syncError.message || t('Submission failed.', 'Echec de la soumission.'));
+   564→    } finally {
+   565→      setIsSubmitting(false);
+   566→    }
+   567→  };
+   568→
+   569→  const renderVerticalSelector = () => {
+   570→    if (isEnrichMode) return null;
+   571→    const verticalEntries = Object.values(VERTICALS);
+   572→    return (
+   573→      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-3">
+   574→        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('Vertical', 'Verticale')}</h4>
+   575→        <div className="grid grid-cols-3 gap-2">
+   576→          {verticalEntries.map((v) => (
+   577→            <button
+   578→              key={v.id}
+   579→              onClick={() => setVertical(v.id as Vertical)}
+   580→              className={`h-11 rounded-xl border text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1 ${vertical === v.id ? `border-current` : 'border-gray-100 text-gray-500'}`}
+   581→              style={vertical === v.id ? { backgroundColor: v.bgColor, color: v.color, borderColor: v.color } : undefined}
+   582→            >
+   583→              <VerticalIcon name={v.icon} size={12} />
+   584→              {getCategoryLabel(v.id, language)}
+   585→            </button>
+   586→          ))}
+   587→        </div>
+   588→      </div>
+   589→    );
+   590→  };
+   591→
+   592→  const renderCommonLocationBlock = () => (
+   593→    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-3">
+   594→      <div className="flex items-center justify-between">
+   595→        <div className="flex items-center space-x-2">
+   596→          <MapPin size={16} className="text-[#0f2b46]" />
+   597→          <span className="text-xs font-bold text-gray-900">{t('GPS Location', 'Localisation GPS')}</span>
+   598→        </div>
+   599→        <button onClick={retryLocation} className="text-[10px] font-bold uppercase tracking-widest text-[#0f2b46]">
+   600→          {t('Retry', 'Reessayer')}
+   601→        </button>
+   602→      </div>
+   603→      <p className="text-[11px] text-gray-500">
+   604→        {location
+   605→          ? `GPS: ${location.latitude.toFixed(4)}°, ${location.longitude.toFixed(4)}°`
+   606→          : t('GPS unavailable. Retry, then use fallback if needed.', 'GPS indisponible. Reessayez, puis utilisez le secours si necessaire.')}
+   607→      </p>
+   608→      {!location && (
+   609→        <button
+   610→          onClick={() => setShowManualLocation((prev) => !prev)}
+   611→          className="text-[10px] font-bold uppercase tracking-widest text-[#c86b4a]"
+   612→        >
+   613→          {showManualLocation ? t('Hide Manual Fallback', 'Masquer secours manuel') : t('Use Manual Fallback', 'Utiliser secours manuel')}
+   614→        </button>
+   615→      )}
+   616→      {showManualLocation && (
+   617→        <div className="grid grid-cols-2 gap-3">
+   618→          <input
+   619→            value={manualLatitude}
+   620→            onChange={(event) => setManualLatitude(event.target.value)}
+   621→            placeholder={t('Latitude', 'Latitude')}
+   622→            className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+   623→          />
+   624→          <input
+   625→            value={manualLongitude}
+   626→            onChange={(event) => setManualLongitude(event.target.value)}
+   627→            placeholder={t('Longitude', 'Longitude')}
+   628→            className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+   629→          />
+   630→        </div>
+   631→      )}
+   632→      {locationError && (
+   633→        <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-[10px] font-bold uppercase tracking-widest text-red-600">
+   634→          {locationError}
+   635→        </div>
+   636→      )}
+   637→    </div>
+   638→  );
+   639→
+   640→  const renderPhotoBlock = () => (
+   641→    <div className="space-y-3">
+   642→      <h4 className="text-sm font-bold text-gray-900">{t('Live Camera Proof', 'Preuve camera en direct')}</h4>
+   643→      <p className="text-xs text-gray-500">{t('Camera capture only. Gallery uploads are blocked.', 'Capture camera uniquement. Import galerie bloque.')}</p>
+   644→      <div className="aspect-square w-full rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 relative overflow-hidden">
+   645→        {photoPreview ? (
+   646→          <img src={photoPreview} alt={t('Captured photo', 'Photo capturee')} className="absolute inset-0 h-full w-full object-cover" />
+   647→        ) : (
+   648→          <>
+   649→            <Camera size={46} className="mb-4 opacity-40" />
+   650→            <p className="text-xs font-bold uppercase tracking-widest opacity-60">{t('Live capture required', 'Capture live requise')}</p>
+   651→          </>
+   652→        )}
+   653→        <input
+   654→          id="capture-photo"
+   655→          type="file"
+   656→          accept="image/*"
+   657→          capture="environment"
+   658→          onChange={handlePhotoChange}
+   659→          className="sr-only"
+   660→        />
+   661→        <label
+   662→          htmlFor="capture-photo"
+   663→          className="relative z-10 mt-6 inline-flex items-center justify-center rounded-full border border-gray-200 bg-white/90 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-600 shadow-sm backdrop-blur hover:bg-white"
+   664→        >
+   665→          {photoPreview ? t('Retake Photo', 'Reprendre photo') : t('Capture Photo', 'Capturer photo')}
+   666→        </label>
+   667→      </div>
+   668→      {photoError && (
+   669→        <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-[10px] font-bold uppercase tracking-widest text-red-600">
+   670→          {photoError}
+   671→        </div>
+   672→      )}
+   673→    </div>
+   674→  );
+   675→
+   676→  const renderCreateFields = () => {
+   677→    if (vertical === 'pharmacy') {
+   678→      return (
+   679→        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+   680→          <h4 className="text-sm font-bold text-gray-900">{t('Create Pharmacy', 'Creer une pharmacie')}</h4>
+   681→          <input
+   682→            value={siteName}
+   683→            onChange={(event) => setSiteName(event.target.value)}
+   684→            placeholder={t('Pharmacy name', 'Nom de la pharmacie')}
+   685→            className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+   686→          />
+   687→          <div className="flex items-center justify-between">
+   688→            <span className="text-xs font-semibold text-gray-600">{t('Open now', 'Ouvert maintenant')}</span>
+   689→            <button
+   690→              onClick={() => setIsOpenNow((prev) => !prev)}
+   691→              className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${isOpenNow ? 'bg-[#4c7c59] text-white' : 'bg-gray-100 text-gray-500'}`}
+   692→            >
+   693→              {isOpenNow ? t('Yes', 'Oui') : t('No', 'Non')}
+   694→            </button>
+   695→          </div>
+   696→        </div>
+   697→      );
+   698→    }
+   699→    if (vertical === 'mobile_money') {
+   700→      return (
+   701→        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+   702→          <h4 className="text-sm font-bold text-gray-900">{t('Create Kiosk', 'Creer un kiosque')}</h4>
+   703→          <div className="flex flex-wrap gap-2">
+   704→            {providerOptions.map((provider) => (
+   705→              <button
+   706→                key={provider}
+   707→                onClick={() => setProviders((prev) => toggleListValue(prev, provider))}
+   708→                className={`px-3 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${providers.includes(provider) ? 'bg-[#0f2b46] text-white' : 'bg-gray-50 text-gray-500'}`}
+   709→              >
+   710→                {provider}
+   711→              </button>
+   712→            ))}
+   713→          </div>
+   714→        </div>
+   715→      );
+   716→    }
+   717→    return (
+   718→      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+   719→        <h4 className="text-sm font-bold text-gray-900">{t('Create Fuel Station', 'Creer une station-service')}</h4>
+   720→        <input
+   721→          value={siteName}
+   722→          onChange={(event) => setSiteName(event.target.value)}
+   723→          placeholder={t('Fuel station name', 'Nom de la station-service')}
+   724→          className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+   725→        />
+   726→        <div className="flex items-center justify-between">
+   727→          <span className="text-xs font-semibold text-gray-600">{t('Fuel available', 'Carburant disponible')}</span>
+   728→          <button
+   729→            onClick={() => setHasFuelAvailable((prev) => !prev)}
+   730→            className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${hasFuelAvailable ? 'bg-[#4c7c59] text-white' : 'bg-gray-100 text-gray-500'}`}
+   731→          >
+   732→            {hasFuelAvailable ? t('Yes', 'Oui') : t('No', 'Non')}
+   733→          </button>
+   734→        </div>
+   735→      </div>
+   736→    );
+   737→  };
+   738→
+   739→  const renderEnrichFields = () => (
+   740→    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+   741→      <h4 className="text-sm font-bold text-gray-900">{t('Enrich Missing Fields', 'Enrichir les champs manquants')}</h4>
+   742→      <div className="flex flex-wrap gap-2">
+   743→        {gaps.map((gap) => (
+   744→          <span key={gap} className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-[#fff8f4] text-[#b85f3f] border border-[#f5d5c6]">
+   745→            {gapLabel(gap)}
+   746→          </span>
+   747→        ))}
+   748→      </div>
+   749→
+   750→      {gaps.includes('openingHours') && (
+   751→        <div className="space-y-2">
+   752→          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('Opening hours', 'Heures d\'ouverture')}</label>
+   753→          <div className="flex flex-wrap gap-2">
+   754→            {openingHourPresets.map((preset) => (
+   755→              <button
+   756→                key={preset}
+   757→                onClick={() => setOpeningHours(preset)}
+   758→                className={`px-3 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${openingHours === preset ? 'bg-[#0f2b46] text-white' : 'bg-gray-50 text-gray-500'}`}
+   759→              >
+   760→                {preset}
+   761→              </button>
+   762→            ))}
+   763→          </div>
+   764→          <input
+   765→            value={openingHours}
+   766→            onChange={(event) => setOpeningHours(event.target.value)}
+   767→            placeholder={t('Custom opening hours', 'Heures d\'ouverture personnalisees')}
+   768→            className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+   769→          />
+   770→        </div>
+   771→      )}
+   772→
+   773→      {gaps.includes('isOpenNow') && (
+   774→        <div className="flex items-center justify-between">
+   775→          <span className="text-xs font-semibold text-gray-600">{t('Open now', 'Ouvert maintenant')}</span>
+   776→          <button
+   777→            onClick={() => setIsOpenNow((prev) => !prev)}
+   778→            className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${isOpenNow ? 'bg-[#4c7c59] text-white' : 'bg-gray-100 text-gray-500'}`}
+   779→          >
+   780→            {isOpenNow ? t('Yes', 'Oui') : t('No', 'Non')}
+   781→          </button>
+   782→        </div>
+   783→      )}
+   784→
+   785→      {gaps.includes('isOnDuty') && (
+   786→        <div className="flex items-center justify-between">
+   787→          <span className="text-xs font-semibold text-gray-600">{t('On-call pharmacy', 'Pharmacie de garde')}</span>
+   788→          <button
+   789→            onClick={() => setIsOnDuty((prev) => !prev)}
+   790→            className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${isOnDuty ? 'bg-[#4c7c59] text-white' : 'bg-gray-100 text-gray-500'}`}
+   791→          >
+   792→            {isOnDuty ? t('Yes', 'Oui') : t('No', 'Non')}
+   793→          </button>
+   794→        </div>
+   795→      )}
+   796→
+   797→      {gaps.includes('providers') && (
+   798→        <div className="space-y-2">
+   799→          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('Providers', 'Operateurs')}</label>
+   800→          <div className="flex flex-wrap gap-2">
+   801→            {providerOptions.map((provider) => (
+   802→              <button
+   803→                key={provider}
+   804→                onClick={() => setProviders((prev) => toggleListValue(prev, provider))}
+   805→                className={`px-3 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${providers.includes(provider) ? 'bg-[#0f2b46] text-white' : 'bg-gray-50 text-gray-500'}`}
+   806→              >
+   807→                {provider}
+   808→              </button>
+   809→            ))}
+   810→          </div>
+   811→        </div>
+   812→      )}
+   813→
+   814→      {gaps.includes('merchantIdByProvider') && (
+   815→        <div className="grid grid-cols-2 gap-3">
+   816→          <select
+   817→            value={merchantProvider}
+   818→            onChange={(event) => setMerchantProvider(event.target.value)}
+   819→            className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+   820→          >
+   821→            {providerOptions.map((provider) => (
+   822→              <option key={provider} value={provider}>{provider}</option>
+   823→            ))}
+   824→          </select>
+   825→          <input
+   826→            value={merchantId}
+   827→            onChange={(event) => setMerchantId(event.target.value)}
+   828→            placeholder={t('Merchant ID', 'ID marchand')}
+   829→            className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+   830→          />
+   831→        </div>
+   832→      )}
+   833→
+   834→      {gaps.includes('paymentMethods') && (
+   835→        <div className="space-y-2">
+   836→          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('Payment methods', 'Moyens de paiement')}</label>
+   837→          <div className="flex flex-wrap gap-2">
+   838→            {paymentMethodOptions.map((method) => (
+   839→              <button
+   840→                key={method}
+   841→                onClick={() => setPaymentMethods((prev) => toggleListValue(prev, method))}
+   842→                className={`px-3 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${paymentMethods.includes(method) ? 'bg-[#0f2b46] text-white' : 'bg-gray-50 text-gray-500'}`}
+   843→              >
+   844→                {method}
+   845→              </button>
+   846→            ))}
+   847→          </div>
+   848→        </div>
+   849→      )}
+   850→
+   851→      {gaps.includes('fuelTypes') && (
+   852→        <div className="space-y-2">
+   853→          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('Fuel types', 'Types de carburant')}</label>
+   854→          <div className="flex flex-wrap gap-2">
+   855→            {fuelTypeOptions.map((type) => (
+   856→              <button
+   857→                key={type}
+   858→                onClick={() => setFuelTypes((prev) => toggleListValue(prev, type))}
+   859→                className={`px-3 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${fuelTypes.includes(type) ? 'bg-[#0f2b46] text-white' : 'bg-gray-50 text-gray-500'}`}
+   860→              >
+   861→                {type}
+   862→              </button>
+   863→            ))}
+   864→          </div>
+   865→        </div>
+   866→      )}
+   867→
+   868→      {gaps.includes('pricesByFuel') && (
+   869→        <div className="grid grid-cols-2 gap-3">
+   870→          <select
+   871→            value={priceFuelType}
+   872→            onChange={(event) => setPriceFuelType(event.target.value)}
+   873→            className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+   874→          >
+   875→            {fuelTypeOptions.map((type) => (
+   876→              <option key={type} value={type}>{type}</option>
+   877→            ))}
+   878→          </select>
+   879→          <input
+   880→            type="number"
+   881→            value={priceValue}
+   882→            onChange={(event) => setPriceValue(event.target.value)}
+   883→            placeholder={t('Price (XAF)', 'Prix (XAF)')}
+   884→            className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+   885→          />
+   886→        </div>
+   887→      )}
+   888→
+   889→      {gaps.includes('quality') && (
+   890→        <div className="flex gap-2">
+   891→          {['Premium', 'Standard', 'Low'].map((option) => (
+   892→            <button
+   893→              key={option}
+   894→              onClick={() => setQuality(option)}
+   895→              className={`flex-1 h-10 rounded-xl text-[10px] font-bold uppercase tracking-widest ${quality === option ? 'bg-[#4c7c59] text-white' : 'bg-gray-50 text-gray-500'}`}
+   896→            >
+   897→              {option}
+   898→            </button>
+   899→          ))}
+   900→        </div>
+   901→      )}
+   902→
+   903→      {gaps.includes('hasFuelAvailable') && (
+   904→        <div className="flex items-center justify-between">
+   905→          <span className="text-xs font-semibold text-gray-600">{t('Fuel available', 'Carburant disponible')}</span>
+   906→          <button
+   907→            onClick={() => setHasFuelAvailable((prev) => !prev)}
+   908→            className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${hasFuelAvailable ? 'bg-[#4c7c59] text-white' : 'bg-gray-100 text-gray-500'}`}
+   909→          >
+   910→            {hasFuelAvailable ? t('Yes', 'Oui') : t('No', 'Non')}
+   911→          </button>
+   912→        </div>
+   913→      )}
+   914→    </div>
+   915→  );
+   916→
+   917→  const verticalIcon = <VerticalIcon name={VERTICALS[vertical]?.icon ?? 'pill'} size={18} />;
+   918→
+   919→  if (submitted) {
+   920→    return (
+   921→      <div className="flex flex-col h-full bg-[#f9fafb]">
+   922→        <div className="pt-6 px-8">
+   923→          <button onClick={onBack} className="p-1 -ml-1 text-gray-500">
+   924→            <ArrowLeft size={24} />
+   925→          </button>
+   926→        </div>
+   927→        <div className="flex-1 px-6 flex flex-col items-center justify-center text-center space-y-4">
+   928→          <div className="w-16 h-16 rounded-2xl bg-[#eaf3ee] text-[#4c7c59] flex items-center justify-center">
+   929→            <CheckCircle size={30} />
+   930→          </div>
+   931→          <h2 className="text-2xl font-bold text-gray-900">{t('Saved Offline', 'Enregistre hors ligne')}</h2>
+   932→          <p className="text-sm text-gray-500">
+   933→            {t('Your submission is saved locally first and will sync automatically when online.', 'Votre soumission est d\'abord enregistree localement et sera synchronisee automatiquement en ligne.')}
+   934→          </p>
+   935→          {syncMessage && (
+   936→            <div className="w-full rounded-xl border border-[#d5e1eb] bg-white p-3 text-xs text-[#0f2b46]">
+   937→              {syncMessage}
+   938→            </div>
+   939→          )}
+   940→        </div>
+   941→        <div className="p-6">
+   942→          <button
+   943→            onClick={onComplete}
+   944→            className="w-full h-14 bg-[#c86b4a] text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg hover:bg-[#b85f3f] active:scale-95 transition-all"
+   945→          >
+   946→            {t('Return to Map', 'Retour a la carte')}
+   947→          </button>
+   948→        </div>
+   949→      </div>
+   950→    );
+   951→  }
+   952→
+   953→  return (
+   954→    <div className="flex flex-col h-full bg-[#f9fafb]">
+   955→      <div className="pt-6 px-6">
+   956→        <div className="flex items-center justify-between mb-3">
+   957→          <button onClick={onBack} className="p-1 -ml-1 text-gray-500">
+   958→            <ArrowLeft size={24} />
+   959→          </button>
+   960→          <span className="text-xs font-bold text-gray-900 uppercase tracking-[0.2em]">
+   961→            {isEnrichMode ? t('Enrich Point', 'Enrichir point') : t('Create Point', 'Creer point')}
+   962→          </span>
+   963→          <span className="w-6"></span>
+   964→        </div>
+   965→        <div className="flex items-center space-x-2 text-[10px] font-bold uppercase tracking-widest text-[#4c7c59] mb-4">
+   966→          <ShieldCheck size={12} />
+   967→          <span>{t('Live photo + GPS mandatory', 'Photo live + GPS obligatoires')}</span>
+   968→        </div>
+   969→      </div>
+   970→
+   971→      <div className="flex-1 p-6 overflow-y-auto no-scrollbar space-y-5">
+   972→        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+   973→          <div className="flex items-center space-x-2 text-[#0f2b46]">
+   974→            {verticalIcon}
+   975→            <span className="text-sm font-bold">
+   976→              {vertical === 'pharmacy'
+   977→                ? t('Pharmacy', 'Pharmacie')
+   978→                : vertical === 'mobile_money'
+   979→                  ? t('Mobile Money Kiosk', 'Kiosque mobile money')
+   980→                  : t('Fuel Station', 'Station-service')}
+   981→            </span>
+   982→          </div>
+   983→          {isEnrichMode && seedPoint && (
+   984→            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 truncate max-w-[140px]">
+   985→              {seedPoint.name}
+   986→            </span>
+   987→          )}
+   988→        </div>
+   989→
+   990→        {renderVerticalSelector()}
+   991→        {renderPhotoBlock()}
+   992→        {renderCommonLocationBlock()}
+   993→        {isEnrichMode ? renderEnrichFields() : renderCreateFields()}
+   994→
+   995→        {errorMessage && (
+   996→          <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-[10px] font-bold uppercase tracking-widest text-red-600">
+   997→            {errorMessage}
+   998→          </div>
+   999→        )}
+  1000→
+  1001→        {syncMessage && (
+  1002→          <div className="rounded-xl border border-[#d5e1eb] bg-white p-3 text-xs text-[#0f2b46]">
+  1003→            {syncMessage}
+  1004→          </div>
+  1005→        )}
+  1006→      </div>
+  1007→
+  1008→      <div className="p-6 pt-2">
+  1009→        <button
+  1010→          onClick={handleSubmit}
+  1011→          disabled={isSubmitting}
+  1012→          className="w-full h-14 bg-[#0f2b46] text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg flex items-center justify-center space-x-2 hover:bg-[#0b2236] active:scale-95 transition-all disabled:opacity-70"
+  1013→        >
+  1014→          {isSubmitting ? (
+  1015→            <>
+  1016→              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+  1017→              <span>{t('Saving', 'Enregistrement')}</span>
+  1018→            </>
+  1019→          ) : (
+  1020→            <span>{isEnrichMode ? t('Save Enrichment', 'Enregistrer enrichissement') : t('Create Point', 'Creer point')}</span>
+  1021→          )}
+  1022→        </button>
+  1023→      </div>
+  1024→    </div>
+  1025→  );
+  1026→};
+  1027→
+  1028→export default ContributionFlow;
+  1029→

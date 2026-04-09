@@ -1,0 +1,304 @@
+{
+  "numStartups": 12,
+  "installMethod": "native",
+  "autoUpdates": false,
+  "hasSeenTasksHint": true,
+  "customApiKeyResponses": {
+    "approved": [
+      "Qsm_fl3MCFg-fvDgDAAA"
+    ],
+    "rejected": []
+  },
+  "tipsHistory": {
+    "new-user-warmup": 7,
+    "plan-mode-for-complex-tasks": 12,
+    "memory-command": 1,
+    "theme-command": 1,
+    "status-line": 1,
+    "prompt-queue": 1,
+    "enter-to-steer-in-relatime": 1,
+    "todo-list": 1,
+    "install-github-app": 11,
+    "install-slack-app": 11,
+    "drag-and-drop-images": 11,
+    "paste-images-mac": 11,
+    "double-esc-code-restore": 11,
+    "continue": 11,
+    "shift-tab": 11,
+    "image-paste": 1,
+    "desktop-app": 1,
+    "web-app": 1,
+    "mobile-app": 1,
+    "terminal-setup": 12,
+    "shift-enter-setup": 12,
+    "vscode-command-install": 12,
+    "custom-agents": 6,
+    "agent-flag": 6,
+    "feedback-command": 9,
+    "frontend-design-plugin": 10,
+    "permissions": 11,
+    "rename-conversation": 11,
+    "custom-commands": 11
+  },
+  "promptQueueUseCount": 33,
+  "cachedGrowthBookFeatures": {
+    "tengu_mcp_tool_search": true,
+    "tengu_scratch": false,
+    "tengu_disable_bypass_permissions_mode": false,
+    "tengu_1p_event_batch_config": {
+      "scheduledDelayMillis": 10000,
+      "maxExportBatchSize": 400,
+      "maxQueueSize": 8192,
+      "path": "/api/event_logging/v2/batch"
+    },
+    "tengu_claudeai_mcp_connectors": true,
+    "tengu_event_sampling_config": {},
+    "tengu_log_segment_events": false,
+    "tengu_log_datadog_events": true,
+    "tengu_marble_anvil": true,
+    "tengu_tool_pear": false,
+    "tengu_scarf_coffee": false,
+    "tengu_keybinding_customization_release": true,
+    "tengu_thinkback": false,
+    "tengu_oboe": true,
+    "tengu_chomp_inflection": false,
+    "tengu_copper_lantern": false,
+    "tengu_pid_based_version_locking": true,
+    "tengu_marble_lantern_disabled": false,
+    "tengu_vscode_review_upsell": false,
+    "tengu_vscode_onboarding": false,
+    "tengu_quiet_fern": true,
+    "tengu_tool_search_unsupported_models": [
+      "haiku"
+    ],
+    "tengu_system_prompt_global_cache": true,
+    "tengu_attribution_header": true,
+    "enhanced_telemetry_beta": false,
+    "tengu_workout2": true,
+    "tengu_marble_kite": false,
+    "tengu_plan_mode_interview_phase": false,
+    "tengu_penguins_enabled": true,
+    "tengu_marble_sandcastle": false,
+    "tengu_penguins_off": null,
+    "tengu_streaming_text": false,
+    "tengu_silver_lantern": false,
+    "tengu-top-of-feed-tip": {
+      "tip": "",
+      "color": ""
+    },
+    "tengu_pr_status_cli": true,
+    "tengu_ccr_bridge": true,
+    "tengu_mcp_elicitation": true,
+    "tengu_post_compact_survey": false,
+    "tengu_pebble_leaf_prune": false,
+    "tengu_birch_mist": true,
+    "tengu_mulberry_fog": false,
+    "tengu_coral_fern": false,
+    "tengu_bergotte_lantern": false,
+    "tengu_swann_brevity": "focused",
+    "tengu_moth_copse": false,
+    "tengu_cache_plum_violet": true,
+    "tengu_streaming_tool_execution2": true,
+    "tengu_coral_whistle": false,
+    "tengu_fgts": false,
+    "tengu_prompt_cache_1h_config": {
+      "allowlist": [
+        "repl_main_thread*",
+        "sdk",
+        "auto_mode"
+      ]
+    },
+    "tengu_session_memory": false,
+    "tengu_auto_background_agents": false,
+    "tengu_tool_input_aliasing": false,
+    "tengu_oak_drum": false,
+    "tengu_permission_explainer": true,
+    "tengu_destructive_command_warning": false,
+    "tengu_amber_prism": true,
+    "tengu_slate_nexus": true,
+    "tengu_amber_quartz": true,
+    "tengu_tst_kx7": false,
+    "tengu_slate_ridge": true,
+    "tengu_immediate_model_command": false,
+    "tengu_crystal_beam": {
+      "budgetTokens": 0
+    },
+    "tengu_disable_streaming_to_non_streaming_fallback": false,
+    "tengu_summarize_tool_results": true,
+    "tengu_sm_compact": false,
+    "tengu_compact_cache_prefix": true,
+    "tengu_compact_streaming_retry": false,
+    "tengu_tst_names_in_messages": false,
+    "tengu_plum_vx3": true,
+    "tengu_turtle_carbon": true,
+    "tengu_quartz_falcon": null,
+    "tengu_kairos_cron": true,
+    "tengu_frond_boric": {},
+    "tengu_quiet_hollow": true,
+    "tengu_herring_clock": false,
+    "tengu_marble_whisper": true,
+    "tengu_grey_wool": true,
+    "tengu_auto_mode_config": {
+      "enabled": "disabled",
+      "twoStageClassifier": true
+    },
+    "tengu_cicada_nap_ms": 0,
+    "tengu_miraculo_the_bard": false,
+    "tengu_miraculo_the_bard2": false,
+    "tengu_paper_halyard": false,
+    "tengu_granite_whisper": false,
+    "tengu_desktop_upsell": {
+      "enable_shortcut_tip": false,
+      "enable_startup_dialog": false
+    },
+    "tengu_tangerine_ladder_boost": true,
+    "tengu_glacier_2xr": false,
+    "tengu_basalt_3kr": false,
+    "tengu_swinburne_dune": true,
+    "tengu_sotto_voce": true,
+    "tengu_defer_all_bn4": false,
+    "tengu_tst_hint_m7r": false,
+    "tengu_satin_quoll": {},
+    "tengu_tight_weave": true,
+    "tengu_lean_cast": false,
+    "tengu_kairos_brief_config": {
+      "enable_slash_command": false
+    },
+    "tengu_toolref_defer_j8m": false,
+    "tengu_orchid_trellis": false,
+    "tengu_marble_whisper2": true,
+    "tengu_hawthorn_steeple": false,
+    "tengu_chair_sermon": false,
+    "tengu_collage_kaleidoscope": true
+  },
+  "firstStartTime": "2026-02-06T14:53:47.942Z",
+  "userID": "c67ac48e93f73d6a37a2518e09c567b71eb3731cfcd94276e7bcc7fdb9f91bc7",
+  "sonnet45MigrationComplete": true,
+  "opus45MigrationComplete": true,
+  "thinkingMigrationComplete": true,
+  "opusProMigrationComplete": true,
+  "cachedChromeExtensionInstalled": false,
+  "changelogLastFetched": 1773414170197,
+  "autoUpdatesProtectedForNative": true,
+  "sonnet1m45MigrationComplete": true,
+  "clientDataCache": {
+    "data": {},
+    "timestamp": 1772340042671
+  },
+  "claudeCodeFirstTokenDate": "2026-02-06T15:12:20.092675Z",
+  "appleTerminalSetupInProgress": false,
+  "appleTerminalBackupPath": "/Users/charlesvictormahouve/Library/Preferences/com.apple.Terminal.plist.bak",
+  "optionAsMetaKeyInstalled": true,
+  "hasCompletedOnboarding": true,
+  "lastOnboardingVersion": "2.1.62",
+  "projects": {
+    "/Users/charlesvictormahouve/Documents/GitHub/africandatalayer": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 19,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "ContributionFlow.tsx",
+        "index.ts",
+        "types.ts",
+        "App.tsx",
+        "auth.ts"
+      ],
+      "exampleFilesGeneratedAt": 1772883221389,
+      "lastCost": 0,
+      "lastAPIDuration": 0,
+      "lastAPIDurationWithoutRetries": 0,
+      "lastToolDuration": 0,
+      "lastDuration": 181571527,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 0,
+      "lastTotalOutputTokens": 0,
+      "lastTotalCacheCreationInputTokens": 0,
+      "lastTotalCacheReadInputTokens": 0,
+      "lastTotalWebSearchRequests": 0,
+      "lastFpsAverage": 0.01,
+      "lastFpsLow1Pct": 22.33,
+      "lastModelUsage": {},
+      "lastSessionId": "8861ce96-c571-4c2e-a7f6-b9444044bfb3",
+      "lastSessionMetrics": {
+        "frame_duration_ms_count": 263,
+        "frame_duration_ms_min": 0.04633300006389618,
+        "frame_duration_ms_max": 74.20549999922514,
+        "frame_duration_ms_avg": 7.372849030273512,
+        "frame_duration_ms_p50": 4.253417000174522,
+        "frame_duration_ms_p95": 23.875862199068052,
+        "frame_duration_ms_p99": 42.3264460002072,
+        "hook_duration_ms_count": 1,
+        "hook_duration_ms_min": 588,
+        "hook_duration_ms_max": 588,
+        "hook_duration_ms_avg": 588,
+        "hook_duration_ms_p50": 588,
+        "hook_duration_ms_p95": 588,
+        "hook_duration_ms_p99": 588
+      }
+    }
+  },
+  "githubRepoPaths": {
+    "daphatpharm4/africandatalayer": [
+      "/Users/charlesvictormahouve/Documents/GitHub/africandatalayer"
+    ]
+  },
+  "lastReleaseNotesSeen": "2.1.71",
+  "hasShownOpus46Notice": {
+    "f4f49eae-2442-4318-9e5d-e11460879ffa": true
+  },
+  "penguinModeOrgEnabled": false,
+  "groveConfigCache": {
+    "c5f5c4a8-d831-464b-81df-54504f1b996a": {
+      "grove_enabled": true,
+      "timestamp": 1773414170872
+    }
+  },
+  "cachedExtraUsageDisabledReason": "org_level_disabled",
+  "officialMarketplaceAutoInstallAttempted": true,
+  "officialMarketplaceAutoInstalled": true,
+  "effortCalloutDismissed": true,
+  "showSpinnerTree": false,
+  "effortCalloutV2Dismissed": true,
+  "claudeAiMcpEverConnected": [
+    "claude.ai Vercel"
+  ],
+  "feedbackSurveyState": {
+    "lastShownTime": 1773207493332
+  },
+  "oauthAccount": {
+    "accountUuid": "c5f5c4a8-d831-464b-81df-54504f1b996a",
+    "emailAddress": "daphatpharm@icloud.com",
+    "organizationUuid": "f4f49eae-2442-4318-9e5d-e11460879ffa",
+    "hasExtraUsageEnabled": false,
+    "billingType": "stripe_subscription",
+    "accountCreatedAt": "2026-02-05T22:24:07.814592Z",
+    "subscriptionCreatedAt": "2026-02-27T07:57:29.712508Z",
+    "displayName": "Charles",
+    "organizationRole": "admin",
+    "workspaceRole": null,
+    "organizationName": "daphatpharm@icloud.com's Organization"
+  },
+  "anonymousId": "claudecode.v1.e32ebc81-820c-4c4c-bff7-1af51d894d6c",
+  "skillUsage": {
+    "superpowers:executing-plans": {
+      "usageCount": 1,
+      "lastUsedAt": 1773151715367
+    },
+    "superpowers:verification-before-completion": {
+      "usageCount": 1,
+      "lastUsedAt": 1773207448973
+    },
+    "ui-ux-pro-max": {
+      "usageCount": 1,
+      "lastUsedAt": 1773415224238
+    }
+  },
+  "voiceNoticeSeenCount": 1
+}

@@ -1,0 +1,957 @@
+     1→# ADL Marketing Strategy & Growth Playbook
+     2→
+     3→**Author:** Teammate 7 -- Marketing Genius
+     4→**Date:** 2026-02-28
+     5→**Status:** Living document -- updates with each growth phase
+     6→**Predecessors:**
+     7→- [01-cloud-architecture.md](./01-cloud-architecture.md) (Cloud Architect)
+     8→- [06-data-analytics.md](./06-data-analytics.md) (Data Analyst)
+     9→- [pitch-one-pager-kasi-insight.md](../pitch-one-pager-kasi-insight.md) (Kasi Insight meeting context)
+    10→
+    11→**Scope:** Ideal customer profiles, personas, positioning, channel strategy, growth metrics, 90-day playbook, and content strategy for African Data Layer
+    12→
+    13→---
+    14→
+    15→## Table of Contents
+    16→
+    17→1. [Ideal Customer Profiles (ICPs)](#1-ideal-customer-profiles-icps)
+    18→2. [Personas](#2-personas)
+    19→3. [Positioning & Messaging](#3-positioning--messaging)
+    20→4. [Channel Strategy & Experiments](#4-channel-strategy--experiments)
+    21→5. [Growth Metrics & Funnel](#5-growth-metrics--funnel)
+    22→6. [Growth Playbook (First 90 Days)](#6-growth-playbook-first-90-days)
+    23→7. [Content Strategy](#7-content-strategy)
+    24→
+    25→---
+    26→
+    27→## 1. Ideal Customer Profiles (ICPs)
+    28→
+    29→### ICP 1 -- Data Consumers (B2B Buyers)
+    30→
+    31→These are the organizations that pay for ADL data. Each sub-segment has distinct pain points, budgets, and buying triggers. The Kasi Insight meeting confirmed: the highest-value buyers are those who need **consistent deltas** -- tracking what changed in the retail/service landscape month-over-month.
+    32→
+    33→---
+    34→
+    35→#### ICP 1a: FMCG & Beverage Companies (Retail Audit Buyers)
+    36→
+    37→| Field | Detail |
+    38→|---|---|
+    39→| **Examples** | Guinness Cameroun, SABC (Societe Anonyme des Brasseries du Cameroun), Diageo Africa, Nestle CWAR, Unilever Cameroon |
+    40→| **Pain point** | After selling to grossistes (wholesalers), they lose visibility on where products end up. They cannot track distribution penetration, competitor shelf presence, or new informal retail points. Current retail audit providers (Nielsen, Kantar) are expensive and operate at macro level. |
+    41→| **Buying trigger** | Quarterly business review reveals distribution gaps; competitor launches new product and they cannot measure speed-to-shelf; marketing team needs billboard traffic data for ad spend optimization |
+    42→| **Budget** | $2,000-$15,000/month for ongoing data feeds; $5,000-$25,000 for one-time retail landscape snapshots |
+    43→| **Decision maker** | Country Commercial Director or Head of Trade Marketing |
+    44→| **Champion** | Field Sales Manager or Distribution Analytics Lead |
+    45→| **Data they need** | Retail point locations, product availability by SKU, competitor presence, informal vs formal outlet classification, month-over-month deltas |
+    46→| **Frequency** | Monthly or quarterly snapshots with delta reporting |
+    47→
+    48→---
+    49→
+    50→#### ICP 1b: Fintech & Mobile Money Operators
+    51→
+    52→| Field | Detail |
+    53→|---|---|
+    54→| **Examples** | MTN MoMo, Orange Money, Wave, Flutterwave, MFS Africa, Afriland First Bank (digital expansion) |
+    55→| **Pain point** | Expanding agent networks without reliable data on existing coverage. Cannot identify underserved neighborhoods or agent density gaps. Competitor agent mapping is done manually by field teams at high cost. |
+    56→| **Buying trigger** | Entering new city or neighborhood; agent churn spikes and they need to understand coverage gaps; regulator requires agent density reporting |
+    57→| **Budget** | $1,000-$8,000/month for API access; $10,000-$50,000 for city-level coverage maps |
+    58→| **Decision maker** | Head of Agent Network / VP Distribution |
+    59→| **Champion** | Product Manager (Growth) or Business Intelligence Analyst |
+    60→| **Data they need** | Mobile money agent locations, operating hours, services offered (cash-in/cash-out, bill pay), competitor agent proximity, agent density per neighborhood |
+    61→| **Frequency** | Weekly to monthly updates |
+    62→
+    63→---
+    64→
+    65→#### ICP 1c: Logistics & Delivery Companies
+    66→
+    67→| Field | Detail |
+    68→|---|---|
+    69→| **Examples** | Gozem, Yango (Douala operations), Glovo Cameroon, DHL Africa last-mile, Jumia Logistics, Bolore Transport & Logistics |
+    70→| **Pain point** | Route planning fails because maps show roads that do not exist or miss roads that do. Point-of-delivery data is inaccurate. Driver ETAs are unreliable because landmark-based navigation depends on knowing what is actually at each corner. |
+    71→| **Buying trigger** | Launching in new city; delivery failure rate exceeds 15%; driver complaint data shows navigation issues |
+    72→| **Budget** | $500-$5,000/month for API access; usage-based pricing preferred |
+    73→| **Decision maker** | Head of Operations or CTO |
+    74→| **Champion** | Engineering Lead or Operations Analyst |
+    75→| **Data they need** | POI locations with landmarks, operating hours, accessibility notes, road-level validation |
+    76→| **Frequency** | Real-time or weekly updates |
+    77→
+    78→---
+    79→
+    80→#### ICP 1d: NGOs, Development Agencies & Government
+    81→
+    82→| Field | Detail |
+    83→|---|---|
+    84→| **Examples** | UNICEF, WHO (pharmacy/health mapping), GIZ, AFD (Agence Francaise de Developpement), World Bank Digital Development, Cameroon Ministry of Health, Institut National de la Statistique |
+    85→| **Pain point** | Census data is 5-10 years old. Health facility registers are incomplete. Cannot plan intervention programs without knowing where pharmacies, clinics, and essential services actually operate today. |
+    86→| **Buying trigger** | New program launch (e.g., vaccine distribution); disaster response planning; regulatory mandate to update service registries |
+    87→| **Budget** | $10,000-$100,000 per project (grant-funded, procurement cycles 3-6 months) |
+    88→| **Decision maker** | Country Director or Program Manager |
+    89→| **Champion** | M&E (Monitoring & Evaluation) Officer or Data/GIS Specialist |
+    90→| **Data they need** | Health service point locations, formal vs informal classification, service availability, population catchment estimates |
+    91→| **Frequency** | Quarterly snapshots or project-based deliveries |
+    92→
+    93→---
+    94→
+    95→### ICP 2 -- Field Contributors (Supply Side)
+    96→
+    97→Contributors are the engine of ADL. Per the analytics framework (doc 06), Phase 1 targets 20 Weekly Active Contributors (WAC) with D7 retention >= 20%. Each contributor sub-segment has distinct motivations and constraints.
+    98→
+    99→---
+   100→
+   101→#### ICP 2a: University Students
+   102→
+   103→| Field | Detail |
+   104→|---|---|
+   105→| **Examples** | Students at Universite de Douala, ESSEC (Ecole Superieure des Sciences Economiques et Commerciales), IUT Douala, Universite de Yaounde I |
+   106→| **Motivation** | Extra income (primary), CV building, tech-savviness, social status among peers. In Cameroon, monthly student budget is 30,000-80,000 FCFA ($45-$125); even 5,000-10,000 FCFA/month ($8-$16) from ADL is meaningful. |
+   107→| **Typical device** | Android (Tecno, Itel, Samsung A-series), 1-2 GB RAM, shared data bundles of 500 MB-2 GB/month |
+   108→| **Connectivity** | 3G/4G on campus, spotty in residential areas. Offline-first is critical. |
+   109→| **Daily routine** | Classes 8am-2pm, free afternoons, active on WhatsApp/Facebook, commute through commercial neighborhoods |
+   110→| **Acquisition channel** | WhatsApp groups, campus ambassadors, word-of-mouth, university digital boards |
+   111→
+   112→---
+   113→
+   114→#### ICP 2b: Gig Workers & Moto-Taxi Drivers
+   115→
+   116→| Field | Detail |
+   117→|---|---|
+   118→| **Examples** | Bendskin (moto-taxi) riders in Douala, delivery couriers, freelance artisans |
+   119→| **Motivation** | Supplemental income during idle time between rides/jobs. Already navigate the city daily and know every corner. |
+   120→| **Typical device** | Low-end Android (Tecno Pop, Itel A-series), often shared phone or secondary device |
+   121→| **Connectivity** | Intermittent 2G/3G while moving. Offline queue (IndexedDB with exponential backoff per doc 01) is essential. |
+   122→| **Daily routine** | On the road 6am-8pm, idle waiting periods at taxi stands, familiar with fuel stations and mobile money points |
+   123→| **Acquisition channel** | Fuel station flyers, moto-taxi stand ambassadors, WhatsApp driver groups |
+   124→
+   125→---
+   126→
+   127→#### ICP 2c: Mobile Money Agents & Small Business Owners
+   128→
+   129→| Field | Detail |
+   130→|---|---|
+   131→| **Examples** | MTN MoMo agents, Orange Money agents, pharmacie vendeuses, boutique owners |
+   132→| **Motivation** | Enrich data about their own business for visibility (free marketing), earn rewards, competitive intelligence on nearby agents. The Kasi meeting flagged that mobile money agents already track competitor locations informally. |
+   133→| **Typical device** | Mid-range Android (Tecno Spark, Samsung A-series), dedicated business phone |
+   134→| **Connectivity** | Fixed location, usually 3G/4G, data plans of 2-5 GB/month |
+   135→| **Daily routine** | Stationary at their kiosk 7am-7pm, slow periods mid-morning and mid-afternoon, strong neighborhood social networks |
+   136→| **Acquisition channel** | Direct outreach at their kiosk, agent network WhatsApp groups, church/community announcements |
+   137→
+   138→---
+   139→
+   140→#### ICP 2d: Community Leaders & Local Entrepreneurs
+   141→
+   142→| Field | Detail |
+   143→|---|---|
+   144→| **Examples** | Neighbourhood chiefs (chefs de quartier), church group leaders, market association presidents, NGO community health workers |
+   145→| **Motivation** | Community development, social proof/status, ability to mobilize others. They are force multipliers -- one community leader can recruit 5-10 active contributors. |
+   146→| **Typical device** | Varies widely, often mid-range Android |
+   147→| **Connectivity** | Varies, but they have strong offline social networks |
+   148→| **Daily routine** | Community meetings, market visits, church activities. Deep local knowledge. |
+   149→| **Acquisition channel** | Direct in-person relationship building, community group presentations, referral from existing contributors |
+   150→
+   151→---
+   152→
+   153→### ICP 3 -- Investors & Partners
+   154→
+   155→---
+   156→
+   157→#### ICP 3a: Impact Investors & Development Finance
+   158→
+   159→| Field | Detail |
+   160→|---|---|
+   161→| **Examples** | Catalyst Fund, Village Capital, GSMA Innovation Fund, Digital Africa, Proparco, IFC (World Bank Group), Orange Ventures Africa |
+   162→| **Interest** | Infrastructure plays that improve data availability across Africa. Financial inclusion, health access, and urban planning alignment. |
+   163→| **Buying trigger** | ADL demonstrates consistent data quality metrics (freshness < 14 days, verification rate > 30%) with a clear path to $500K ARR. |
+   164→| **What they need to see** | Unit economics (cost per verified data point), retention cohorts, B2B pipeline, defensibility of data moat |
+   165→
+   166→---
+   167→
+   168→#### ICP 3b: Tech Accelerators & Ecosystem Partners
+   169→
+   170→| Field | Detail |
+   171→|---|---|
+   172→| **Examples** | Y Combinator (data infrastructure track), Techstars (African programs), Google for Startups Africa, Flat6Labs, ActivSpaces Douala |
+   173→| **Interest** | Scalable platform models with network effects. ADL's two-sided marketplace (contributors + data buyers) fits this. |
+   174→| **Partnership value** | Mentorship, B2B introductions, credibility signal, follow-on funding connections |
+   175→
+   176→---
+   177→
+   178→## 2. Personas
+   179→
+   180→### Persona 1: Amina Tchinda -- The University Contributor
+   181→
+   182→| Field | Detail |
+   183→|---|---|
+   184→| **Age** | 21 |
+   185→| **Location** | Bonamoussadi, Douala. Lives in a shared room near Universite de Douala campus. |
+   186→| **Device** | Tecno Spark 8, Android 11, 2 GB RAM. Buys 1 GB MTN data bundles for 1,000 FCFA (~$1.60). |
+   187→| **Language** | French (primary), English (conversational). Uses phone in French. |
+   188→| **Monthly budget** | 50,000 FCFA ($80) from family remittances. Needs 10,000-15,000 FCFA more to cover transport and food. |
+   189→| **Goals** | Earn consistent side income without conflicting with class schedule. Build a portfolio of tech-related work for future job applications. Get recognized among peers as someone who knows the neighborhood well. |
+   190→| **Frustrations** | Most "earn money with your phone" apps are scams or pay after weeks of delay. Data bundles run out quickly if apps are data-hungry. Apps that crash on her phone or drain battery are immediately deleted. |
+   191→| **How she discovers ADL** | Her friend Serge, a campus ambassador, posts in their department WhatsApp group: "Gagnez 5,000 FCFA/semaine en mappant les pharmacies de Bonamoussadi." She clicks the link during a boring lecture. |
+   192→| **First experience** | Opens the PWA, signs up with Google in 30 seconds. Sees the map centered on Bonamoussadi with nearby pharmacies. Contributes data about the pharmacy next to her lecture hall. Earns 5 XP immediately. Feels a small dopamine hit. |
+   193→| **What makes her stay** | Weekly XP leaderboard where she competes with Serge. Consistent payouts every Friday. The app works when her data runs out (offline mode). She can contribute during her walk from campus to her room. |
+   194→| **What makes her leave** | Payout delays beyond 48 hours. App starts eating her data bundle. XP rewards feel meaningless (no real-world redemption). A newer, shinier earning app launches. |
+   195→| **Lifetime value to ADL** | 15-25 verified contributions/month for 4-6 months. If retained through one academic year, she becomes a campus ambassador recruiting 3-5 others. |
+   196→
+   197→---
+   198→
+   199→### Persona 2: Emmanuel Nkeng -- The Mobile Money Agent
+   200→
+   201→| Field | Detail |
+   202→|---|---|
+   203→| **Age** | 34 |
+   204→| **Location** | Carrefour Ange Raphael, Bonamoussadi. Runs an MTN MoMo kiosk. |
+   205→| **Device** | Samsung Galaxy A13, Android 12, dedicated business phone. 3 GB Orange data plan. |
+   206→| **Language** | French (primary), Pidgin English (with customers), basic English. |
+   207→| **Monthly income** | 120,000-180,000 FCFA ($190-$290) from MoMo commissions. Good months hit 200,000 FCFA. |
+   208→| **Goals** | Understand where competitor Orange Money agents are opening nearby. Get his kiosk to appear on any map or directory customers might search. Know which hours are slowest so he can do ADL contributions during downtime. |
+   209→| **Frustrations** | New MoMo agents open next to him and cut into his business. No way to see a map of the agent landscape. Google Maps does not show most MoMo kiosks. He suspects some nearby "agents" are fraudulent (unregistered). |
+   210→| **How he discovers ADL** | An ADL field coordinator visits his kiosk during a slow afternoon and explains: "We are mapping all the mobile money agents in Bonamoussadi. You can list your kiosk for free and earn rewards for mapping others around you." |
+   211→| **First experience** | He maps his own kiosk in 2 minutes. Sees it appear on the ADL map with a verified badge. Immediately wants to map the three competitor agents within 200 meters. |
+   212→| **What makes him stay** | His kiosk gets visibility. He earns 2,000-3,000 FCFA/week mapping nearby businesses during slow hours. He becomes the neighborhood data expert and other agents ask him about ADL. |
+   213→| **What makes him leave** | If competitor data he contributes somehow benefits his competitors more than him. If rewards stop. If the app requires too much data/bandwidth. |
+   214→| **Lifetime value to ADL** | 8-12 enrichment events/month with very high accuracy (he knows these businesses personally). Key referral node for 5-10 other agents. His data about operating hours, services, and competitor presence is among the highest-quality ADL receives. |
+   215→
+   216→---
+   217→
+   218→### Persona 3: Fatou Diallo -- The Logistics Startup PM
+   219→
+   220→| Field | Detail |
+   221→|---|---|
+   222→| **Age** | 29 |
+   223→| **Location** | Dakar, Senegal (ADL future market). Works remotely 2 days/week, office in Plateau district 3 days. |
+   224→| **Device** | MacBook Pro (work), iPhone 14 (personal). Company Slack, Notion, Google Workspace. |
+   225→| **Role** | Product Manager at a last-mile delivery startup operating in Douala, Dakar, and Abidjan. |
+   226→| **Goals** | Reduce delivery failure rate from 18% to under 10%. Build a reliable POI database so drivers can navigate using landmarks ("next to the Total station on Rue de la Joie") instead of unreliable street addresses. |
+   227→| **Frustrations** | Google Maps data in Douala is 2+ years stale. OpenStreetMap coverage is patchy and unmaintained. Her engineering team spent 3 months building an internal POI system that only covers 30% of their delivery zones. Hiring field teams to map cities is expensive ($3,000-$5,000 per city). |
+   228→| **How she discovers ADL** | Searches "hyperlocal POI data Africa API" on Google. Finds an ADL blog post ranking for "pharmacy locations Douala API." Clicks through to the API docs. |
+   229→| **First experience** | Signs up for the free developer tier. Makes a GET request to `/api/points?category=pharmacy&lat=4.05&lng=9.74&radius=2000`. Gets back 47 verified pharmacies with coordinates, names, and operating hours. Realizes this would have taken her field team 2 weeks to collect. |
+   230→| **What makes her stay** | Data freshness (median < 14 days vs. her internal data at 90+ days stale). API reliability. Coverage expanding into her other operating cities. Clear pricing that scales with usage. |
+   231→| **What makes her leave** | Data quality drops (stale points, incorrect coordinates). API goes down during business hours. Pricing jumps unpredictably. Coverage does not expand to her priority cities. |
+   232→| **Lifetime value to ADL** | $1,500-$3,000/month API subscription. Introduces ADL to 2-3 other startup PMs in her network. Provides feature requests that improve the product for all B2B customers. |
+   233→
+   234→---
+   235→
+   236→### Persona 4: Thierry Mbarga -- The Fintech Product Manager
+   237→
+   238→| Field | Detail |
+   239→|---|---|
+   240→| **Age** | 32 |
+   241→| **Location** | Lagos, Nigeria. His company is expanding mobile lending product to Cameroon. |
+   242→| **Device** | MacBook Air (work), Samsung Galaxy S23 (personal). Uses Linear, Figma, Mixpanel daily. |
+   243→| **Role** | Senior Product Manager at a Series B fintech. Tasked with launching in Cameroon within 6 months. |
+   244→| **Goals** | Map the financial services landscape in Douala and Yaounde before launch. Identify underserved areas where their lending product would have the highest demand. Understand mobile money agent density to plan cash-out partnerships. |
+   245→| **Frustrations** | Cameroon market data is scarce compared to Nigeria or Kenya. His team's Cameroon market research cost $15,000 and delivered a PDF with data from 2023. He needs granular, current, neighborhood-level data, not country-level reports. |
+   246→| **How he discovers ADL** | A LinkedIn post from a Cameroon tech ecosystem account mentions ADL. His Head of Expansion forwards it with "This could save us the field research budget." |
+   247→| **First experience** | Books a demo call. ADL shows him a live dashboard of mobile money agent density in Bonamoussadi with weekly freshness. He compares it to his $15,000 market research report and sees 3x more data points at neighborhood level. |
+   248→| **What makes him stay** | ADL expands to Yaounde and other Cameroon cities on a timeline that matches his launch roadmap. Custom data packages tailored to financial services use case. Responsive account management. |
+   249→| **What makes him leave** | Coverage limited to one neighborhood. No SLA on data freshness. Cannot get custom fields (e.g., agent float levels, transaction volume proxies). |
+   250→| **Lifetime value to ADL** | $3,000-$8,000 for initial market entry dataset. $1,500-$3,000/month ongoing subscription. Enterprise contract potential at $20,000-$50,000/year as they scale Cameroon operations. |
+   251→
+   252→---
+   253→
+   254→### Persona 5: Carine Mengue -- The Development Agency Program Officer
+   255→
+   256→| Field | Detail |
+   257→|---|---|
+   258→| **Age** | 38 |
+   259→| **Location** | Yaounde, Cameroon. Works at a bilateral development agency (GIZ or AFD). |
+   260→| **Device** | Lenovo ThinkPad (work), iPhone 12 (personal). Uses Outlook, Teams, Power BI. |
+   261→| **Role** | Program Officer for Health Systems Strengthening. Manages a $2M program to improve pharmaceutical distribution in Littoral and Centre regions. |
+   262→| **Goals** | Map every pharmacy (formal and informal) in target regions. Understand supply chain gaps: which neighborhoods lack access to essential medicines. Report to headquarters with data-backed evidence of program impact. |
+   263→| **Frustrations** | The Ministry of Health pharmacy register was last updated in 2019. Informal pharmacies (vendeurs ambulants) are completely invisible in official data. Hiring a survey firm costs $30,000-$50,000 and takes 4 months. By the time data arrives, it is already stale. |
+   264→| **How she discovers ADL** | Attends a GIZ innovation day in Yaounde where ADL presents. Or, her M&E consultant recommends ADL after seeing the Bonamoussadi pharmacy dataset. |
+   265→| **First experience** | Requests a sample dataset for Bonamoussadi pharmacies. Receives 85 verified points with formal/informal classification, product categories, and operating hours. Compares to the Ministry register (which shows 12 pharmacies for the same area). The gap is immediately compelling. |
+   266→| **What makes her stay** | Data quality reporting (verification rate, freshness score). Ability to track deltas month-over-month ("15 new informal pharmacies appeared in Q2"). Compliance with development agency data standards. French-language reports and dashboards. |
+   267→| **What makes her leave** | Cannot guarantee data provenance (who collected it, when, how verified). No formal/informal classification methodology. Pricing requires procurement process that ADL cannot accommodate. |
+   268→| **Lifetime value to ADL** | $15,000-$40,000 per project contract (1-2 projects/year). Introduces ADL to 3-4 other program officers. Provides legitimacy signal for other institutional buyers. Multi-year program renewals if data proves useful for impact reporting. |
+   269→
+   270→---
+   271→
+   272→## 3. Positioning & Messaging
+   273→
+   274→### 3.1 Positioning Statements
+   275→
+   276→**For Contributors:**
+   277→
+   278→> African Data Layer turns your local knowledge into real income. Walk your neighborhood, map the businesses you already know, and earn weekly rewards -- even when your internet is off.
+   279→
+   280→*French:*
+   281→
+   282→> African Data Layer transforme vos connaissances locales en revenus reels. Parcourez votre quartier, cartographiez les commerces que vous connaissez deja, et gagnez des recompenses chaque semaine -- meme sans connexion internet.
+   283→
+   284→---
+   285→
+   286→**For Data Buyers (B2B):**
+   287→
+   288→> African Data Layer delivers verified, continuously refreshed point-of-interest data for African cities -- built by thousands of local contributors, validated by automated fraud detection, and accessible via a simple API. Stop making decisions with stale maps.
+   289→
+   290→*French:*
+   291→
+   292→> African Data Layer fournit des donnees de points d'interet verifiees et actualisees en continu pour les villes africaines -- collectees par des milliers de contributeurs locaux, validees par detection automatique de fraude, et accessibles via une API simple. Arretez de prendre des decisions avec des cartes obsoletes.
+   293→
+   294→---
+   295→
+   296→**For Investors:**
+   297→
+   298→> African Data Layer is building the ground-truth data infrastructure for Africa's essential services. Our crowdsourced, offline-first platform creates a compounding data moat: every contribution makes the dataset more valuable, every new data buyer funds more contributors, and every new city creates network effects that are expensive to replicate.
+   299→
+   300→---
+   301→
+   302→### 3.2 Tagline Options
+   303→
+   304→| # | English | French |
+   305→|---|---------|--------|
+   306→| 1 | **Map your city. Earn real rewards.** | **Cartographiez votre ville. Gagnez de vraies recompenses.** |
+   307→| 2 | **Africa's ground truth, updated daily.** | **La verite terrain de l'Afrique, actualisee chaque jour.** |
+   308→| 3 | **Your neighborhood knowledge has value.** | **Vos connaissances de quartier ont de la valeur.** |
+   309→| 4 | **Fresh data for Africa. Built by Africa.** | **Des donnees fraiches pour l'Afrique. Construites par l'Afrique.** |
+   310→| 5 | **The data layer Africa was missing.** | **La couche de donnees qui manquait a l'Afrique.** |
+   311→
+   312→**Recommended primary tagline:** Option 3 for contributor acquisition (emotional, personal, validates their existing knowledge). Option 5 for B2B and investor audiences (positions ADL as infrastructure).
+   313→
+   314→---
+   315→
+   316→### 3.3 Value Proposition Canvas
+   317→
+   318→#### Segment A: Contributors
+   319→
+   320→| Component | Detail |
+   321→|---|---|
+   322→| **Jobs to be done** | Earn supplemental income with flexible hours. Build marketable skills. Gain social recognition in their community. |
+   323→| **Pains** | Most mobile earning apps are scams or pay too little. Data bundles are expensive and most apps waste them. No way to monetize local knowledge. Unemployment or underemployment, especially for students. |
+   324→| **Gains** | Weekly payouts in mobile money (FCFA). Visible progress (XP, leaderboard ranking). Works offline -- does not eat data bundles. Takes 2-3 minutes per contribution (fits into any routine). Community recognition as a "data ambassador." |
+   325→| **Pain relievers (ADL)** | Offline-first design (IndexedDB queue syncs when connectivity returns). Lightweight PWA (<500 KB initial load). Transparent XP system (5 XP per event, visible immediately). Weekly payout cycle, not monthly. |
+   326→| **Gain creators (ADL)** | Leaderboard competition. Campus ambassador program with elevated status. Referral bonuses. Skill certification ("ADL Verified Data Collector") for CV. |
+   327→
+   328→#### Segment B: Data Buyers
+   329→
+   330→| Component | Detail |
+   331→|---|---|
+   332→| **Jobs to be done** | Make location-based business decisions with confidence. Enter new African markets with reliable data. Track competitive landscape changes over time. |
+   333→| **Pains** | Google Maps and OSM data in Africa is stale, incomplete, and unverified. Hiring field survey teams is slow ($3K-$5K/city) and one-time (data decays immediately). Existing data providers operate at macro level (country/region), not micro (neighborhood). |
+   334→| **Gains** | Always-fresh POI data (median freshness < 14 days). Neighborhood-level granularity. Structured data with consistent schema. API-first access that integrates into existing workflows. Month-over-month delta reporting. |
+   335→| **Pain relievers (ADL)** | Crowdsourced data keeps costs 80% below traditional field surveys. Automated fraud detection ensures quality without manual review bottleneck. Event-sourcing model provides full data provenance. |
+   336→| **Gain creators (ADL)** | Custom data packages by category, geography, and refresh frequency. Delta reporting (the Kasi meeting confirmed: "capture the delta and report on it" is the highest-value output). Dashboard access for non-technical users. Formal/informal classification that no other provider offers. |
+   337→
+   338→#### Segment C: Investors
+   339→
+   340→| Component | Detail |
+   341→|---|---|
+   342→| **Jobs to be done** | Find scalable infrastructure businesses with defensible moats in Africa. Deploy capital into impact-aligned ventures. |
+   343→| **Pains** | Most African data startups fail to achieve data quality at scale. Two-sided marketplaces are hard to bootstrap. Unit economics in low-income markets are unproven. |
+   344→| **Gains** | Clear path from Bonamoussadi proof-of-concept to city-by-city expansion. Compounding data moat (more contributors = better data = more buyers = more revenue = more contributors). Impact alignment (health access, financial inclusion, urban planning). |
+   345→| **Pain relievers (ADL)** | Automated fraud detection reduces cost of quality assurance. Offline-first architecture solves the hardest technical problem upfront. Event-sourcing provides auditable data lineage that institutional buyers require. |
+   346→| **Gain creators (ADL)** | Network effects create winner-take-most dynamics per city. Multiple revenue streams (API subscriptions, enterprise deals, project-based contracts). Expansion playbook replicable to any African city. |
+   347→
+   348→---
+   349→
+   350→### 3.4 Competitive Differentiation
+   351→
+   352→| Dimension | ADL | OpenStreetMap | Google Maps | Proprietary Surveys (Nielsen, Kantar) | Other Crowdsourcing (Premise, mSurvey) |
+   353→|---|---|---|---|---|---|
+   354→| **Data freshness** | Median < 14 days (target). Continuous contributor updates. | Years-stale in most African neighborhoods. Volunteer-dependent. | Updated irregularly. Street View cars visit African cities rarely. | Quarterly at best. Data delivered as static PDF reports. | Project-based. Data stops flowing when contracts end. |
+   355→| **Informal sector coverage** | Core strength. Contributors map informal pharmacies, unlicensed MoMo agents, roadside fuel sellers. | Almost zero informal coverage. OSM mappers focus on physical structures. | Does not index informal businesses. | Samples formal sector only. | Some coverage, but question-driven (not spatial). |
+   356→| **Offline capability** | Offline-first (IndexedDB queue with exponential backoff). Works on 2G. | Editing requires connectivity. | Requires connectivity for all updates. | Paper-based field collection, then manual digitization. | Most require connectivity. |
+   357→| **Cost per data point** | $0.05-$0.15 (contributor incentive + platform cost) | Free (volunteer labor) but unreliable supply | N/A (Google's internal cost) | $2-$10 per data point (field enumerator salary + logistics) | $0.50-$2.00 per survey response |
+   358→| **Data provenance** | Full event log: who, when, where, what device, fraud score | Edit history available but unstructured | Opaque | Enumerator ID tracked but not publicly verifiable | Survey-level tracking |
+   359→| **Delta reporting** | Built-in: month-over-month changes in POI landscape | Not a product feature | Not available | Expensive add-on service | Not standard |
+   360→| **API access** | REST API, real-time | Overpass API (complex, raw) | Places API (expensive at scale) | Custom data delivery (FTP/email) | API available but project-scoped |
+   361→
+   362→**ADL's defensible advantages:**
+   363→1. **Informal sector data** -- Nobody else systematically collects it.
+   364→2. **Continuous freshness** -- Incentivized contributors keep data alive; surveys and OSM do not.
+   365→3. **Delta reporting** -- The Kasi meeting confirmed this is the highest-value output: "capture the delta and report on it." ADL's event-sourcing model makes delta computation native.
+   366→4. **Offline-first** -- Technical moat that is hard to retrofit into existing platforms.
+   367→5. **Local contributor network** -- Once built in a neighborhood, the contributor community is a defensible asset.
+   368→
+   369→---
+   370→
+   371→### 3.5 Messaging Framework by Channel & Audience
+   372→
+   373→| Channel | Audience | Primary Message | Tone | CTA |
+   374→|---|---|---|---|---|
+   375→| **WhatsApp group** | Students, gig workers | "Gagnez de l'argent en marchant dans votre quartier. 5 min = 250 FCFA." | Casual, peer-to-peer, French/Pidgin | "Cliquez ici pour commencer" (link to PWA) |
+   376→| **Facebook/Instagram ad** | Young adults in Douala | "Vos voisins gagnent deja de l'argent avec ADL. Et vous?" | Social proof, FOMO, visual (screenshot of earnings) | "Telecharger maintenant" |
+   377→| **LinkedIn post** | Fintech/logistics PMs | "We mapped 200+ pharmacies in one Douala neighborhood in 3 weeks. Our API delivers what Google Maps cannot: verified, fresh, informal-sector data." | Professional, data-driven | "Request API access" |
+   378→| **Twitter/X thread** | Data/tech community | "Why is African POI data so broken? A thread. (1/8)" | Educational, provocative | "Follow us for updates" |
+   379→| **Conference talk** | Enterprise buyers, investors | "The retail audit industry charges $10/data point. We do it for $0.10 with better freshness. Here is how." | Authoritative, numbers-driven | "Book a demo at our booth" |
+   380→| **Radio spot** | General Douala population | "Vous connaissez votre quartier mieux que Google. Avec African Data Layer, cette connaissance vous rapporte de l'argent. Inscrivez-vous gratuitement." | Warm, local, spoken French | "Demandez a votre ami qui utilise deja ADL" |
+   381→| **Campus poster** | University students | "WANTED: Data Ambassadors. 10,000 FCFA/semaine. Aucune experience requise." | Bold, job-listing style | QR code to signup |
+   382→| **Email (B2B)** | Data buyer prospects | Subject: "Your Douala data is 2 years old. Ours is 2 weeks old." | Direct, value-proposition-first | "See sample data for your city" |
+   383→
+   384→---
+   385→
+   386→## 4. Channel Strategy & Experiments
+   387→
+   388→### 4.1 Digital Channels
+   389→
+   390→---
+   391→
+   392→#### Experiment D1: WhatsApp Community (Bonamoussadi Contributors)
+   393→
+   394→| Field | Detail |
+   395→|---|---|
+   396→| **Hypothesis** | A moderated WhatsApp community with weekly challenges and leaderboard updates will achieve 50 signups in 2 weeks, with 40% making their first contribution within 48 hours. |
+   397→| **Experiment design** | Create a WhatsApp Community with 3 sub-groups: (1) General announcements, (2) Bonamoussadi contributors, (3) Q&A/support. Seed with 10 early contributors. Post daily: morning challenge ("Map 3 pharmacies today and earn bonus XP"), evening leaderboard screenshot. Share payment proof screenshots weekly. |
+   398→| **Budget** | 0 FCFA (organic). Moderator time: 1 hour/day. |
+   399→| **Timeline** | Weeks 1-4 (ongoing) |
+   400→| **Success metric** | 50 members joined, 20 first contributions, 10 active by week 2 |
+   401→| **Decision criteria** | Continue if 40%+ of joiners make first contribution. Scale to Yaounde if D7 retention > 20%. Kill if fewer than 10 contributions in first week. |
+   402→
+   403→---
+   404→
+   405→#### Experiment D2: Facebook/Instagram Ads (Douala Youth)
+   406→
+   407→| Field | Detail |
+   408→|---|---|
+   409→| **Hypothesis** | Targeted ads showing earnings proof (screenshot of XP balance + payout) will generate signups at < 500 FCFA ($0.80) cost per signup, with > 25% activation rate. |
+   410→| **Experiment design** | Three ad variants: (A) "Gagnez 5,000 FCFA/semaine" with earnings screenshot, (B) "Vos voisins mappent leur quartier et gagnent de l'argent" with contributor photo, (C) "Etudiant? Gagne de l'argent entre tes cours" with campus context. Target: ages 18-30, Douala, interests in technology/mobile money/freelancing. Budget split equally across 3 variants for 7 days, then scale the winner. |
+   411→| **Budget** | 50,000 FCFA ($80) for initial 2-week test. Scale to 200,000 FCFA ($320) if unit economics work. |
+   412→| **Timeline** | Weeks 3-6 |
+   413→| **Success metric** | 100 signups, 25 activated (first contribution), CPA < 500 FCFA |
+   414→| **Decision criteria** | Scale winning variant 3x if CPA < 500 FCFA and activation > 25%. Pause if CPA > 1,000 FCFA. Test new creatives if activation < 15%. |
+   415→
+   416→---
+   417→
+   418→#### Experiment D3: Twitter/X for B2B Awareness
+   419→
+   420→| Field | Detail |
+   421→|---|---|
+   422→| **Hypothesis** | A weekly thread on African data infrastructure challenges will generate 5 inbound B2B inquiries within 60 days. |
+   423→| **Experiment design** | Publish 2 threads/week: one educational ("Why Africa's POI data is broken"), one data-driven ("We mapped 200 pharmacies in Bonamoussadi -- here is what we found"). Tag relevant accounts (AfricaTechSummit, GSMA, local tech influencers). Engage in replies to logistics/fintech discussions. |
+   424→| **Budget** | 0 FCFA (organic). Content creation: 3 hours/week. |
+   425→| **Timeline** | Weeks 1-12 (ongoing) |
+   426→| **Success metric** | 500 followers, 5 B2B DM inquiries, 2 demo calls booked |
+   427→| **Decision criteria** | Continue if generating 1+ inbound inquiry/month. Invest in Twitter ads if organic engagement rate > 3%. |
+   428→
+   429→---
+   430→
+   431→#### Experiment D4: LinkedIn for Enterprise & Investors
+   432→
+   433→| Field | Detail |
+   434→|---|---|
+   435→| **Hypothesis** | Direct outreach to 50 relevant decision-makers (logistics ops leads, fintech expansion PMs, development agency M&E officers) will generate 10 demo calls within 30 days. |
+   436→| **Experiment design** | Week 1: Build target list of 50 prospects from ICP 1a-1d. Week 2-3: Send personalized connection requests with 2-line value prop. Week 3-4: Follow up with sample data offer. Simultaneously: publish 1 article/week on LinkedIn about ADL insights (e.g., "How many pharmacies are in Bonamoussadi? The answer might surprise you"). |
+   437→| **Budget** | LinkedIn Sales Navigator: $79.99/month. Content creation: 2 hours/week. |
+   438→| **Timeline** | Weeks 5-12 |
+   439→| **Success metric** | 30% connection acceptance rate, 10 demo calls, 2 pilot agreements |
+   440→| **Decision criteria** | Scale outreach to 200 prospects if conversion to demo > 15%. Hire part-time SDR if pipeline exceeds founder capacity. |
+   441→
+   442→---
+   443→
+   444→#### Experiment D5: University Digital Boards
+   445→
+   446→| Field | Detail |
+   447→|---|---|
+   448→| **Hypothesis** | Digital announcements on university intranets/Facebook groups will drive 20 signups per campus at zero cost. |
+   449→| **Experiment design** | Partner with student associations at Universite de Douala, ESSEC, and IUT. Post in official Facebook groups with association endorsement. Format: "Programme Ambassadeur ADL -- Gagnez de l'argent en cartographiant votre campus." |
+   450→| **Budget** | 0 FCFA. Relationship-building time with student association leaders. |
+   451→| **Timeline** | Weeks 3-4 |
+   452→| **Success metric** | 20 signups per campus, 10 activated |
+   453→| **Decision criteria** | Roll out to 5 more campuses if activation > 30%. |
+   454→
+   455→---
+   456→
+   457→#### Experiment D6: TikTok for Young Contributor Recruitment
+   458→
+   459→| Field | Detail |
+   460→|---|---|
+   461→| **Hypothesis** | Short-form video content showing the contribution workflow (walk, photograph, submit, earn) will generate 30 signups from organic reach within 4 weeks. |
+   462→| **Experiment design** | Create 5 TikTok videos: (1) "Day in the life of an ADL contributor," (2) "I earned 5,000 FCFA walking to class," (3) "POV: you discover your neighborhood has 47 pharmacies," (4) "How to map a MoMo agent in 60 seconds," (5) "My ADL earnings this week." Post 3x/week. Use trending sounds and local French/Pidgin. |
+   463→| **Budget** | 0 FCFA (organic). Video production: 2 hours/week using phone camera. |
+   464→| **Timeline** | Weeks 3-8 |
+   465→| **Success metric** | 30 signups traceable to TikTok (UTM parameter), 5,000 views on top video |
+   466→| **Decision criteria** | Invest in paid TikTok promotion if organic CPA < 1,000 FCFA equivalent. |
+   467→
+   468→---
+   469→
+   470→### 4.2 Offline Channels
+   471→
+   472→---
+   473→
+   474→#### Experiment O1: Campus Ambassador Program
+   475→
+   476→| Field | Detail |
+   477→|---|---|
+   478→| **Hypothesis** | 5 campus ambassadors, each incentivized to recruit 10 contributors, will deliver 50 active contributors in Bonamoussadi within 3 weeks. |
+   479→| **Experiment design** | Recruit 5 top-performing early contributors. Give each a target: 10 recruits who make at least 3 contributions each. Compensation: 2,000 FCFA per qualified recruit (paid when recruit reaches 3 contributions). Ambassadors get ADL-branded T-shirts and "Data Ambassador" title in-app. Weekly standup via WhatsApp voice note. |
+   480→| **Budget** | 100,000 FCFA ($160) for ambassador payouts. 50,000 FCFA ($80) for T-shirts (10 units). Total: 150,000 FCFA ($240). |
+   481→| **Timeline** | Weeks 3-6 |
+   482→| **Success metric** | 50 new contributors activated (>= 3 contributions each) |
+   483→| **Decision criteria** | Scale to 15 ambassadors if cost per activated contributor < 3,000 FCFA. Restructure incentives if fewer than 30 activated by week 5. |
+   484→
+   485→---
+   486→
+   487→#### Experiment O2: Mobile Money Agent Network Seeding
+   488→
+   489→| Field | Detail |
+   490→|---|---|
+   491→| **Hypothesis** | Visiting 20 MoMo/Orange Money agents in person and helping them map their kiosk will convert 12 into active contributors who each map 5+ nearby businesses. |
+   492→| **Experiment design** | Field coordinator visits 20 agents in Bonamoussadi during slow hours (10am-12pm). Script: "We are creating a map of all mobile money agents in Bonamoussadi. Map your kiosk for free visibility. Map 5 nearby businesses and earn 1,000 FCFA this week." Leave a flyer with QR code. Follow up via WhatsApp after 48 hours. |
+   493→| **Budget** | 30,000 FCFA ($48) for field coordinator transport and airtime. 20,000 FCFA ($32) for flyer printing (200 flyers). Total: 50,000 FCFA ($80). |
+   494→| **Timeline** | Weeks 3-5 |
+   495→| **Success metric** | 12 agents activated, 60+ business points contributed |
+   496→| **Decision criteria** | Expand to Akwa and Deido agent networks if > 50% conversion. |
+   497→
+   498→---
+   499→
+   500→#### Experiment O3: Church & Community Group Presentations
+   501→
+   502→| Field | Detail |
+   503→|---|---|
+   504→| **Hypothesis** | A 10-minute presentation at 3 church youth group meetings will generate 15 signups with 60% activation (community trust accelerates adoption). |
+   505→| **Experiment design** | Identify 3 large churches in Bonamoussadi with active youth groups (e.g., Eglise Evangelique du Cameroun, Paroisse Catholique Sainte-Therese). Request 10 minutes during youth meeting. Presentation: "Use your phone to map your neighborhood and earn money. Your church community can be the most-mapped in Douala." Live demo of one contribution. Sign up 5 people on the spot. |
+   506→| **Budget** | 10,000 FCFA ($16) for transport and printed materials. |
+   507→| **Timeline** | Weeks 4-6 (aligned with Sunday youth meetings) |
+   508→| **Success metric** | 15 signups, 9 activated |
+   509→| **Decision criteria** | Systematize into a "Community Launch Kit" if activation > 50%. |
+   510→
+   511→---
+   512→
+   513→#### Experiment O4: Local Radio Spots (Douala)
+   514→
+   515→| Field | Detail |
+   516→|---|---|
+   517→| **Hypothesis** | 30-second radio spots on 2 popular Douala stations during morning drive (6-9am) will generate 50 app visits and 15 signups over 2 weeks. |
+   518→| **Experiment design** | Script (French): "Vous connaissez votre quartier mieux que Google Maps. Avec African Data Layer, transformez cette connaissance en argent. Inscrivez-vous gratuitement sur africandatalayer.com. Gagnez chaque semaine en cartographiant les pharmacies, stations, et kiosques autour de vous." Air on Radio Siantou and Sweet FM. 3 spots/day during morning and evening drive. Track with dedicated URL or SMS short code. |
+   519→| **Budget** | 150,000-300,000 FCFA ($240-$480) for 2-week flight on 2 stations. |
+   520→| **Timeline** | Weeks 7-8 (after digital channels establish baseline) |
+   521→| **Success metric** | 50 unique visits from radio (tracked via short URL), 15 signups |
+   522→| **Decision criteria** | Scale to 4-week flight if CPA < 2,000 FCFA. Test on Yaounde stations if Douala results are positive. |
+   523→
+   524→---
+   525→
+   526→#### Experiment O5: Flyer Distribution at Fuel Stations & Pharmacies
+   527→
+   528→| Field | Detail |
+   529→|---|---|
+   530→| **Hypothesis** | Flyers placed at 15 fuel stations and 15 pharmacies in Bonamoussadi will generate 20 signups within 3 weeks (people who work at these locations have downtime and local knowledge). |
+   531→| **Experiment design** | Design bilingual flyer (French/English): headline "Gagnez de l'argent avec votre telephone / Earn money with your phone," QR code to PWA, 3 bullet points (earn weekly, works offline, 5 minutes per contribution). Negotiate with station managers and pharmacists to display at counter. Leave 20 flyers per location. |
+   532→| **Budget** | 15,000 FCFA ($24) for 600 flyers. 10,000 FCFA ($16) for distribution transport. Total: 25,000 FCFA ($40). |
+   533→| **Timeline** | Weeks 3-5 |
+   534→| **Success metric** | 20 signups from QR code scans (tracked via UTM) |
+   535→| **Decision criteria** | Refresh flyers monthly if generating > 5 signups/week. |
+   536→
+   537→---
+   538→
+   539→### 4.3 B2B Channels
+   540→
+   541→---
+   542→
+   543→#### Experiment B1: LinkedIn Outreach to Logistics/Fintech PMs
+   544→
+   545→| Field | Detail |
+   546→|---|---|
+   547→| **Hypothesis** | Personalized outreach to 50 PMs at logistics and fintech companies operating in Cameroon will generate 5 demo calls and 1 pilot agreement within 6 weeks. |
+   548→| **Experiment design** | Build prospect list: Gozem, Yango, Glovo, Jumia Logistics, Wave, MFS Africa, Flutterwave (Cameroon operations). Identify Head of Ops, PM Growth, or Data Lead on LinkedIn. Send 3-touch sequence: (1) Connection request + 2-line intro, (2) Share sample data screenshot 3 days later, (3) Offer free pilot dataset 5 days after. Track in simple CRM (Notion or Google Sheet). |
+   549→| **Budget** | LinkedIn Sales Navigator: $79.99/month. Founder time: 5 hours/week. |
+   550→| **Timeline** | Weeks 5-12 |
+   551→| **Success metric** | 15 connections accepted, 5 demo calls, 1 signed pilot |
+   552→| **Decision criteria** | Hire fractional SDR if pipeline exceeds 20 qualified leads. |
+   553→
+   554→---
+   555→
+   556→#### Experiment B2: Mobile Money Operator Partnerships
+   557→
+   558→| Field | Detail |
+   559→|---|---|
+   560→| **Hypothesis** | Presenting ADL agent mapping data to MTN MoMo and Orange Money regional managers will generate a data-sharing pilot where the operator provides agent lists in exchange for ADL enrichment data. |
+   561→| **Experiment design** | Prepare a "Bonamoussadi Agent Landscape" report showing: total agents mapped, density map, competitor breakdown, formal vs informal. Request meeting with MTN MoMo Littoral regional manager via warm introduction (through contributor network or tech ecosystem contacts). Propose: "We have mapped X agents in Bonamoussadi. We can cover all of Douala in 60 days. In exchange, help us validate our data against your official agent records." |
+   562→| **Budget** | 20,000 FCFA ($32) for printed report and transport. |
+   563→| **Timeline** | Weeks 7-10 |
+   564→| **Success metric** | 1 meeting secured, partnership LOI signed |
+   565→| **Decision criteria** | If operator shows interest, prioritize mobile money vertical for Phase 2 expansion. |
+   566→
+   567→---
+   568→
+   569→#### Experiment B3: Conference Presence
+   570→
+   571→| Field | Detail |
+   572→|---|---|
+   573→| **Hypothesis** | Presenting at 1 regional tech conference will generate 10 B2B leads and 3 investor conversations. |
+   574→| **Experiment design** | Target conferences: AfricaCom (Cape Town, Nov 2026), Africa Tech Summit (Nairobi, Feb 2027), or closer: Douala Digital Week, ActivSpaces Demo Day. For near-term: apply to pitch at ActivSpaces Douala monthly showcase (free). Prepare 5-minute pitch + live demo. For later: submit speaker proposal to AfricaCom on "Crowdsourcing hyperlocal data infrastructure in Africa." |
+   575→| **Budget** | ActivSpaces: 0 FCFA. AfricaCom: $2,000-$3,000 (travel + registration). |
+   576→| **Timeline** | Weeks 8-12 (local events), 6+ months (international) |
+   577→| **Success metric** | 10 business cards/LinkedIn connections, 3 demo requests, 1 follow-up meeting |
+   578→| **Decision criteria** | Prioritize local events until B2B product-market fit is validated. International conferences after first paying customer. |
+   579→
+   580→---
+   581→
+   582→#### Experiment B4: Developer Relations & API Documentation
+   583→
+   584→| Field | Detail |
+   585→|---|---|
+   586→| **Hypothesis** | Publishing comprehensive API docs with a free developer tier will generate 10 developer signups and 3 integration projects within 60 days. |
+   587→| **Experiment design** | Create API documentation site (can be a section on existing site or hosted on ReadMe/GitBook). Include: authentication guide, endpoint reference, code samples (Python, JavaScript, curl), rate limits, pricing tiers. Free tier: 1,000 API calls/month. Promote via dev-focused communities: r/africa (Reddit), Africa tech Slack/Discord channels, dev.to articles. |
+   588→| **Budget** | 0 FCFA (documentation is content investment). Founder engineering time: 10 hours for docs + free tier setup. |
+   589→| **Timeline** | Weeks 5-8 |
+   590→| **Success metric** | 10 developer signups, 3 active API integrations |
+   591→| **Decision criteria** | Invest in developer advocate hire if >20 active API users. |
+   592→
+   593→---
+   594→
+   595→## 5. Growth Metrics & Funnel
+   596→
+   597→### 5.1 Contributor Funnel (Supply Side)
+   598→
+   599→| Stage | Metric | Phase 1 Target (Weeks 1-12) | Phase 2 Target (Months 4-6) | Measurement |
+   600→|---|---|---|---|---|
+   601→| **Awareness** | Impressions / reach | 10,000 impressions across channels | 100,000 | Facebook Ads Manager, WhatsApp group size, radio reach estimate |
+   602→| **Acquisition** | App visits / signups | 200 signups (15-20/week) | 1,000 signups | Supabase auth events, UTM tracking |
+   603→| **Activation** | First contribution within 24h | 30% of signups (60 people) | 35% | `point_events` first row per `user_id` vs signup timestamp |
+   604→| **Engagement** | Contributions per user per week | Median 3/week among active users | Median 5/week | KPI-T2-03 from analytics framework |
+   605→| **Retention** | D7 active rate | 20% | 30% | KPI-T2-02 retention cohorts |
+   606→| **Retention** | D30 active rate | 10% | 20% | KPI-T2-02 retention cohorts |
+   607→| **Referral** | Viral coefficient (K) | 0.3 (each contributor invites 0.3 new activated users) | 0.5 | Referral code tracking |
+   608→| **Revenue** | Contributor cost per verified point | < 500 FCFA ($0.80) | < 300 FCFA ($0.48) | Total contributor payouts / total verified points |
+   609→
+   610→### 5.2 Data Buyer Funnel (Demand Side)
+   611→
+   612→| Stage | Metric | Phase 1 Target (Weeks 1-12) | Phase 2 Target (Months 4-6) | Measurement |
+   613→|---|---|---|---|---|
+   614→| **Awareness** | B2B prospects aware of ADL | 100 (LinkedIn views, conference contacts) | 500 | LinkedIn analytics, CRM |
+   615→| **Interest** | Demo requests / API signups | 10 | 50 | CRM, API auth events |
+   616→| **Evaluation** | Free tier / pilot users | 5 | 15 | API usage logs |
+   617→| **Purchase** | Paid subscriptions or contracts | 1 | 5 | Stripe/invoicing |
+   618→| **Expansion** | Account revenue growth | N/A (too early) | 20% account expansion | Revenue per account over time |
+   619→| **Advocacy** | Customer referrals | 1 referral | 5 referrals | CRM attribution |
+   620→
+   621→### 5.3 North Star Metric
+   622→
+   623→**Active Verified Data Points per Region** (KPI-T1-01 from analytics framework).
+   624→
+   625→This metric captures both sides of the marketplace: contributors must produce data (supply), and the data must be cross-verified (quality). Phase 1 target: 200 verified points across 3 categories in Bonamoussadi.
+   626→
+   627→### 5.4 Key Ratios to Monitor Weekly
+   628→
+   629→| Ratio | Formula | Healthy Range | Red Flag |
+   630→|---|---|---|---|
+   631→| **Activation rate** | First contribution within 24h / Total signups | > 25% | < 15% |
+   632→| **Cost per activated contributor** | Total acquisition spend / Activated contributors | < 3,000 FCFA ($4.80) | > 5,000 FCFA ($8.00) |
+   633→| **Contributions per active user per week** | Total weekly contributions / WAC | > 3 | < 2 |
+   634→| **Verification rate** | Points with 2+ contributor events / Total points | > 30% | < 15% |
+   635→| **Fraud rejection rate** | Rejected events / Total events | 5-15% (healthy fraud detection) | > 25% (contributor quality issue) or < 2% (detection too weak) |
+   636→| **B2B pipeline velocity** | Demo requests per month / Outreach volume | > 10% | < 5% |
+   637→
+   638→---
+   639→
+   640→## 6. Growth Playbook (First 90 Days)
+   641→
+   642→### Phase 0: Pre-Launch Foundation (Weeks 1-2)
+   643→
+   644→**Objective:** All messaging, assets, and infrastructure ready before first contributor touches the product.
+   645→
+   646→| Day | Action | Owner | Deliverable |
+   647→|---|---|---|---|
+   648→| 1-2 | Finalize contributor-facing messaging in French and English | Marketing | Messaging doc approved |
+   649→| 1-2 | Create WhatsApp Community (3 groups: Annonces, Contributeurs Bonamoussadi, Support) | Marketing | Community live with welcome message |
+   650→| 3-4 | Design and print 500 flyers (bilingual, QR code to PWA) | Marketing | Flyers ready for distribution |
+   651→| 3-4 | Set up UTM tracking for all channels (WhatsApp, Facebook, flyers, campus, radio) | Engineering | UTM parameters configured, tracking dashboard live |
+   652→| 5-6 | Record 3 TikTok/Instagram Reels showing contribution workflow | Marketing | Videos edited and scheduled |
+   653→| 5-6 | Create campus ambassador recruitment post for university WhatsApp groups | Marketing | Post approved, ready to send |
+   654→| 7 | Seed WhatsApp group with 10 early contributors (friends, family, beta testers) | Founder | 10 members, 5 contributions |
+   655→| 8-10 | Set up weekly metrics dashboard (signups, activations, contributions, retention) | Engineering + Analytics | Dashboard live in Supabase/Metabase |
+   656→| 10-12 | Prepare B2B sample data package (Bonamoussadi pharmacies) for outreach | Data + Marketing | PDF/interactive demo ready |
+   657→| 12-14 | Write first 2 blog posts for SEO | Marketing | Posts published |
+   658→
+   659→**Week 2 Checkpoint:** WhatsApp community has 15+ members. 10+ contributions from seed users. Tracking infrastructure works. Ready for campus launch.
+   660→
+   661→---
+   662→
+   663→### Phase 1: Bonamoussadi Campus Blitz (Weeks 3-4)
+   664→
+   665→**Objective:** Reach 50 active contributors in Bonamoussadi through campus-first strategy.
+   666→
+   667→| Day | Action | Owner | Deliverable |
+   668→|---|---|---|---|
+   669→| 15 | Launch campus ambassador program: recruit 5 ambassadors from seed contributors | Marketing | 5 ambassadors confirmed, targets set |
+   670→| 15 | Post in Universite de Douala, ESSEC, IUT Facebook groups and WhatsApp channels | Ambassadors | 3+ posts per campus |
+   671→| 16-17 | Distribute flyers at 15 pharmacies and 10 fuel stations in Bonamoussadi | Field coordinator | 500 flyers placed |
+   672→| 17-18 | Visit 20 mobile money agents in person (Experiment O2) | Field coordinator | 20 agents visited, 12+ onboarded |
+   673→| 18-19 | Launch Facebook/Instagram ad campaign (Experiment D2, variant A/B/C test) | Marketing | Ads live, budget allocated |
+   674→| 19-21 | First WhatsApp community challenge: "Map 5 pharmacies by Friday, earn bonus 500 FCFA" | Marketing | Challenge announced, leaderboard tracked |
+   675→| 21 | First weekly payout to all qualifying contributors | Finance | Payouts confirmed via MoMo/OM |
+   676→| 22-24 | Church youth group presentations (Experiment O3, first 2 churches) | Founder/Ambassador | 2 presentations delivered |
+   677→| 25-28 | Daily WhatsApp engagement: morning challenge, evening leaderboard, contributor spotlights | Marketing | 14 posts over 2 weeks |
+   678→
+   679→**Week 4 Checkpoint:**
+   680→- 50 signups (target)
+   681→- 20 activated contributors (40% activation)
+   682→- 100+ verified data points
+   683→- WhatsApp community at 40+ members
+   684→- Facebook ad CPA measured, winning variant identified
+   685→
+   686→**Decision gate:** If < 25 signups, diagnose messaging or channel issue before expanding. If activation < 20%, investigate onboarding friction.
+   687→
+   688→---
+   689→
+   690→### Phase 2: Neighborhood Expansion (Weeks 5-6)
+   691→
+   692→**Objective:** Expand from Bonamoussadi to Akwa and Deido neighborhoods. Reach 100 active contributors.
+   693→
+   694→| Day | Action | Owner | Deliverable |
+   695→|---|---|---|---|
+   696→| 29-30 | Create sub-groups in WhatsApp Community for Akwa and Deido | Marketing | 2 new sub-groups |
+   697→| 29-30 | Recruit 3 new ambassadors in Akwa (from contributor referrals or new recruits) | Marketing | 3 ambassadors, 2 in Akwa, 1 in Deido |
+   698→| 31-33 | Replicate flyer distribution in Akwa and Deido (fuel stations, pharmacies, MoMo kiosks) | Field coordinator | 400 flyers distributed |
+   699→| 33-35 | Scale winning Facebook ad variant. Add Akwa/Deido geo-targeting. | Marketing | Ad spend increased 3x on winning variant |
+   700→| 35-37 | Launch "Neighborhood Challenge": which neighborhood maps the most points this week? | Marketing | Inter-neighborhood competition live |
+   701→| 37-42 | Begin API documentation (Experiment B4) | Engineering | Docs draft live on /docs endpoint |
+   702→| 37-42 | Start TikTok content series (Experiment D6) | Marketing | 3 videos posted |
+   703→
+   704→**Week 6 Checkpoint:**
+   705→- 100 total signups across 3 neighborhoods
+   706→- 40 active contributors (D7)
+   707→- 200 verified data points (North Star Phase 1 target)
+   708→- 3 neighborhoods with data coverage
+   709→- API docs draft available
+   710→
+   711→---
+   712→
+   713→### Phase 3: First B2B Outreach (Weeks 7-8)
+   714→
+   715→**Objective:** Generate 10 warm B2B leads and begin demand-side validation.
+   716→
+   717→| Day | Action | Owner | Deliverable |
+   718→|---|---|---|---|
+   719→| 43-44 | Prepare "Bonamoussadi Data Landscape" report for B2B prospects | Data + Marketing | PDF report with maps, stats, sample data |
+   720→| 43-44 | Build target list of 50 B2B prospects (LinkedIn research) | Marketing | Prospect list in CRM |
+   721→| 45-47 | Begin LinkedIn outreach sequence (Experiment B1, first 25 prospects) | Founder | 25 connection requests sent |
+   722→| 47-49 | Prepare and deliver MTN MoMo agent landscape pitch (Experiment B2) | Founder | Meeting requested or delivered |
+   723→| 49-50 | Launch local radio spot on Radio Siantou (Experiment O4) | Marketing | Radio spots airing 3x/day |
+   724→| 50-56 | Continue LinkedIn outreach (remaining 25 prospects) | Founder | 50 total outreach messages |
+   725→| 50-56 | Follow up with interested B2B prospects: share sample data, offer pilot | Founder | 5+ conversations active |
+   726→
+   727→**Week 8 Checkpoint:**
+   728→- 10 B2B prospects in active conversation
+   729→- 3 demo calls completed
+   730→- 1 pilot agreement in discussion
+   731→- Radio spot performance measured
+   732→- Contributor base stable at 40+ WAC
+   733→
+   734→---
+   735→
+   736→### Phase 4: Scale & Optimize (Weeks 9-12)
+   737→
+   738→**Objective:** Double down on what works, kill what does not, close first B2B deal.
+   739→
+   740→| Week | Action | Decision |
+   741→|---|---|---|
+   742→| **Week 9** | Review all experiment results. Calculate CPA by channel, activation rate, D7 retention. | Kill channels with CPA > 5,000 FCFA or activation < 15%. Scale channels with CPA < 2,000 FCFA. |
+   743→| **Week 9** | Analyze contributor quality by acquisition channel. | Identify which channels produce highest-quality contributors (most verified points, lowest fraud rate). |
+   744→| **Week 10** | If B2B pipeline has 3+ qualified leads: prepare custom data packages and pricing proposals. | Prioritize the vertical (pharmacy, MoMo, fuel) with strongest buyer interest. |
+   745→| **Week 10** | Expand campus ambassador program to Yaounde (Universite de Yaounde I) if Douala playbook works. | Go only if Douala D30 retention > 10% and cost per verified point < 500 FCFA. |
+   746→| **Week 11** | Close first B2B pilot deal ($500-$2,000 for data package or 30-day API trial). | Any paying customer validates demand. |
+   747→| **Week 11** | Apply to ActivSpaces Douala Demo Day or similar local pitch event. | Conference pipeline for Q3. |
+   748→| **Week 12** | Compile 90-day retrospective: total contributors, verified points, B2B pipeline, unit economics, retention cohorts. | Present to advisors/investors. Decide: continue current direction, narrow to one vertical, or pivot. |
+   749→
+   750→**Week 12 Success Criteria (Phase 1 Complete):**
+   751→
+   752→| Metric | Target | Red Flag |
+   753→|---|---|---|
+   754→| Total signups | 200+ | < 100 |
+   755→| Weekly Active Contributors (WAC) | 40+ | < 20 |
+   756→| Verified data points | 200+ across 3 categories | < 100 |
+   757→| D7 retention | >= 20% | < 10% |
+   758→| D30 retention | >= 10% | < 5% |
+   759→| B2B pipeline | 10 prospects, 1 paying pilot | 0 paying customers and < 5 prospects |
+   760→| Cost per verified data point | < 500 FCFA ($0.80) | > 1,000 FCFA ($1.60) |
+   761→| Neighborhoods covered | 3+ in Douala | Only 1 |
+   762→
+   763→---
+   764→
+   765→## 7. Content Strategy
+   766→
+   767→### 7.1 Blog / SEO Content Calendar
+   768→
+   769→ADL needs to own search terms that B2B buyers use when looking for African location data. Target keywords and content plan:
+   770→
+   771→| Priority | Target Keyword | Search Intent | Blog Post Title | Language |
+   772→|---|---|---|---|---|
+   773→| 1 | "pharmacy locations Douala" | Local/commercial | "Every Pharmacy in Bonamoussadi, Douala: A Complete Map (2026)" | EN + FR |
+   774→| 2 | "hyperlocal data Africa" | Informational/commercial | "Why Hyperlocal Data Is the Missing Infrastructure Layer in Africa" | EN |
+   775→| 3 | "mobile money agent map Cameroon" | Commercial | "Mapping Every Mobile Money Agent in Douala: What We Found" | EN + FR |
+   776→| 4 | "Africa POI data API" | Commercial/transactional | "How to Access Verified Point-of-Interest Data for African Cities via API" | EN |
+   777→| 5 | "crowdsourcing data Africa" | Informational | "Crowdsourcing vs. Traditional Surveys: How Africa's Data Gap Is Being Closed" | EN |
+   778→| 6 | "donnees geographiques Afrique" | Informational | "Cartographier l'Afrique par le bas : comment les contributeurs locaux construisent la couche de donnees qui manquait" | FR |
+   779→| 7 | "fuel station locations Cameroon" | Local/commercial | "Fuel Station Coverage in Douala: What Google Maps Misses" | EN + FR |
+   780→| 8 | "retail audit Africa" | Commercial | "The $0.10 Retail Audit: How Crowdsourced Data Disrupts Traditional Market Research in Africa" | EN |
+   781→| 9 | "informal economy data Africa" | Informational | "The Invisible Economy: Why Informal Businesses Are Missing from Every Map of Africa" | EN |
+   782→| 10 | "OpenStreetMap Africa coverage" | Informational | "OpenStreetMap in Africa: What It Gets Right, What It Misses, and How to Fill the Gaps" | EN |
+   783→
+   784→**Publishing cadence:** 2 posts/month during Phase 1, scaling to weekly in Phase 2.
+   785→
+   786→**Content production process:** Founder writes first draft from ADL data insights. Each post includes real data (e.g., "We found 87 pharmacies in a neighborhood where Google Maps shows 4"). Real data is the content moat -- competitors cannot produce this content without doing the fieldwork.
+   787→
+   788→---
+   789→
+   790→### 7.2 Social Proof Assets
+   791→
+   792→These assets convert skeptics at every stage of the funnel.
+   793→
+   794→| Asset | Purpose | Production Plan |
+   795→|---|---|---|
+   796→| **Contributor earnings screenshots** | Recruit new contributors. "Look, real people earning real money." | Ask top 5 contributors for permission to share anonymized earnings. Post weekly in WhatsApp and Instagram. |
+   797→| **Before/after map comparison** | B2B sales. "Google Maps shows 4 pharmacies. ADL shows 87." | Generate side-by-side screenshots from Google Maps vs ADL for Bonamoussadi. Use in LinkedIn posts, pitch decks, blog posts. |
+   798→| **Data quality metrics dashboard** | Investor/B2B credibility. "Our data is verified and fresh." | Publish monthly transparency report: verification rate, freshness score, contributor count, fraud rejection rate. |
+   799→| **Contributor video testimonials** | Emotional resonance. "Hear from Amina, a student who earns 20,000 FCFA/month with ADL." | Record 3-minute phone videos with top contributors. Use in Facebook/Instagram ads and website. |
+   800→| **B2B case study** | Enterprise sales. "How [Company X] reduced delivery failures by 40% using ADL data." | Write after first B2B pilot completes. Even a 1-page case study with real metrics is high-value. |
+   801→| **Neighborhood coverage reports** | Community pride + B2B pipeline. "Bonamoussadi is now the best-mapped neighborhood in Cameroon." | Generate automatically from ADL data. Share with community leaders and local press. |
+   802→
+   803→---
+   804→
+   805→### 7.3 Developer Documentation
+   806→
+   807→API documentation is a sales channel for technical buyers. Key sections:
+   808→
+   809→| Section | Content | Priority |
+   810→|---|---|---|
+   811→| **Quick Start** | "Get your first 10 data points in 5 minutes." Authentication, first API call, response format. | Week 5 |
+   812→| **Authentication** | API key generation, rate limits, free tier vs paid tier. | Week 5 |
+   813→| **Endpoints Reference** | `GET /api/points` (list/filter), `GET /api/points/:id` (detail), `GET /api/categories` (available categories), `GET /api/coverage` (coverage map). | Week 6 |
+   814→| **Code Samples** | Python, JavaScript (Node.js), curl. "Get all pharmacies within 2 km of a point." | Week 6 |
+   815→| **Data Dictionary** | Field definitions, category schemas, event types, freshness metadata. | Week 7 |
+   816→| **Pricing** | Free tier (1,000 calls/month), Startup ($99/month, 10K calls), Enterprise (custom). | Week 8 |
+   817→| **Changelog** | Coverage updates, new categories, API changes. | Ongoing |
+   818→
+   819→**Hosting:** Start with a dedicated `/docs` page on the ADL site or a free-tier ReadMe.io/GitBook site. Migrate to custom docs site when API revenue justifies it.
+   820→
+   821→---
+   822→
+   823→### 7.4 Investor Materials
+   824→
+   825→| Material | Purpose | Timeline |
+   826→|---|---|---|
+   827→| **Pitch deck (10-12 slides)** | Fundraising conversations, accelerator applications | Week 8-10 |
+   828→| **One-pager** | Conference handouts, email attachments (update existing Kasi Insight one-pager) | Week 2 (update existing) |
+   829→| **Data room** | Due diligence for serious investors | Month 4+ |
+   830→
+   831→**Pitch deck outline:**
+   832→
+   833→| Slide | Content |
+   834→|---|---|
+   835→| 1. Title | ADL logo, tagline ("The data layer Africa was missing"), founding team |
+   836→| 2. Problem | African businesses and organizations make decisions with stale, incomplete location data. Google Maps shows 4 pharmacies where there are 87. The informal economy is invisible. |
+   837→| 3. Solution | Crowdsourced, offline-first platform that incentivizes local contributors to map essential services. Automated fraud detection ensures quality. API delivers data to B2B buyers. |
+   838→| 4. Why now | Mobile penetration crossing 80% in urban Africa. Fintech, logistics, and FMCG companies expanding and need hyperlocal data. Traditional data providers (Nielsen, Kantar) are too expensive and too slow. |
+   839→| 5. Product demo | Screenshot of contributor flow + API response + dashboard |
+   840→| 6. Traction | X verified points, Y contributors, Z neighborhoods, first B2B pilot |
+   841→| 7. Business model | Contributor incentives funded by B2B data subscriptions. Unit economics: cost per verified point vs. revenue per API call. |
+   842→| 8. Market size | Africa's location data and market research market: $X billion (cite GSMA, McKinsey). SAM: companies operating in Cameroon and West Africa needing POI data. |
+   843→| 9. Competitive landscape | Differentiation matrix (vs. OSM, Google, Nielsen, Premise). Key moat: informal sector data + continuous freshness + offline-first. |
+   844→| 10. Go-to-market | City-by-city expansion. Bonamoussadi -> Douala -> Cameroon -> West Africa. Campus ambassador model for supply. LinkedIn outreach + partnerships for demand. |
+   845→| 11. Team | Founder background (cloud architecture, LVMH consulting, Africa market experience since 2018). Advisory network. |
+   846→| 12. Ask | Raising $X for Y months of runway. Use of funds: contributor incentives (40%), engineering (30%), GTM (20%), ops (10%). |
+   847→
+   848→**Data room structure (Month 4+):**
+   849→
+   850→```
+   851→/data-room
+   852→  /corporate
+   853→    - Certificate of incorporation
+   854→    - Shareholder agreement
+   855→    - Cap table
+   856→  /financials
+   857→    - Monthly P&L (from launch)
+   858→    - Unit economics model
+   859→    - Financial projections (3-year)
+   860→  /product
+   861→    - Architecture documentation (doc 01)
+   862→    - System design (doc 02)
+   863→    - Security audit (doc 04)
+   864→    - Fraud detection framework (doc 05)
+   865→  /traction
+   866→    - Weekly KPI dashboard exports
+   867→    - Contributor growth chart
+   868→    - B2B pipeline summary
+   869→    - Customer testimonials / LOIs
+   870→  /market
+   871→    - TAM/SAM/SOM analysis
+   872→    - Competitor landscape
+   873→    - ICP documentation (this document)
+   874→  /legal
+   875→    - Data privacy policy
+   876→    - Terms of service
+   877→    - Contributor agreement
+   878→```
+   879→
+   880→---
+   881→
+   882→## Appendix A: Budget Summary (First 90 Days)
+   883→
+   884→| Item | Amount (FCFA) | Amount (USD) |
+   885→|---|---|---|
+   886→| Facebook/Instagram ads (Experiment D2) | 200,000 | $320 |
+   887→| Campus ambassador payouts (Experiment O1) | 100,000 | $160 |
+   888→| Ambassador T-shirts | 50,000 | $80 |
+   889→| Mobile money agent outreach (Experiment O2) | 50,000 | $80 |
+   890→| Church/community presentations (Experiment O3) | 10,000 | $16 |
+   891→| Radio spots (Experiment O4) | 300,000 | $480 |
+   892→| Flyer printing and distribution (Experiment O5) | 25,000 | $40 |
+   893→| LinkedIn Sales Navigator (3 months) | 150,000 | $240 |
+   894→| Contributor incentive payouts (estimated 200 contributors x 5,000 FCFA avg) | 1,000,000 | $1,600 |
+   895→| **Total** | **1,885,000** | **$3,016** |
+   896→
+   897→This is a lean budget appropriate for a pre-revenue startup validating product-market fit. The single largest line item is contributor incentive payouts, which directly produce the data asset. Every other line item can be cut without stopping data production.
+   898→
+   899→---
+   900→
+   901→## Appendix B: Key Cameroonian Market Context
+   902→
+   903→| Factor | Detail | Implication for ADL |
+   904→|---|---|---|
+   905→| **Internet penetration** | ~45% (2025), heavily mobile. MTN and Orange dominate. | Mobile-first PWA is the right form factor. |
+   906→| **Smartphone penetration** | ~55% in urban areas, predominantly low-end Android (Tecno, Itel). | App must work on 1-2 GB RAM devices. Offline-first is essential. |
+   907→| **Mobile money** | MTN MoMo and Orange Money are the primary payment rails. 70%+ of urban adults use mobile money. | Payout via MoMo/OM is the only viable contributor payment method. |
+   908→| **Language** | French dominant in Douala, English in Northwest/Southwest, Pidgin as lingua franca. | All contributor-facing content must be bilingual (FR/EN). Pidgin for informal communications (WhatsApp, TikTok). |
+   909→| **Youth unemployment** | ~60% underemployment among 18-35 in urban areas. | Strong pull for any legitimate earning opportunity. Messaging: income stability > gig economy hype. |
+   910→| **Social media usage** | Facebook and WhatsApp dominate. Instagram growing among youth. Twitter/X used by tech/business community. TikTok growing fast among 15-25. | WhatsApp is the primary community channel. Facebook for paid acquisition. TikTok for organic youth reach. |
+   911→| **Trust dynamics** | Word-of-mouth and personal referrals are the strongest trust signals. "My friend uses it" > "I saw an ad." | Campus ambassador and community leader strategies are higher-trust than digital ads. |
+   912→| **Payment expectations** | Small, frequent payments preferred over large, delayed ones. Consistency matters more than amount (confirmed by Kasi meeting). | Weekly payouts, not monthly. Even 2,000 FCFA/week is valuable if consistent. |
+   913→| **Competitor landscape** | No direct competitor doing hyperlocal crowdsourced POI data in Cameroon. OSM presence is minimal. Google Maps coverage is basic. | First-mover advantage in Cameroon. Speed of execution matters more than features. |
+   914→
+   915→---
+   916→
+   917→## Appendix C: French Translation of Key Marketing Assets
+   918→
+   919→### Contributor Signup WhatsApp Message
+   920→
+   921→> Salut! Tu connais bien ton quartier? African Data Layer te paie pour cartographier les pharmacies, stations-service et kiosques MoMo autour de toi.
+   922→>
+   923→> Comment ca marche:
+   924→> 1. Inscris-toi en 30 secondes (lien ci-dessous)
+   925→> 2. Photographie et localise un commerce pres de toi
+   926→> 3. Gagne des XP et recois ton paiement chaque vendredi sur MoMo/OM
+   927→>
+   928→> Ca marche meme sans connexion internet!
+   929→>
+   930→> Rejoins les +50 contributeurs de Bonamoussadi: [lien]
+   931→>
+   932→> Des questions? Ecris ici, on repond en moins de 2h.
+   933→
+   934→### Flyer Text (Front)
+   935→
+   936→> **GAGNEZ DE L'ARGENT AVEC VOTRE TELEPHONE**
+   937→>
+   938→> Cartographiez les commerces de votre quartier et gagnez chaque semaine.
+   939→>
+   940→> - 5 minutes par contribution
+   941→> - Paiement chaque vendredi sur MoMo/OM
+   942→> - Fonctionne meme hors connexion
+   943→>
+   944→> Scannez le QR code pour commencer >>
+   945→>
+   946→> **EARN MONEY WITH YOUR PHONE**
+   947→>
+   948→> Map the businesses in your neighborhood and earn every week.
+   949→
+   950→### Radio Script (30 seconds, French)
+   951→
+   952→> Vous connaissez votre quartier mieux que n'importe quelle carte. Les pharmacies, les kiosques MoMo, les stations-service -- vous savez ou ils sont. Avec African Data Layer, cette connaissance vous rapporte de l'argent reel. Inscrivez-vous gratuitement, cartographiez les commerces autour de vous, et recevez votre paiement chaque vendredi sur MTN MoMo ou Orange Money. Ca marche meme sans internet. African Data Layer -- vos connaissances de quartier ont de la valeur. Rendez-vous sur africandatalayer.com.
+   953→
+   954→---
+   955→
+   956→*This document is immediately actionable. Every experiment has a budget, timeline, and decision criteria. Start with Week 1, Day 1: finalize messaging and create the WhatsApp community. Everything else follows.*
+   957→

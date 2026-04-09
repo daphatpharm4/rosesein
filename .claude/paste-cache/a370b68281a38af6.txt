@@ -1,0 +1,62 @@
+SUBMITTER
+Admin
+test@example.com
+ID: test@example.com
+SUBMISSION METADATA
+Time: 02/03/2026 09:04:04
+Event Type: CREATE_EVENT
+Category: Pharmacy
+Point ID: 9db38ffb-6659-4d6a-b721-4693b2c54e7b
+CLIENT DEVICE
+Device ID: fce89c51-8471-450c-bed8-026966464995
+Platform: iPhone
+Low-end flag: No
+LOCATION
+Submission GPS: -1.28394°, 36.78087°
+Effective GPS: -1.28394°, 36.78087°
+IP GPS: Unavailable
+PHOTOS
+Primary photo
+SECONDARY PHOTO UNAVAILABLE
+FRAUD METADATA
+PRIMARY PHOTO METADATA
+EXIF Status
+Recovered via URL
+EXIF Source
+Initial upload
+EXIF Reason
+EXIF recovered from client-side extraction (server got missing: No EXIF metadata found in uploaded file (mime=image/jpeg; ext=jpg; bytes=504053).)
+Photo EXIF GPS
+-1.28394°, 36.78087°
+Capture Time
+01/03/2026 15:20:35
+Device
+Apple iPhone
+Distance to Submission GPS
+0.000 km
+Distance to IP GPS
+Unavailable
+Submission GPS Match
+Match
+THRESHOLD: 1 KM
+SECONDARY PHOTO METADATA
+EXIF Status
+Unavailable
+EXIF Source
+Unavailable
+EXIF Reason
+Unavailable
+Photo EXIF GPS
+Unavailable
+Capture Time
+Unavailable
+Device
+Unavailable
+Distance to Submission GPS
+Unavailable
+Distance to IP GPS
+Unavailable
+Submission GPS Match
+Unavailable
+THRESHOLD: 1 KM
+IP MATCH THRESHOLD: 50 KM

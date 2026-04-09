@@ -1,6 +1,6 @@
 "use client";
 
-import { BriefcaseMedical, HeartHandshake } from "lucide-react";
+import { BriefcaseMedical, ChevronDown, HeartHandshake } from "lucide-react";
 import { useId, useState } from "react";
 
 type CategoryOption = {
@@ -39,12 +39,13 @@ export function ProfessionalTaxonomyFields({
         catégorie médicale ou soins de support. Choisissez celui qui oriente le premier contact.
       </p>
 
+      {/* M6: standardized opacity steps (10/20/30 instead of 8/18/35) */}
       <div className="grid gap-3 md:grid-cols-2">
         <label
           className={`block cursor-pointer rounded-brand border px-4 py-4 transition-colors ${
             kind === "medical"
-              ? "border-primary/35 bg-primary/8"
-              : "border-outline-variant/25 bg-surface-container-lowest hover:border-primary/18 hover:bg-white"
+              ? "border-primary/30 bg-primary/10"
+              : "border-outline-variant/30 bg-surface-container-lowest hover:border-primary/20 hover:bg-white"
           }`}
         >
           <input
@@ -73,8 +74,8 @@ export function ProfessionalTaxonomyFields({
         <label
           className={`block cursor-pointer rounded-brand border px-4 py-4 transition-colors ${
             kind === "support_care"
-              ? "border-primary/35 bg-primary/8"
-              : "border-outline-variant/25 bg-surface-container-lowest hover:border-primary/18 hover:bg-white"
+              ? "border-primary/30 bg-primary/10"
+              : "border-outline-variant/30 bg-surface-container-lowest hover:border-primary/20 hover:bg-white"
           }`}
         >
           <input
@@ -102,47 +103,62 @@ export function ProfessionalTaxonomyFields({
       </div>
 
       <div className="rounded-brand bg-surface-container-lowest px-4 py-4 shadow-ambient">
+        {/* M7: appearance-none + custom ChevronDown arrow on selects */}
         {kind === "medical" ? (
           <label className="block space-y-2">
             <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
               Catégorie médicale
             </span>
-            <select
-              name="medicalCategory"
-              value={medicalCategory}
-              onChange={(event) => setMedicalCategory(event.target.value)}
-              aria-describedby={`${hintId} ${noteId}`}
-              className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
-              required
-            >
-              <option value="">Choisir une catégorie médicale</option>
-              {medicalOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                name="medicalCategory"
+                value={medicalCategory}
+                onChange={(event) => setMedicalCategory(event.target.value)}
+                aria-describedby={`${hintId} ${noteId}`}
+                className="w-full appearance-none rounded-brand bg-surface-container-high px-4 py-4 pr-10 text-sm text-on-surface"
+                required
+              >
+                <option value="">Choisir une catégorie médicale</option>
+                {medicalOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant"
+                strokeWidth={1.8}
+              />
+            </div>
           </label>
         ) : (
           <label className="block space-y-2">
             <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
               Soins de support
             </span>
-            <select
-              name="supportCategory"
-              value={supportCategory}
-              onChange={(event) => setSupportCategory(event.target.value)}
-              aria-describedby={`${hintId} ${noteId}`}
-              className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm text-on-surface"
-              required
-            >
-              <option value="">Choisir une catégorie de soins de support</option>
-              {supportOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                name="supportCategory"
+                value={supportCategory}
+                onChange={(event) => setSupportCategory(event.target.value)}
+                aria-describedby={`${hintId} ${noteId}`}
+                className="w-full appearance-none rounded-brand bg-surface-container-high px-4 py-4 pr-10 text-sm text-on-surface"
+                required
+              >
+                <option value="">Choisir une catégorie de soins de support</option>
+                {supportOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant"
+                strokeWidth={1.8}
+              />
+            </div>
           </label>
         )}
 

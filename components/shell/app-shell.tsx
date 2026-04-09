@@ -9,6 +9,7 @@ type AppShellProps = {
   title?: string;
   currentPath: string;
   floatingAction?: React.ReactNode;
+  wide?: boolean;
   children: React.ReactNode;
 };
 
@@ -16,6 +17,7 @@ export async function AppShell({
   title,
   currentPath,
   floatingAction,
+  wide = false,
   children,
 }: AppShellProps) {
   const context = await getCurrentUserContext();
@@ -29,13 +31,14 @@ export async function AppShell({
         title={title}
         showAdminLink={hasStaffAccess}
         adminActive={currentPath.startsWith("/admin")}
+        wide={wide}
       />
       <main
         id="main-content"
         className={`mx-auto flex min-h-dvh w-full flex-col ${
           difficultDayMode
             ? "max-w-screen-sm gap-5 px-4 pt-[calc(var(--safe-area-top)+5.75rem)] pb-[calc(var(--safe-area-bottom)+6.75rem)] sm:gap-6 sm:pt-[calc(var(--safe-area-top)+6.5rem)] sm:pb-32"
-            : "max-w-screen-md gap-8 px-4 pt-[calc(var(--safe-area-top)+5.5rem)] pb-[calc(var(--safe-area-bottom)+6.75rem)] sm:px-5 sm:pt-[calc(var(--safe-area-top)+6.25rem)] sm:pb-32"
+            : `${wide ? "max-w-screen-lg" : "max-w-screen-md"} gap-8 px-4 pt-[calc(var(--safe-area-top)+5.5rem)] pb-[calc(var(--safe-area-bottom)+6.75rem)] sm:px-5 sm:pt-[calc(var(--safe-area-top)+6.25rem)] sm:pb-32`
         }`}
       >
         {difficultDayMode ? (
@@ -68,6 +71,7 @@ export async function AppShell({
       <BottomNav
         currentPath={currentPath}
         profileKind={context?.profile?.profileKind ?? null}
+        wide={wide}
       />
     </div>
   );

@@ -1,0 +1,9 @@
+{
+  "id": "9",
+  "subject": "Teammate 9: Notification Agent — Communication templates",
+  "description": "Design notification templates for phase updates, risks, blockers, and incident alerts via email/WhatsApp",
+  "activeForm": "Running Notification Agent design",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": []
+}

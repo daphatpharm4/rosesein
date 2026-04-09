@@ -1,0 +1,1833 @@
+     1→import React, { useEffect, useMemo, useState } from 'react';
+     2→import {
+     3→  ArrowLeft,
+     4→  Camera,
+     5→  MapPin,
+     6→  ShieldCheck
+     7→} from 'lucide-react';
+     8→import { categoryLabel as getCategoryLabel, VERTICALS } from '../../shared/verticals';
+     9→import VerticalIcon from '../shared/VerticalIcon';
+    10→import {
+    11→  enqueueSubmission,
+    12→  flushOfflineQueue,
+    13→  getQueueStats,
+    14→  retryQueueItem,
+    15→  updateQueueItemPayload,
+    16→  type QueueItem,
+    17→  type QueueSyncSummary,
+    18→} from '../../lib/client/offlineQueue';
+    19→import { detectLowEndDevice, getClientDeviceInfo } from '../../lib/client/deviceProfile';
+    20→import { sendSubmissionPayload, toSubmissionSyncError } from '../../lib/client/submissionSync';
+    21→import { apiJson } from '../../lib/client/api';
+    22→import type { ClientExifData, CollectionAssignment, DedupCheckResult, SubmissionCategory, SubmissionInput } from '../../shared/types';
+    23→import { ENRICH_FIELD_CATALOG, getEnrichFieldLabel, type EnrichFieldConfig, type EnrichFieldOption } from '../../shared/enrichFieldCatalog';
+    24→import { Category, ContributionMode, DataPoint } from '../../types';
+    25→import exifr from 'exifr';
+    26→import XPPopup from '../XPPopup';
+    27→
+    28→interface Props {
+    29→  onBack: () => void;
+    30→  onComplete: () => void;
+    31→  language: 'en' | 'fr';
+    32→  mode: ContributionMode;
+    33→  seedPoint: DataPoint | null;
+    34→  queuedDraft?: QueueItem | null;
+    35→  assignment?: CollectionAssignment | null;
+    36→  isBatchMode?: boolean;
+    37→  onQueueOpen?: () => void;
+    38→  onDraftConsumed?: () => void;
+    39→  onBatchExit?: () => void;
+    40→}
+    41→
+    42→type Vertical = SubmissionCategory;
+    43→
+    44→const providerOptions = ['MTN', 'Orange', 'Airtel'];
+    45→const paymentMethodOptions = ['Cash', 'Mobile Money', 'Card'];
+    46→const fuelTypeOptions = ['Super', 'Diesel', 'Gas'];
+    47→const outletTypeOptions = ['bar', 'restaurant', 'off_licence', 'street_vendor', 'nightclub'];
+    48→const billboardTypeOptions = ['standard', 'digital', 'street_furniture', 'wall_paint', 'poster', 'informal'];
+    49→const roadConditionOptions = ['good', 'fair', 'poor', 'impassable'];
+    50→const roadSurfaceOptions = ['asphalt', 'laterite', 'gravel', 'earth', 'concrete'];
+    51→const roadBlockageOptions = ['flooding', 'construction', 'accident', 'debris', 'market_encroachment'];
+    52→const buildingTypeOptions = ['residential', 'commercial', 'mixed', 'industrial', 'institutional', 'religious'];
+    53→const occupancyStatusOptions = ['occupied', 'partially_occupied', 'vacant', 'under_construction'];
+    54→const openingHourPresets = ['08:00 - 20:00', '09:00 - 19:00', '24/7'];
+    55→// Vercel serverless payload limit is 4.5MB; base64 adds ~33% overhead.
+    56→// Keep raw threshold at 3MB so base64 + JSON stays under 4.5MB.
+    57→const MAX_SUBMISSION_IMAGE_BYTES = 3 * 1024 * 1024;
+    58→const MAX_UPLOAD_DIMENSION = 1600;
+    59→const IMAGE_QUALITY_LOW_END = 0.72;
+    60→const IMAGE_QUALITY_DEFAULT = 0.82;
+    61→const JPEG_MIME_TYPES = new Set(['image/jpeg', 'image/jpg']);
+    62→
+    63→function normalizeText(input: unknown): string | null {
+    64→  if (typeof input !== 'string') return null;
+    65→  const value = input.trim();
+    66→  return value || null;
+    67→}
+    68→
+    69→function normalizeStringList(input: unknown): string[] {
+    70→  if (!Array.isArray(input)) return [];
+    71→  const cleaned = input
+    72→    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    73→    .filter((value) => value.length > 0);
+    74→  return Array.from(new Set(cleaned));
+    75→}
+    76→
+    77→function normalizeNumber(input: unknown): number | null {
+    78→  if (typeof input === 'number' && Number.isFinite(input)) return input;
+    79→  if (typeof input === 'string') {
+    80→    const parsed = Number(input.trim());
+    81→    if (Number.isFinite(parsed)) return parsed;
+    82→  }
+    83→  return null;
+    84→}
+    85→
+    86→function optionLabel(option: EnrichFieldOption, language: 'en' | 'fr'): string {
+    87→  return language === 'fr' ? option.labelFr : option.labelEn;
+    88→}
+    89→
+    90→function dataUrlToBytes(dataUrl: string): Uint8Array | null {
+    91→  const commaIndex = dataUrl.indexOf(',');
+    92→  if (commaIndex === -1) return null;
+    93→  const base64 = dataUrl.slice(commaIndex + 1);
+    94→  if (!base64) return null;
+    95→  const binary = atob(base64);
+    96→  const bytes = new Uint8Array(binary.length);
+    97→  for (let i = 0; i < binary.length; i += 1) {
+    98→    bytes[i] = binary.charCodeAt(i);
+    99→  }
+   100→  return bytes;
+   101→}
+   102→
+   103→function bytesToDataUrl(bytes: Uint8Array, mime: string): string {
+   104→  let binary = '';
+   105→  for (let i = 0; i < bytes.length; i += 1) {
+   106→    binary += String.fromCharCode(bytes[i] ?? 0);
+   107→  }
+   108→  return `data:${mime};base64,${btoa(binary)}`;
+   109→}
+   110→
+   111→function extractJpegExifSegment(bytes: Uint8Array): Uint8Array | null {
+   112→  if (bytes.length < 4) return null;
+   113→  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+   114→
+   115→  let offset = 2;
+   116→  while (offset + 4 <= bytes.length) {
+   117→    if (bytes[offset] !== 0xff) {
+   118→      offset += 1;
+   119→      continue;
+   120→    }
+   121→
+   122→    const marker = bytes[offset + 1];
+   123→    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+   124→      offset += 2;
+   125→      continue;
+   126→    }
+   127→    if (marker === 0xda || marker === 0xd9) break;
+   128→
+   129→    const segmentLength = ((bytes[offset + 2] ?? 0) << 8) | (bytes[offset + 3] ?? 0);
+   130→    if (segmentLength < 2) break;
+   131→    const segmentEnd = offset + 2 + segmentLength;
+   132→    if (segmentEnd > bytes.length) break;
+   133→
+   134→    if (marker === 0xe1 && segmentLength >= 8) {
+   135→      const signature = String.fromCharCode(
+   136→        bytes[offset + 4] ?? 0,
+   137→        bytes[offset + 5] ?? 0,
+   138→        bytes[offset + 6] ?? 0,
+   139→        bytes[offset + 7] ?? 0,
+   140→        bytes[offset + 8] ?? 0,
+   141→        bytes[offset + 9] ?? 0,
+   142→      );
+   143→      if (signature === 'Exif\0\0') {
+   144→        return bytes.slice(offset, segmentEnd);
+   145→      }
+   146→    }
+   147→
+   148→    offset = segmentEnd;
+   149→  }
+   150→
+   151→  return null;
+   152→}
+   153→
+   154→function injectExifIntoJpeg(compressedBytes: Uint8Array, exifSegment: Uint8Array): Uint8Array | null {
+   155→  if (compressedBytes.length < 2) return null;
+   156→  if (compressedBytes[0] !== 0xff || compressedBytes[1] !== 0xd8) return null;
+   157→  if (!exifSegment.length) return null;
+   158→
+   159→  const merged = new Uint8Array(compressedBytes.length + exifSegment.length);
+   160→  merged[0] = compressedBytes[0];
+   161→  merged[1] = compressedBytes[1];
+   162→  merged.set(exifSegment, 2);
+   163→  merged.set(compressedBytes.slice(2), 2 + exifSegment.length);
+   164→  return merged;
+   165→}
+   166→
+   167→async function preserveJpegExif(originalFile: File, compressedDataUrl: string): Promise<string> {
+   168→  if (!JPEG_MIME_TYPES.has((originalFile.type || '').toLowerCase())) return compressedDataUrl;
+   169→
+   170→  const originalBytes = new Uint8Array(await originalFile.arrayBuffer());
+   171→  const exifSegment = extractJpegExifSegment(originalBytes);
+   172→  if (!exifSegment) return compressedDataUrl;
+   173→
+   174→  const compressedBytes = dataUrlToBytes(compressedDataUrl);
+   175→  if (!compressedBytes) return compressedDataUrl;
+   176→  if (extractJpegExifSegment(compressedBytes)) return compressedDataUrl;
+   177→
+   178→  const merged = injectExifIntoJpeg(compressedBytes, exifSegment);
+   179→  if (!merged) return compressedDataUrl;
+   180→  return bytesToDataUrl(merged, 'image/jpeg');
+   181→}
+   182→
+   183→function parseDeviceFromUserAgent(): { make: string | null; model: string | null } {
+   184→  const ua = navigator.userAgent;
+   185→  // iPhone detection
+   186→  const iphoneMatch = ua.match(/iPhone/);
+   187→  if (iphoneMatch) return { make: 'Apple', model: 'iPhone' };
+   188→  // iPad detection
+   189→  const ipadMatch = ua.match(/iPad/);
+   190→  if (ipadMatch) return { make: 'Apple', model: 'iPad' };
+   191→  // Android device detection
+   192→  const androidMatch = ua.match(/;\s*([^;)]+)\s+Build\//);
+   193→  if (androidMatch) return { make: null, model: androidMatch[1]?.trim() ?? null };
+   194→  return { make: null, model: null };
+   195→}
+   196→
+   197→async function extractClientExif(
+   198→  file: File,
+   199→  deviceLocation: { latitude: number; longitude: number } | null,
+   200→): Promise<ClientExifData | null> {
+   201→  // Step 1: Try extracting EXIF from the raw file (works on Android, some iOS versions)
+   202→  let lat: number | null = null;
+   203→  let lng: number | null = null;
+   204→  let capturedAt: string | null = null;
+   205→  let deviceMake: string | null = null;
+   206→  let deviceModel: string | null = null;
+   207→
+   208→  try {
+   209→    const buffer = await file.arrayBuffer();
+   210→    const [exifData, gpsData] = await Promise.all([
+   211→      exifr.parse(buffer, { gps: true, exif: true, tiff: true, pick: [
+   212→        'latitude', 'longitude', 'GPSLatitude', 'GPSLongitude',
+   213→        'DateTimeOriginal', 'DateTimeDigitized', 'CreateDate', 'ModifyDate',
+   214→        'Make', 'Model',
+   215→      ] }).catch(() => null),
+   216→      exifr.gps(buffer).catch(() => null),
+   217→    ]);
+   218→    const merged = { ...(exifData ?? {}), ...(gpsData ?? {}) } as Record<string, unknown>;
+   219→    lat = typeof merged.latitude === 'number' ? merged.latitude : null;
+   220→    lng = typeof merged.longitude === 'number' ? merged.longitude : null;
+   221→    const rawDate = merged.DateTimeOriginal ?? merged.DateTimeDigitized ?? merged.CreateDate ?? merged.ModifyDate;
+   222→    if (rawDate instanceof Date) {
+   223→      capturedAt = rawDate.toISOString();
+   224→    } else if (typeof rawDate === 'string' && rawDate.trim()) {
+   225→      const m = rawDate.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+   226→      capturedAt = m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}` : rawDate;
+   227→    }
+   228→    deviceMake = typeof merged.Make === 'string' ? merged.Make : null;
+   229→    deviceModel = typeof merged.Model === 'string' ? merged.Model : null;
+   230→  } catch {
+   231→    // EXIF parsing failed entirely -- fall through to device fallback
+   232→  }
+   233→
+   234→  // Step 2: Fill gaps with browser APIs (critical for iOS which strips EXIF from <input capture>)
+   235→  if (deviceLocation) {
+   236→    if (lat == null) lat = deviceLocation.latitude;
+   237→    if (lng == null) lng = deviceLocation.longitude;
+   238→  }
+   239→  if (!capturedAt) {
+   240→    capturedAt = new Date().toISOString();
+   241→  }
+   242→  if (!deviceMake && !deviceModel) {
+   243→    const parsed = parseDeviceFromUserAgent();
+   244→    deviceMake = parsed.make;
+   245→    deviceModel = parsed.model;
+   246→  }
+   247→
+   248→  if (lat == null && lng == null && !capturedAt && !deviceMake && !deviceModel) return null;
+   249→  return { latitude: lat, longitude: lng, capturedAt, deviceMake, deviceModel };
+   250→}
+   251→
+   252→const pointTypeToVertical = (type: Category): Vertical => {
+   253→  if (type === Category.PHARMACY) return 'pharmacy';
+   254→  if (type === Category.FUEL) return 'fuel_station';
+   255→  if (type === Category.MOBILE_MONEY) return 'mobile_money';
+   256→  if (type === Category.ALCOHOL_OUTLET) return 'alcohol_outlet';
+   257→  if (type === Category.BILLBOARD) return 'billboard';
+   258→  if (type === Category.TRANSPORT_ROAD) return 'transport_road';
+   259→  if (type === Category.CENSUS_PROXY) return 'census_proxy';
+   260→  return 'pharmacy';
+   261→};
+   262→
+   263→const ContributionFlow: React.FC<Props> = ({
+   264→  onBack,
+   265→  onComplete,
+   266→  language,
+   267→  mode,
+   268→  seedPoint,
+   269→  queuedDraft = null,
+   270→  assignment = null,
+   271→  isBatchMode = false,
+   272→  onQueueOpen,
+   273→  onDraftConsumed,
+   274→  onBatchExit,
+   275→}) => {
+   276→  const t = (en: string, fr: string) => (language === 'fr' ? fr : en);
+   277→  const [vertical, setVertical] = useState<Vertical>(() => (seedPoint ? pointTypeToVertical(seedPoint.type) : 'pharmacy'));
+   278→  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+   279→  const [photoFile, setPhotoFile] = useState<File | null>(null);
+   280→  const [draftImageBase64, setDraftImageBase64] = useState<string | null>(null);
+   281→  const [draftClientExif, setDraftClientExif] = useState<ClientExifData | null>(null);
+   282→  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+   283→  const [showManualLocation, setShowManualLocation] = useState(false);
+   284→  const [manualLatitude, setManualLatitude] = useState('');
+   285→  const [manualLongitude, setManualLongitude] = useState('');
+   286→  const [photoError, setPhotoError] = useState('');
+   287→  const [locationError, setLocationError] = useState('');
+   288→  const [errorMessage, setErrorMessage] = useState('');
+   289→  const [syncMessage, setSyncMessage] = useState('');
+   290→  const [isSubmitting, setIsSubmitting] = useState(false);
+   291→  const [submitted, setSubmitted] = useState(false);
+   292→  const [dedupCheck, setDedupCheck] = useState<DedupCheckResult | null>(null);
+   293→  const [pendingPayload, setPendingPayload] = useState<SubmissionInput | null>(null);
+   294→  const [selectedDedupPointId, setSelectedDedupPointId] = useState('');
+   295→  const [isResolvingDedup, setIsResolvingDedup] = useState(false);
+   296→  const [batchCapturedCount, setBatchCapturedCount] = useState(0);
+   297→  const [xpBreakdown, setXpBreakdown] = useState({ baseXp: 5, qualityBonus: 0, streakBonus: 0, totalXp: 5 });
+   298→
+   299→  const [siteName, setSiteName] = useState(seedPoint?.name ?? '');
+   300→  const [openingHours, setOpeningHours] = useState(seedPoint?.openingHours ?? '');
+   301→  const [isOpenNow, setIsOpenNow] = useState(seedPoint?.isOpenNow ?? true);
+   302→  const [isOnDuty, setIsOnDuty] = useState(seedPoint?.isOnDuty ?? false);
+   303→  const [providers, setProviders] = useState<string[]>(seedPoint?.providers ?? []);
+   304→  const [merchantId, setMerchantId] = useState(seedPoint?.merchantId ?? '');
+   305→  const [merchantProvider, setMerchantProvider] = useState(seedPoint?.providers?.[0] ?? providerOptions[0]);
+   306→  const [paymentMethods, setPaymentMethods] = useState<string[]>(seedPoint?.paymentMethods ?? []);
+   307→  const [hasFuelAvailable, setHasFuelAvailable] = useState(seedPoint?.hasFuelAvailable ?? true);
+   308→  const [fuelTypes, setFuelTypes] = useState<string[]>(seedPoint?.fuelTypes ?? (seedPoint?.fuelType ? [seedPoint.fuelType] : []));
+   309→  const [priceFuelType, setPriceFuelType] = useState(seedPoint?.fuelType ?? fuelTypeOptions[0]);
+   310→  const [priceValue, setPriceValue] = useState(seedPoint?.price ? String(seedPoint.price) : '');
+   311→  const [quality, setQuality] = useState(seedPoint?.quality ?? 'Standard');
+   312→  const [outletType, setOutletType] = useState('bar');
+   313→  const [isFormal, setIsFormal] = useState(true);
+   314→  const [billboardType, setBillboardType] = useState('standard');
+   315→  const [isOccupied, setIsOccupied] = useState(true);
+   316→  const [advertiserBrand, setAdvertiserBrand] = useState('');
+   317→  const [roadName, setRoadName] = useState('');
+   318→  const [roadCondition, setRoadCondition] = useState('good');
+   319→  const [roadSurface, setRoadSurface] = useState('asphalt');
+   320→  const [roadBlocked, setRoadBlocked] = useState(false);
+   321→  const [blockageType, setBlockageType] = useState(roadBlockageOptions[0]);
+   322→  const [buildingType, setBuildingType] = useState('residential');
+   323→  const [occupancyStatus, setOccupancyStatus] = useState('occupied');
+   324→  const [storeyCount, setStoreyCount] = useState('');
+   325→  const [estimatedUnits, setEstimatedUnits] = useState('');
+   326→  const [enrichValues, setEnrichValues] = useState<Record<string, unknown>>({});
+   327→  const [enrichTouched, setEnrichTouched] = useState<Record<string, boolean>>({});
+   328→  const [enrichMultiRaw, setEnrichMultiRaw] = useState<Record<string, string>>({});
+   329→  const [isLowEndDevice] = useState<boolean>(() => detectLowEndDevice());
+   330→
+   331→  const draftGapKeys = useMemo(() => {
+   332→    const details = (queuedDraft?.payload.details ?? {}) as Record<string, unknown>;
+   333→    return Object.keys(details).filter((field) => field !== 'clientDevice');
+   334→  }, [queuedDraft?.id, queuedDraft?.payload.details]);
+   335→  const gaps = useMemo(() => (seedPoint?.gaps && seedPoint.gaps.length > 0 ? seedPoint.gaps : draftGapKeys), [draftGapKeys, seedPoint]);
+   336→  const isEnrichMode = mode === 'ENRICH' && (Boolean(seedPoint) || Boolean(queuedDraft?.payload.pointId));
+   337→
+   338→  const markEnrichTouched = (field: string) => {
+   339→    setEnrichTouched((prev) => ({ ...prev, [field]: true }));
+   340→  };
+   341→
+   342→  const setEnrichFieldValue = (field: string, value: unknown) => {
+   343→    setEnrichValues((prev) => ({ ...prev, [field]: value }));
+   344→    markEnrichTouched(field);
+   345→  };
+   346→
+   347→  const getEnrichFieldValue = (field: string): unknown => {
+   348→    return enrichValues[field];
+   349→  };
+   350→
+   351→  const toggleEnrichMultiValue = (field: string, value: string) => {
+   352→    const existing = normalizeStringList(getEnrichFieldValue(field));
+   353→    const next = existing.includes(value) ? existing.filter((item) => item !== value) : [...existing, value];
+   354→    setEnrichFieldValue(field, next);
+   355→  };
+   356→
+   357→  useEffect(() => {
+   358→    if (seedPoint) {
+   359→      setVertical(pointTypeToVertical(seedPoint.type));
+   360→    }
+   361→  }, [seedPoint]);
+   362→
+   363→  useEffect(() => {
+   364→    if (queuedDraft) return;
+   365→    if (assignment?.assignedVerticals?.[0] && !isEnrichMode) {
+   366→      setVertical(assignment.assignedVerticals[0]);
+   367→    }
+   368→  }, [assignment?.assignedVerticals, isEnrichMode, queuedDraft]);
+   369→
+   370→  useEffect(() => {
+   371→    setEnrichValues({});
+   372→    setEnrichTouched({});
+   373→    setEnrichMultiRaw({});
+   374→    setMerchantId(seedPoint?.merchantId ?? '');
+   375→    setMerchantProvider(seedPoint?.providers?.[0] ?? providerOptions[0]);
+   376→    setPriceFuelType(seedPoint?.fuelType ?? fuelTypeOptions[0]);
+   377→    setPriceValue(seedPoint?.price ? String(seedPoint.price) : '');
+   378→  }, [isEnrichMode, seedPoint?.id]);
+   379→
+   380→  useEffect(() => {
+   381→    if (!isEnrichMode) return;
+   382→    clearDedupPrompt();
+   383→  }, [isEnrichMode, seedPoint?.id]);
+   384→
+   385→  useEffect(() => {
+   386→    if (!navigator.geolocation) return;
+   387→    navigator.geolocation.getCurrentPosition(
+   388→      (pos) => setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+   389→      () => setLocation(null),
+   390→      { enableHighAccuracy: true, timeout: 10000 }
+   391→    );
+   392→  }, []);
+   393→
+   394→  useEffect(() => {
+   395→    return () => {
+   396→      if (photoPreview?.startsWith('blob:')) URL.revokeObjectURL(photoPreview);
+   397→    };
+   398→  }, [photoPreview]);
+   399→
+   400→  useEffect(() => {
+   401→    if (!queuedDraft) {
+   402→      setDraftImageBase64(null);
+   403→      setDraftClientExif(null);
+   404→      return;
+   405→    }
+   406→
+   407→    const details = (queuedDraft.payload.details ?? {}) as Record<string, unknown>;
+   408→    const merchantMap = details.merchantIdByProvider && typeof details.merchantIdByProvider === 'object'
+   409→      ? details.merchantIdByProvider as Record<string, string>
+   410→      : {};
+   411→    const firstMerchantProvider = Object.keys(merchantMap)[0];
+   412→    const priceMap = details.pricesByFuel && typeof details.pricesByFuel === 'object'
+   413→      ? details.pricesByFuel as Record<string, number>
+   414→      : {};
+   415→    const firstPriceFuel = Object.keys(priceMap)[0];
+   416→
+   417→    setVertical(queuedDraft.payload.category as Vertical);
+   418→    setPhotoPreview(typeof queuedDraft.payload.imageBase64 === 'string' ? queuedDraft.payload.imageBase64 : null);
+   419→    setPhotoFile(null);
+   420→    setDraftImageBase64(typeof queuedDraft.payload.imageBase64 === 'string' ? queuedDraft.payload.imageBase64 : null);
+   421→    setDraftClientExif(queuedDraft.payload.clientExif ?? null);
+   422→    setLocation(queuedDraft.payload.location ?? null);
+   423→    setSiteName(
+   424→      (typeof details.siteName === 'string' && details.siteName)
+   425→      || (typeof details.name === 'string' && details.name)
+   426→      || '',
+   427→    );
+   428→    setOpeningHours(typeof details.openingHours === 'string' ? details.openingHours : '');
+   429→    setIsOpenNow(typeof details.isOpenNow === 'boolean' ? details.isOpenNow : true);
+   430→    setIsOnDuty(typeof details.isOnDuty === 'boolean' ? details.isOnDuty : false);
+   431→    setProviders(Array.isArray(details.providers) ? details.providers.filter((value): value is string => typeof value === 'string') : []);
+   432→    setMerchantProvider(firstMerchantProvider ?? providerOptions[0]);
+   433→    setMerchantId(firstMerchantProvider ? merchantMap[firstMerchantProvider] ?? '' : (typeof details.merchantId === 'string' ? details.merchantId : ''));
+   434→    setPaymentMethods(Array.isArray(details.paymentMethods) ? details.paymentMethods.filter((value): value is string => typeof value === 'string') : []);
+   435→    setHasFuelAvailable(typeof details.hasFuelAvailable === 'boolean' ? details.hasFuelAvailable : true);
+   436→    setFuelTypes(Array.isArray(details.fuelTypes) ? details.fuelTypes.filter((value): value is string => typeof value === 'string') : []);
+   437→    setPriceFuelType(firstPriceFuel ?? fuelTypeOptions[0]);
+   438→    setPriceValue(firstPriceFuel && Number.isFinite(priceMap[firstPriceFuel]) ? String(priceMap[firstPriceFuel]) : '');
+   439→    setQuality(typeof details.quality === 'string' ? details.quality : 'Standard');
+   440→    setOutletType(typeof details.outletType === 'string' ? details.outletType : 'bar');
+   441→    setIsFormal(typeof details.isFormal === 'boolean' ? details.isFormal : true);
+   442→    setBillboardType(typeof details.billboardType === 'string' ? details.billboardType : 'standard');
+   443→    setIsOccupied(typeof details.isOccupied === 'boolean' ? details.isOccupied : true);
+   444→    setAdvertiserBrand(typeof details.advertiserBrand === 'string' ? details.advertiserBrand : '');
+   445→    setRoadName(
+   446→      (typeof details.roadName === 'string' && details.roadName)
+   447→      || (typeof details.name === 'string' && details.name)
+   448→      || '',
+   449→    );
+   450→    setRoadCondition(typeof details.condition === 'string' ? details.condition : 'good');
+   451→    setRoadSurface(typeof details.surfaceType === 'string' ? details.surfaceType : 'asphalt');
+   452→    setRoadBlocked(typeof details.isBlocked === 'boolean' ? details.isBlocked : false);
+   453→    setBlockageType(typeof details.blockageType === 'string' ? details.blockageType : roadBlockageOptions[0]);
+   454→    setBuildingType(typeof details.buildingType === 'string' ? details.buildingType : 'residential');
+   455→    setOccupancyStatus(typeof details.occupancyStatus === 'string' ? details.occupancyStatus : 'occupied');
+   456→    setStoreyCount(typeof details.storeyCount === 'number' ? String(details.storeyCount) : '');
+   457→    setEstimatedUnits(typeof details.estimatedUnits === 'number' ? String(details.estimatedUnits) : '');
+   458→
+   459→    if (mode === 'ENRICH') {
+   460→      const nextEnrichValues = Object.fromEntries(
+   461→        Object.entries(details).filter(([field]) => field !== 'clientDevice'),
+   462→      );
+   463→      setEnrichValues(nextEnrichValues);
+   464→      setEnrichTouched(Object.fromEntries(Object.keys(nextEnrichValues).map((field) => [field, true])));
+   465→    }
+   466→  }, [mode, queuedDraft]);
+   467→
+   468→  useEffect(() => {
+   469→    if (!isBatchMode) {
+   470→      setBatchCapturedCount(0);
+   471→    }
+   472→  }, [isBatchMode]);
+   473→
+   474→  useEffect(() => {
+   475→    const onOnline = async () => {
+   476→      await syncQueuedItems();
+   477→    };
+   478→    window.addEventListener('online', onOnline);
+   479→    return () => window.removeEventListener('online', onOnline);
+   480→  }, []);
+   481→
+   482→  const syncQueuedItems = async (): Promise<QueueSyncSummary | null> => {
+   483→    try {
+   484→      const summary = await flushOfflineQueue(sendSubmissionPayload);
+   485→      if (summary.permanentFailures > 0) {
+   486→        const reason = summary.permanentFailureMessages[0] ?? t('Submission rejected by server validation.', 'Soumission rejetee par la validation serveur.');
+   487→        const rejectedMessage = t(
+   488→          `${summary.permanentFailures} queued item(s) were rejected: ${reason}`,
+   489→          `${summary.permanentFailures} element(s) en file ont ete rejetes : ${reason}`
+   490→        );
+   491→        if (summary.failed > 0) {
+   492→          setSyncMessage(`${rejectedMessage} ${t(`${summary.failed} item(s) still pending sync.`, `${summary.failed} element(s) en attente de synchronisation.`)}`);
+   493→        } else {
+   494→          setSyncMessage(rejectedMessage);
+   495→        }
+   496→      } else if (summary.failed > 0) {
+   497→        setSyncMessage(t(`Saved offline. ${summary.failed} item(s) still pending sync.`, `${summary.failed} element(s) en attente de synchronisation.`));
+   498→      } else if (summary.synced > 0) {
+   499→        setSyncMessage(t('Saved offline and synced successfully.', 'Enregistre hors ligne puis synchronise avec succes.'));
+   500→      } else {
+   501→        const stats = await getQueueStats();
+   502→        if (stats.total > 0) {
+   503→          setSyncMessage(t(`${stats.total} item(s) queued for sync.`, `${stats.total} element(s) en file de synchronisation.`));
+   504→        }
+   505→      }
+   506→      return summary;
+   507→    } catch (error) {
+   508→      setSyncMessage(error instanceof Error ? error.message : t('Saved offline. Sync will retry automatically.', 'Enregistre hors ligne. La synchronisation reessaiera automatiquement.'));
+   509→      return null;
+   510→    }
+   511→  };
+   512→
+   513→  const getCurrentLocation = () =>
+   514→    new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
+   515→      if (!navigator.geolocation) {
+   516→        reject(new Error(t('Geolocation not supported.', 'Geolocalisation non supportee.')));
+   517→        return;
+   518→      }
+   519→      navigator.geolocation.getCurrentPosition(
+   520→        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+   521→        () => reject(new Error(t('Unable to access location.', 'Impossible d\'acceder a la localisation.'))),
+   522→        { enableHighAccuracy: true, timeout: 10000 }
+   523→      );
+   524→    });
+   525→
+   526→  const retryLocation = async () => {
+   527→    setLocationError('');
+   528→    try {
+   529→      const current = await getCurrentLocation();
+   530→      setLocation(current);
+   531→      setShowManualLocation(false);
+   532→    } catch {
+   533→      setLocation(null);
+   534→      setLocationError(t('Unable to access location. Use manual fallback coordinates.', 'Impossible d\'acceder a la localisation. Utilisez les coordonnees manuelles.'));
+   535→      setShowManualLocation(true);
+   536→    }
+   537→  };
+   538→
+   539→  const parseManualLocation = () => {
+   540→    const latRaw = manualLatitude.trim();
+   541→    const lngRaw = manualLongitude.trim();
+   542→    if (!latRaw && !lngRaw) return null;
+   543→    const latitude = Number(latRaw);
+   544→    const longitude = Number(lngRaw);
+   545→    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+   546→    return { latitude, longitude };
+   547→  };
+   548→
+   549→  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+   550→    const file = event.target.files?.[0];
+   551→    if (!file) return;
+   552→    setPhotoFile(file);
+   553→    setDraftImageBase64(null);
+   554→    setDraftClientExif(null);
+   555→    setPhotoError('');
+   556→    const nextPreview = URL.createObjectURL(file);
+   557→    setPhotoPreview((prev) => {
+   558→      if (prev?.startsWith('blob:')) URL.revokeObjectURL(prev);
+   559→      return nextPreview;
+   560→    });
+   561→  };
+   562→
+   563→  const fileToBase64 = async (file: File) => {
+   564→    const readAsDataUrl = (target: Blob) =>
+   565→      new Promise<string>((resolve, reject) => {
+   566→        const reader = new FileReader();
+   567→        reader.onload = () => {
+   568→          if (typeof reader.result === 'string') {
+   569→            resolve(reader.result);
+   570→            return;
+   571→          }
+   572→          reject(new Error('Unable to read file.'));
+   573→        };
+   574→        reader.onerror = () => reject(new Error('Unable to read file.'));
+   575→        reader.readAsDataURL(target);
+   576→      });
+   577→
+   578→    if (!file.type.startsWith('image/')) {
+   579→      return await readAsDataUrl(file);
+   580→    }
+   581→
+   582→    // Keep original capture when possible so EXIF (GPS/time/device) reaches server-side forensics.
+   583→    if (file.size <= MAX_SUBMISSION_IMAGE_BYTES) {
+   584→      return await readAsDataUrl(file);
+   585→    }
+   586→
+   587→    const loadImage = (objectUrl: string) =>
+   588→      new Promise<HTMLImageElement>((resolve, reject) => {
+   589→        const img = new Image();
+   590→        img.onload = () => resolve(img);
+   591→        img.onerror = () => reject(new Error('Unable to decode image.'));
+   592→        img.src = objectUrl;
+   593→      });
+   594→
+   595→    const objectUrl = URL.createObjectURL(file);
+   596→    try {
+   597→      const img = await loadImage(objectUrl);
+   598→      const maxDimension = Math.max(img.width, img.height);
+   599→      const scale = maxDimension > MAX_UPLOAD_DIMENSION ? MAX_UPLOAD_DIMENSION / maxDimension : 1;
+   600→      const width = Math.max(1, Math.round(img.width * scale));
+   601→      const height = Math.max(1, Math.round(img.height * scale));
+   602→      const canvas = document.createElement('canvas');
+   603→      canvas.width = width;
+   604→      canvas.height = height;
+   605→      const ctx = canvas.getContext('2d');
+   606→      if (!ctx) {
+   607→        return await readAsDataUrl(file);
+   608→      }
+   609→      ctx.drawImage(img, 0, 0, width, height);
+   610→      const quality = isLowEndDevice ? IMAGE_QUALITY_LOW_END : IMAGE_QUALITY_DEFAULT;
+   611→      const compressed = canvas.toDataURL('image/jpeg', quality);
+   612→      return await preserveJpegExif(file, compressed);
+   613→    } catch {
+   614→      return await readAsDataUrl(file);
+   615→    } finally {
+   616→      URL.revokeObjectURL(objectUrl);
+   617→    }
+   618→  };
+   619→
+   620→  const toggleListValue = (current: string[], value: string): string[] => {
+   621→    return current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+   622→  };
+   623→
+   624→  const buildCreateDetails = (): Record<string, unknown> => {
+   625→    const clientDevice = getClientDeviceInfo();
+   626→    if (vertical === 'pharmacy') {
+   627→      return {
+   628→        name: siteName.trim(),
+   629→        isOpenNow,
+   630→        isOnDuty,
+   631→        openingHours: openingHours.trim() || undefined,
+   632→        clientDevice
+   633→      };
+   634→    }
+   635→    if (vertical === 'mobile_money') {
+   636→      return {
+   637→        providers,
+   638→        openingHours: openingHours.trim() || undefined,
+   639→        paymentMethods: paymentMethods.length ? paymentMethods : undefined,
+   640→        merchantIdByProvider: merchantId.trim() ? { [merchantProvider]: merchantId.trim() } : undefined,
+   641→        clientDevice
+   642→      };
+   643→    }
+   644→    if (vertical === 'fuel_station') {
+   645→      const parsedPrice = Number(priceValue);
+   646→      return {
+   647→        name: siteName.trim(),
+   648→        hasFuelAvailable,
+   649→        fuelTypes: fuelTypes.length ? fuelTypes : undefined,
+   650→        pricesByFuel: Number.isFinite(parsedPrice) ? { [priceFuelType]: parsedPrice } : undefined,
+   651→        quality,
+   652→        openingHours: openingHours.trim() || undefined,
+   653→        paymentMethods: paymentMethods.length ? paymentMethods : undefined,
+   654→        clientDevice
+   655→      };
+   656→    }
+   657→    if (vertical === 'alcohol_outlet') {
+   658→      return {
+   659→        name: siteName.trim(),
+   660→        outletType,
+   661→        isFormal,
+   662→        openingHours: openingHours.trim() || undefined,
+   663→        paymentMethods: paymentMethods.length ? paymentMethods : undefined,
+   664→        clientDevice
+   665→      };
+   666→    }
+   667→    if (vertical === 'billboard') {
+   668→      return {
+   669→        name: siteName.trim(),
+   670→        billboardType,
+   671→        isOccupied,
+   672→        advertiserBrand: advertiserBrand.trim() || undefined,
+   673→        clientDevice
+   674→      };
+   675→    }
+   676→    if (vertical === 'transport_road') {
+   677→      return {
+   678→        roadName: roadName.trim(),
+   679→        name: roadName.trim() || undefined,
+   680→        condition: roadCondition,
+   681→        surfaceType: roadSurface,
+   682→        isBlocked: roadBlocked,
+   683→        blockageType: roadBlocked ? blockageType : undefined,
+   684→        clientDevice
+   685→      };
+   686→    }
+   687→    const parsedStoreyCount = Number(storeyCount);
+   688→    const parsedEstimatedUnits = Number(estimatedUnits);
+   689→    return {
+   690→      buildingType,
+   691→      occupancyStatus,
+   692→      storeyCount: Number.isFinite(parsedStoreyCount) ? parsedStoreyCount : undefined,
+   693→      estimatedUnits: Number.isFinite(parsedEstimatedUnits) ? parsedEstimatedUnits : undefined,
+   694→      clientDevice
+   695→    };
+   696→  };
+   697→
+   698→  const buildEnrichDetails = (): Record<string, unknown> => {
+   699→    const details: Record<string, unknown> = { clientDevice: getClientDeviceInfo() };
+   700→    for (const gap of gaps) {
+   701→      const fieldConfig = ENRICH_FIELD_CATALOG[gap];
+   702→      if (!fieldConfig) {
+   703→        const fallback = normalizeText(getEnrichFieldValue(gap));
+   704→        if (fallback) details[gap] = fallback;
+   705→        continue;
+   706→      }
+   707→
+   708→      if (fieldConfig.kind === 'map_value') {
+   709→        if (!enrichTouched[gap]) continue;
+   710→        if (gap === 'merchantIdByProvider') {
+   711→          const normalizedMerchantId = merchantId.trim();
+   712→          if (normalizedMerchantId) details.merchantIdByProvider = { [merchantProvider]: normalizedMerchantId };
+   713→          continue;
+   714→        }
+   715→        if (gap === 'pricesByFuel') {
+   716→          const parsedPrice = normalizeNumber(priceValue);
+   717→          if (parsedPrice !== null) details.pricesByFuel = { [priceFuelType]: parsedPrice };
+   718→          continue;
+   719→        }
+   720→        const rawMap = getEnrichFieldValue(gap);
+   721→        if (rawMap && typeof rawMap === 'object' && !Array.isArray(rawMap)) {
+   722→          const normalizedMap = Object.fromEntries(
+   723→            Object.entries(rawMap as Record<string, unknown>)
+   724→              .map(([key, value]) => [key.trim(), normalizeText(value)])
+   725→              .filter(([key, value]) => key.length > 0 && Boolean(value)),
+   726→          );
+   727→          if (Object.keys(normalizedMap).length > 0) details[gap] = normalizedMap;
+   728→        }
+   729→        continue;
+   730→      }
+   731→
+   732→      const rawValue = getEnrichFieldValue(gap);
+   733→      if (fieldConfig.kind === 'boolean') {
+   734→        if (enrichTouched[gap] && typeof rawValue === 'boolean') details[gap] = rawValue;
+   735→        continue;
+   736→      }
+   737→      if (fieldConfig.kind === 'text') {
+   738→        const normalized = normalizeText(rawValue);
+   739→        if (normalized) details[gap] = normalized;
+   740→        continue;
+   741→      }
+   742→      if (fieldConfig.kind === 'number') {
+   743→        const normalized = normalizeNumber(rawValue);
+   744→        if (normalized !== null) details[gap] = normalized;
+   745→        continue;
+   746→      }
+   747→      if (fieldConfig.kind === 'single_select') {
+   748→        const normalized = normalizeText(rawValue);
+   749→        if (normalized) details[gap] = normalized;
+   750→        continue;
+   751→      }
+   752→      if (fieldConfig.kind === 'multi_select') {
+   753→        const normalized = normalizeStringList(rawValue);
+   754→        if (normalized.length > 0) details[gap] = normalized;
+   755→      }
+   756→    }
+   757→    return details;
+   758→  };
+   759→
+   760→  const validateBeforeSubmit = (details: Record<string, unknown>): boolean => {
+   761→    setPhotoError('');
+   762→    setLocationError('');
+   763→    setErrorMessage('');
+   764→
+   765→    if (!photoFile && !draftImageBase64) {
+   766→      setPhotoError(t('Please capture a live photo before submitting.', 'Veuillez capturer une photo en direct avant de soumettre.'));
+   767→      return false;
+   768→    }
+   769→
+   770→    if (!location && !parseManualLocation()) {
+   771→      setLocationError(t('GPS is required. Retry location or enter fallback coordinates.', 'Le GPS est requis. Reessayez la localisation ou saisissez des coordonnees de secours.'));
+   772→      return false;
+   773→    }
+   774→
+   775→    if (!isEnrichMode) {
+   776→      if (vertical === 'pharmacy' && !siteName.trim()) {
+   777→        setErrorMessage(t('Pharmacy name is required.', 'Le nom de la pharmacie est requis.'));
+   778→        return false;
+   779→      }
+   780→      if (vertical === 'mobile_money' && providers.length === 0) {
+   781→        setErrorMessage(t('Select at least one provider.', 'Selectionnez au moins un operateur.'));
+   782→        return false;
+   783→      }
+   784→      if (vertical === 'fuel_station' && !siteName.trim()) {
+   785→        setErrorMessage(t('Fuel station name is required.', 'Le nom de la station-service est requis.'));
+   786→        return false;
+   787→      }
+   788→      if (vertical === 'alcohol_outlet' && !siteName.trim()) {
+   789→        setErrorMessage(t('Alcohol outlet name is required.', 'Le nom du point de vente d\'alcool est requis.'));
+   790→        return false;
+   791→      }
+   792→      if (vertical === 'billboard' && !siteName.trim()) {
+   793→        setErrorMessage(t('Billboard name/description is required.', 'Le nom ou la description du panneau est requis.'));
+   794→        return false;
+   795→      }
+   796→      if (vertical === 'transport_road' && !roadName.trim()) {
+   797→        setErrorMessage(t('Road segment name is required.', 'Le nom du segment routier est requis.'));
+   798→        return false;
+   799→      }
+   800→      if (vertical === 'transport_road' && !roadCondition) {
+   801→        setErrorMessage(t('Road condition is required.', 'L\'etat de la route est requis.'));
+   802→        return false;
+   803→      }
+   804→      if (vertical === 'census_proxy' && !buildingType) {
+   805→        setErrorMessage(t('Building type is required.', 'Le type de batiment est requis.'));
+   806→        return false;
+   807→      }
+   808→      if (vertical === 'census_proxy' && !occupancyStatus) {
+   809→        setErrorMessage(t('Occupancy status is required.', 'Le statut d\'occupation est requis.'));
+   810→        return false;
+   811→      }
+   812→    } else if (Object.keys(details).filter((field) => field !== 'clientDevice').length === 0) {
+   813→      setErrorMessage(t('Fill at least one gap field to enrich this point.', 'Renseignez au moins un champ manquant pour enrichir ce point.'));
+   814→      return false;
+   815→    }
+   816→
+   817→    return true;
+   818→  };
+   819→
+   820→  const calculateXp = (payload: SubmissionInput) => {
+   821→    const baseXp = 5;
+   822→    const qualityBonus = payload.location ? 2 : 0;
+   823→    const detailsCount = Object.keys((payload.details ?? {}) as Record<string, unknown>).filter((field) => field !== 'clientDevice').length;
+   824→    const streakBonus = isBatchMode || detailsCount >= 3 ? 1 : 0;
+   825→    return {
+   826→      baseXp,
+   827→      qualityBonus,
+   828→      streakBonus,
+   829→      totalXp: baseXp + qualityBonus + streakBonus,
+   830→    };
+   831→  };
+   832→
+   833→  const submitPayload = async (payload: SubmissionInput): Promise<boolean> => {
+   834→    const queuedItem = queuedDraft
+   835→      ? await updateQueueItemPayload(queuedDraft.id, payload)
+   836→      : await enqueueSubmission(payload);
+   837→    let summary: QueueSyncSummary | null = null;
+   838→    if (navigator.onLine) {
+   839→      if (queuedDraft && queuedItem) {
+   840→        summary = await retryQueueItem(queuedItem.id, sendSubmissionPayload);
+   841→      } else {
+   842→        summary = await syncQueuedItems();
+   843→      }
+   844→    } else {
+   845→      const stats = await getQueueStats();
+   846→      setSyncMessage(t(`Saved offline. ${stats.total} item(s) pending sync.`, `Enregistre hors ligne. ${stats.total} element(s) en attente de synchronisation.`));
+   847→    }
+   848→
+   849→    if (summary && queuedItem && summary.permanentFailureIds.includes(queuedItem.id)) {
+   850→      const reason = summary.permanentFailureMessages[0] ?? t('Submission rejected by server validation.', 'Soumission rejetee par la validation serveur.');
+   851→      setErrorMessage(reason);
+   852→      return false;
+   853→    }
+   854→
+   855→    setXpBreakdown(calculateXp(payload));
+   856→    if (isBatchMode) {
+   857→      setBatchCapturedCount((prev) => prev + 1);
+   858→    }
+   859→    onDraftConsumed?.();
+   860→    setSubmitted(true);
+   861→    return true;
+   862→  };
+   863→
+   864→  const maybePromptDedup = async (payload: SubmissionInput): Promise<boolean> => {
+   865→    if (isEnrichMode || !navigator.onLine) return false;
+   866→    if (!payload.location) return false;
+   867→
+   868→    try {
+   869→      const details = (payload.details ?? {}) as Record<string, unknown>;
+   870→      const dedupName =
+   871→        (typeof details.siteName === 'string' && details.siteName.trim()) ||
+   872→        (typeof details.name === 'string' && details.name.trim()) ||
+   873→        (typeof details.roadName === 'string' && details.roadName.trim()) ||
+   874→        '';
+   875→      const params = new URLSearchParams({
+   876→        view: 'dedup_candidates',
+   877→        category: payload.category,
+   878→        lat: String(payload.location.latitude),
+   879→        lng: String(payload.location.longitude),
+   880→      });
+   881→      if (dedupName) params.set('name', dedupName);
+   882→      const result = await apiJson<DedupCheckResult>(`/api/submissions?${params.toString()}`);
+   883→      if (result.shouldPrompt && result.candidates.length > 0) {
+   884→        setDedupCheck(result);
+   885→        setPendingPayload(payload);
+   886→        setSelectedDedupPointId(result.bestCandidatePointId ?? result.candidates[0]?.pointId ?? '');
+   887→        setSyncMessage('');
+   888→        setErrorMessage('');
+   889→        return true;
+   890→      }
+   891→    } catch {
+   892→      // If pre-check fails, fall back to normal submission flow.
+   893→    }
+   894→    return false;
+   895→  };
+   896→
+   897→  const clearDedupPrompt = () => {
+   898→    setDedupCheck(null);
+   899→    setPendingPayload(null);
+   900→    setSelectedDedupPointId('');
+   901→  };
+   902→
+   903→  const handleSubmit = async () => {
+   904→    if (!photoFile && !draftImageBase64) {
+   905→      setPhotoError(t('Please capture a live photo before submitting.', 'Veuillez capturer une photo en direct avant de soumettre.'));
+   906→      return;
+   907→    }
+   908→
+   909→    const manual = parseManualLocation();
+   910→    if ((manualLatitude.trim() || manualLongitude.trim()) && !manual) {
+   911→      setLocationError(t('Enter a valid latitude and longitude.', 'Entrez une latitude et une longitude valides.'));
+   912→      return;
+   913→    }
+   914→
+   915→    const details = isEnrichMode ? buildEnrichDetails() : buildCreateDetails();
+   916→    if (!validateBeforeSubmit(details)) return;
+   917→
+   918→    setSyncMessage('');
+   919→    setIsSubmitting(true);
+   920→    try {
+   921→      clearDedupPrompt();
+   922→      const imageBase64 = photoFile ? await fileToBase64(photoFile) : draftImageBase64;
+   923→      const clientExif = photoFile ? await extractClientExif(photoFile, location ?? manual ?? null) : draftClientExif;
+   924→      const payload: SubmissionInput = {
+   925→        eventType: isEnrichMode ? 'ENRICH_EVENT' : 'CREATE_EVENT',
+   926→        category: vertical,
+   927→        pointId: isEnrichMode ? (seedPoint?.id ?? queuedDraft?.payload.pointId) : undefined,
+   928→        location: location ?? manual ?? undefined,
+   929→        details,
+   930→        imageBase64: imageBase64 ?? undefined,
+   931→        clientExif,
+   932→      };
+   933→      const blockedByDedup = await maybePromptDedup(payload);
+   934→      if (blockedByDedup) return;
+   935→      await submitPayload(payload);
+   936→    } catch (error) {
+   937→      const syncError = toSubmissionSyncError(error);
+   938→      setErrorMessage(syncError.message || t('Submission failed.', 'Echec de la soumission.'));
+   939→    } finally {
+   940→      setIsSubmitting(false);
+   941→    }
+   942→  };
+   943→
+   944→  const handleDedupUseExisting = async () => {
+   945→    if (!pendingPayload || !dedupCheck) return;
+   946→    const targetPointId = selectedDedupPointId || dedupCheck.bestCandidatePointId || dedupCheck.candidates[0]?.pointId;
+   947→    if (!targetPointId) {
+   948→      setErrorMessage(t('No target point selected for enrich mode.', 'Aucun point cible selectionne pour le mode enrichissement.'));
+   949→      return;
+   950→    }
+   951→
+   952→    setIsResolvingDedup(true);
+   953→    setErrorMessage('');
+   954→    try {
+   955→      const success = await submitPayload({
+   956→        ...pendingPayload,
+   957→        dedupDecision: 'use_existing',
+   958→        dedupTargetPointId: targetPointId,
+   959→      });
+   960→      if (success) clearDedupPrompt();
+   961→    } catch (error) {
+   962→      const syncError = toSubmissionSyncError(error);
+   963→      setErrorMessage(syncError.message || t('Submission failed.', 'Echec de la soumission.'));
+   964→    } finally {
+   965→      setIsResolvingDedup(false);
+   966→    }
+   967→  };
+   968→
+   969→  const handleDedupCreateNew = async () => {
+   970→    if (!pendingPayload) return;
+   971→    setIsResolvingDedup(true);
+   972→    setErrorMessage('');
+   973→    try {
+   974→      const success = await submitPayload({
+   975→        ...pendingPayload,
+   976→        dedupDecision: 'allow_create',
+   977→      });
+   978→      if (success) clearDedupPrompt();
+   979→    } catch (error) {
+   980→      const syncError = toSubmissionSyncError(error);
+   981→      setErrorMessage(syncError.message || t('Submission failed.', 'Echec de la soumission.'));
+   982→    } finally {
+   983→      setIsResolvingDedup(false);
+   984→    }
+   985→  };
+   986→
+   987→  const renderVerticalSelector = () => {
+   988→    if (isEnrichMode) return null;
+   989→    const verticalEntries = Object.values(VERTICALS) as Array<(typeof VERTICALS)[keyof typeof VERTICALS]>;
+   990→    return (
+   991→      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-3">
+   992→        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('Vertical', 'Verticale')}</h4>
+   993→        <div className="grid grid-cols-2 gap-2">
+   994→          {verticalEntries.map((v) => (
+   995→            <button
+   996→              key={v.id}
+   997→              onClick={() => setVertical(v.id as Vertical)}
+   998→              className={`h-11 rounded-xl border text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1 ${vertical === v.id ? `border-current` : 'border-gray-100 text-gray-500'}`}
+   999→              style={vertical === v.id ? { backgroundColor: v.bgColor, color: v.color, borderColor: v.color } : undefined}
+  1000→            >
+  1001→              <VerticalIcon name={v.icon} size={12} />
+  1002→              {getCategoryLabel(v.id, language)}
+  1003→            </button>
+  1004→          ))}
+  1005→        </div>
+  1006→      </div>
+  1007→    );
+  1008→  };
+  1009→
+  1010→  const renderCommonLocationBlock = () => (
+  1011→    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-3">
+  1012→      <div className="flex items-center justify-between">
+  1013→        <div className="flex items-center space-x-2">
+  1014→          <MapPin size={16} className="text-[#0f2b46]" />
+  1015→          <span className="text-xs font-bold text-gray-900">{t('GPS Location', 'Localisation GPS')}</span>
+  1016→        </div>
+  1017→        <button onClick={retryLocation} className="text-[10px] font-bold uppercase tracking-widest text-[#0f2b46]">
+  1018→          {t('Retry', 'Reessayer')}
+  1019→        </button>
+  1020→      </div>
+  1021→      <p className="text-[11px] text-gray-500">
+  1022→        {location
+  1023→          ? `GPS: ${location.latitude.toFixed(4)}°, ${location.longitude.toFixed(4)}°`
+  1024→          : t('GPS unavailable. Retry, then use fallback if needed.', 'GPS indisponible. Reessayez, puis utilisez le secours si necessaire.')}
+  1025→      </p>
+  1026→      {!location && (
+  1027→        <button
+  1028→          onClick={() => setShowManualLocation((prev) => !prev)}
+  1029→          className="text-[10px] font-bold uppercase tracking-widest text-[#c86b4a]"
+  1030→        >
+  1031→          {showManualLocation ? t('Hide Manual Fallback', 'Masquer secours manuel') : t('Use Manual Fallback', 'Utiliser secours manuel')}
+  1032→        </button>
+  1033→      )}
+  1034→      {showManualLocation && (
+  1035→        <div className="grid grid-cols-2 gap-3">
+  1036→          <input
+  1037→            value={manualLatitude}
+  1038→            onChange={(event) => setManualLatitude(event.target.value)}
+  1039→            placeholder={t('Latitude', 'Latitude')}
+  1040→            className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1041→          />
+  1042→          <input
+  1043→            value={manualLongitude}
+  1044→            onChange={(event) => setManualLongitude(event.target.value)}
+  1045→            placeholder={t('Longitude', 'Longitude')}
+  1046→            className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1047→          />
+  1048→        </div>
+  1049→      )}
+  1050→      {locationError && (
+  1051→        <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-[10px] font-bold uppercase tracking-widest text-red-600">
+  1052→          {locationError}
+  1053→        </div>
+  1054→      )}
+  1055→    </div>
+  1056→  );
+  1057→
+  1058→  const renderPhotoBlock = () => (
+  1059→    <div className="space-y-3">
+  1060→      <h4 className="text-sm font-bold text-gray-900">{t('Live Camera Proof', 'Preuve camera en direct')}</h4>
+  1061→      <p className="text-xs text-gray-500">{t('Camera capture only. Gallery uploads are blocked.', 'Capture camera uniquement. Import galerie bloque.')}</p>
+  1062→      <div className="aspect-square w-full rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 relative overflow-hidden">
+  1063→        {photoPreview ? (
+  1064→          <img src={photoPreview} alt={t('Captured photo', 'Photo capturee')} className="absolute inset-0 h-full w-full object-cover" />
+  1065→        ) : (
+  1066→          <>
+  1067→            <Camera size={46} className="mb-4 opacity-40" />
+  1068→            <p className="text-xs font-bold uppercase tracking-widest opacity-60">{t('Live capture required', 'Capture live requise')}</p>
+  1069→          </>
+  1070→        )}
+  1071→        <input
+  1072→          id="capture-photo"
+  1073→          type="file"
+  1074→          accept="image/*"
+  1075→          capture="environment"
+  1076→          onChange={handlePhotoChange}
+  1077→          className="sr-only"
+  1078→        />
+  1079→        <label
+  1080→          htmlFor="capture-photo"
+  1081→          className="relative z-10 mt-6 inline-flex items-center justify-center rounded-full border border-gray-200 bg-white/90 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-600 shadow-sm backdrop-blur hover:bg-white"
+  1082→        >
+  1083→          {photoPreview ? t('Retake Photo', 'Reprendre photo') : t('Capture Photo', 'Capturer photo')}
+  1084→        </label>
+  1085→      </div>
+  1086→      {photoError && (
+  1087→        <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-[10px] font-bold uppercase tracking-widest text-red-600">
+  1088→          {photoError}
+  1089→        </div>
+  1090→      )}
+  1091→    </div>
+  1092→  );
+  1093→
+  1094→  const renderCreateFields = () => {
+  1095→    if (vertical === 'pharmacy') {
+  1096→      return (
+  1097→        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+  1098→          <h4 className="text-sm font-bold text-gray-900">{t('Create Pharmacy', 'Creer une pharmacie')}</h4>
+  1099→          <input
+  1100→            value={siteName}
+  1101→            onChange={(event) => setSiteName(event.target.value)}
+  1102→            placeholder={t('Pharmacy name', 'Nom de la pharmacie')}
+  1103→            className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1104→          />
+  1105→          <div className="flex items-center justify-between">
+  1106→            <span className="text-xs font-semibold text-gray-600">{t('Open now', 'Ouvert maintenant')}</span>
+  1107→            <button
+  1108→              onClick={() => setIsOpenNow((prev) => !prev)}
+  1109→              className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${isOpenNow ? 'bg-[#4c7c59] text-white' : 'bg-gray-100 text-gray-500'}`}
+  1110→            >
+  1111→              {isOpenNow ? t('Yes', 'Oui') : t('No', 'Non')}
+  1112→            </button>
+  1113→          </div>
+  1114→        </div>
+  1115→      );
+  1116→    }
+  1117→    if (vertical === 'mobile_money') {
+  1118→      return (
+  1119→        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+  1120→          <h4 className="text-sm font-bold text-gray-900">{t('Create Kiosk', 'Creer un kiosque')}</h4>
+  1121→          <div className="flex flex-wrap gap-2">
+  1122→            {providerOptions.map((provider) => (
+  1123→              <button
+  1124→                key={provider}
+  1125→                onClick={() => setProviders((prev) => toggleListValue(prev, provider))}
+  1126→                className={`px-3 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${providers.includes(provider) ? 'bg-[#0f2b46] text-white' : 'bg-gray-50 text-gray-500'}`}
+  1127→              >
+  1128→                {provider}
+  1129→              </button>
+  1130→            ))}
+  1131→          </div>
+  1132→        </div>
+  1133→      );
+  1134→    }
+  1135→    if (vertical === 'fuel_station') {
+  1136→      return (
+  1137→        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+  1138→          <h4 className="text-sm font-bold text-gray-900">{t('Create Fuel Station', 'Creer une station-service')}</h4>
+  1139→          <input
+  1140→            value={siteName}
+  1141→            onChange={(event) => setSiteName(event.target.value)}
+  1142→            placeholder={t('Fuel station name', 'Nom de la station-service')}
+  1143→            className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1144→          />
+  1145→          <div className="flex items-center justify-between">
+  1146→            <span className="text-xs font-semibold text-gray-600">{t('Fuel available', 'Carburant disponible')}</span>
+  1147→            <button
+  1148→              onClick={() => setHasFuelAvailable((prev) => !prev)}
+  1149→              className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${hasFuelAvailable ? 'bg-[#4c7c59] text-white' : 'bg-gray-100 text-gray-500'}`}
+  1150→            >
+  1151→              {hasFuelAvailable ? t('Yes', 'Oui') : t('No', 'Non')}
+  1152→            </button>
+  1153→          </div>
+  1154→        </div>
+  1155→      );
+  1156→    }
+  1157→
+  1158→    if (vertical === 'alcohol_outlet') {
+  1159→      return (
+  1160→        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+  1161→          <h4 className="text-sm font-bold text-gray-900">{t('Create Alcohol Outlet', 'Creer un point de vente d\'alcool')}</h4>
+  1162→          <input
+  1163→            value={siteName}
+  1164→            onChange={(event) => setSiteName(event.target.value)}
+  1165→            placeholder={t('Outlet name', 'Nom du point de vente')}
+  1166→            className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1167→          />
+  1168→          <select
+  1169→            value={outletType}
+  1170→            onChange={(event) => setOutletType(event.target.value)}
+  1171→            className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1172→          >
+  1173→            {outletTypeOptions.map((option) => (
+  1174→              <option key={option} value={option}>{option}</option>
+  1175→            ))}
+  1176→          </select>
+  1177→          <div className="flex items-center justify-between">
+  1178→            <span className="text-xs font-semibold text-gray-600">{t('Formal / licensed', 'Formel / licence')}</span>
+  1179→            <button
+  1180→              onClick={() => setIsFormal((prev) => !prev)}
+  1181→              className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${isFormal ? 'bg-[#4c7c59] text-white' : 'bg-gray-100 text-gray-500'}`}
+  1182→            >
+  1183→              {isFormal ? t('Yes', 'Oui') : t('No', 'Non')}
+  1184→            </button>
+  1185→          </div>
+  1186→        </div>
+  1187→      );
+  1188→    }
+  1189→
+  1190→    if (vertical === 'billboard') {
+  1191→      return (
+  1192→        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+  1193→          <h4 className="text-sm font-bold text-gray-900">{t('Create Billboard', 'Creer un panneau')}</h4>
+  1194→          <input
+  1195→            value={siteName}
+  1196→            onChange={(event) => setSiteName(event.target.value)}
+  1197→            placeholder={t('Billboard description', 'Description du panneau')}
+  1198→            className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1199→          />
+  1200→          <select
+  1201→            value={billboardType}
+  1202→            onChange={(event) => setBillboardType(event.target.value)}
+  1203→            className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1204→          >
+  1205→            {billboardTypeOptions.map((option) => (
+  1206→              <option key={option} value={option}>{option}</option>
+  1207→            ))}
+  1208→          </select>
+  1209→          <input
+  1210→            value={advertiserBrand}
+  1211→            onChange={(event) => setAdvertiserBrand(event.target.value)}
+  1212→            placeholder={t('Advertiser brand (optional)', 'Marque annonceur (optionnel)')}
+  1213→            className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1214→          />
+  1215→          <div className="flex items-center justify-between">
+  1216→            <span className="text-xs font-semibold text-gray-600">{t('Occupied', 'Occupe')}</span>
+  1217→            <button
+  1218→              onClick={() => setIsOccupied((prev) => !prev)}
+  1219→              className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${isOccupied ? 'bg-[#4c7c59] text-white' : 'bg-gray-100 text-gray-500'}`}
+  1220→            >
+  1221→              {isOccupied ? t('Yes', 'Oui') : t('No', 'Non')}
+  1222→            </button>
+  1223→          </div>
+  1224→        </div>
+  1225→      );
+  1226→    }
+  1227→
+  1228→    if (vertical === 'transport_road') {
+  1229→      return (
+  1230→        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+  1231→          <h4 className="text-sm font-bold text-gray-900">{t('Create Road Segment', 'Creer un segment routier')}</h4>
+  1232→          <input
+  1233→            value={roadName}
+  1234→            onChange={(event) => setRoadName(event.target.value)}
+  1235→            placeholder={t('Road name', 'Nom de route')}
+  1236→            className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1237→          />
+  1238→          <select
+  1239→            value={roadCondition}
+  1240→            onChange={(event) => setRoadCondition(event.target.value)}
+  1241→            className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1242→          >
+  1243→            {roadConditionOptions.map((option) => (
+  1244→              <option key={option} value={option}>{option}</option>
+  1245→            ))}
+  1246→          </select>
+  1247→          <select
+  1248→            value={roadSurface}
+  1249→            onChange={(event) => setRoadSurface(event.target.value)}
+  1250→            className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1251→          >
+  1252→            {roadSurfaceOptions.map((option) => (
+  1253→              <option key={option} value={option}>{option}</option>
+  1254→            ))}
+  1255→          </select>
+  1256→          <div className="flex items-center justify-between">
+  1257→            <span className="text-xs font-semibold text-gray-600">{t('Blocked', 'Bloque')}</span>
+  1258→            <button
+  1259→              onClick={() => setRoadBlocked((prev) => !prev)}
+  1260→              className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${roadBlocked ? 'bg-[#c86b4a] text-white' : 'bg-gray-100 text-gray-500'}`}
+  1261→            >
+  1262→              {roadBlocked ? t('Yes', 'Oui') : t('No', 'Non')}
+  1263→            </button>
+  1264→          </div>
+  1265→          {roadBlocked && (
+  1266→            <select
+  1267→              value={blockageType}
+  1268→              onChange={(event) => setBlockageType(event.target.value)}
+  1269→              className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1270→            >
+  1271→              {roadBlockageOptions.map((option) => (
+  1272→                <option key={option} value={option}>{option}</option>
+  1273→              ))}
+  1274→            </select>
+  1275→          )}
+  1276→        </div>
+  1277→      );
+  1278→    }
+  1279→
+  1280→    return (
+  1281→      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+  1282→        <h4 className="text-sm font-bold text-gray-900">{t('Create Building', 'Creer un batiment')}</h4>
+  1283→        <select
+  1284→          value={buildingType}
+  1285→          onChange={(event) => setBuildingType(event.target.value)}
+  1286→          className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1287→        >
+  1288→          {buildingTypeOptions.map((option) => (
+  1289→            <option key={option} value={option}>{option}</option>
+  1290→          ))}
+  1291→        </select>
+  1292→        <select
+  1293→          value={occupancyStatus}
+  1294→          onChange={(event) => setOccupancyStatus(event.target.value)}
+  1295→          className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1296→        >
+  1297→          {occupancyStatusOptions.map((option) => (
+  1298→            <option key={option} value={option}>{option}</option>
+  1299→          ))}
+  1300→        </select>
+  1301→        <div className="grid grid-cols-2 gap-3">
+  1302→          <input
+  1303→            type="number"
+  1304→            value={storeyCount}
+  1305→            onChange={(event) => setStoreyCount(event.target.value)}
+  1306→            placeholder={t('Storeys', 'Etages')}
+  1307→            className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1308→          />
+  1309→          <input
+  1310→            type="number"
+  1311→            value={estimatedUnits}
+  1312→            onChange={(event) => setEstimatedUnits(event.target.value)}
+  1313→            placeholder={t('Estimated units', 'Unites estimees')}
+  1314→            className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1315→          />
+  1316→        </div>
+  1317→      </div>
+  1318→    );
+  1319→  };
+  1320→
+  1321→  const renderEnrichFieldInput = (gap: string) => {
+  1322→    const fieldConfig: EnrichFieldConfig | undefined = ENRICH_FIELD_CATALOG[gap];
+  1323→    if (!fieldConfig) {
+  1324→      const raw = typeof getEnrichFieldValue(gap) === 'string' ? String(getEnrichFieldValue(gap)) : '';
+  1325→      return (
+  1326→        <div className="space-y-2" key={gap}>
+  1327→          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{gap}</label>
+  1328→          <input
+  1329→            value={raw}
+  1330→            onChange={(event) => setEnrichFieldValue(gap, event.target.value)}
+  1331→            className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1332→          />
+  1333→        </div>
+  1334→      );
+  1335→    }
+  1336→
+  1337→    const label = getEnrichFieldLabel(gap, language);
+  1338→    const options = fieldConfig.options ?? [];
+  1339→
+  1340→    if (fieldConfig.kind === 'boolean') {
+  1341→      const selected = typeof getEnrichFieldValue(gap) === 'boolean' ? (getEnrichFieldValue(gap) as boolean) : null;
+  1342→      return (
+  1343→        <div className="space-y-2" key={gap}>
+  1344→          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+  1345→          <div className="grid grid-cols-2 gap-2">
+  1346→            <button
+  1347→              type="button"
+  1348→              onClick={() => setEnrichFieldValue(gap, true)}
+  1349→              className={`h-10 rounded-xl text-[10px] font-bold uppercase tracking-widest ${selected === true ? 'bg-[#4c7c59] text-white' : 'bg-gray-50 text-gray-500'}`}
+  1350→            >
+  1351→              {t('Yes', 'Oui')}
+  1352→            </button>
+  1353→            <button
+  1354→              type="button"
+  1355→              onClick={() => setEnrichFieldValue(gap, false)}
+  1356→              className={`h-10 rounded-xl text-[10px] font-bold uppercase tracking-widest ${selected === false ? 'bg-[#c86b4a] text-white' : 'bg-gray-50 text-gray-500'}`}
+  1357→            >
+  1358→              {t('No', 'Non')}
+  1359→            </button>
+  1360→          </div>
+  1361→        </div>
+  1362→      );
+  1363→    }
+  1364→
+  1365→    if (fieldConfig.kind === 'map_value') {
+  1366→      if (gap === 'merchantIdByProvider') {
+  1367→        return (
+  1368→          <div className="space-y-2" key={gap}>
+  1369→            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+  1370→            <div className="grid grid-cols-2 gap-3">
+  1371→              <select
+  1372→                value={merchantProvider}
+  1373→                onChange={(event) => {
+  1374→                  markEnrichTouched(gap);
+  1375→                  setMerchantProvider(event.target.value);
+  1376→                }}
+  1377→                className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1378→              >
+  1379→                {providerOptions.map((provider) => (
+  1380→                  <option key={provider} value={provider}>{provider}</option>
+  1381→                ))}
+  1382→              </select>
+  1383→              <input
+  1384→                value={merchantId}
+  1385→                onChange={(event) => {
+  1386→                  markEnrichTouched(gap);
+  1387→                  setMerchantId(event.target.value);
+  1388→                }}
+  1389→                placeholder={t('Merchant ID', 'ID marchand')}
+  1390→                className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1391→              />
+  1392→            </div>
+  1393→          </div>
+  1394→        );
+  1395→      }
+  1396→      if (gap === 'pricesByFuel') {
+  1397→        return (
+  1398→          <div className="space-y-2" key={gap}>
+  1399→            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+  1400→            <div className="grid grid-cols-2 gap-3">
+  1401→              <select
+  1402→                value={priceFuelType}
+  1403→                onChange={(event) => {
+  1404→                  markEnrichTouched(gap);
+  1405→                  setPriceFuelType(event.target.value);
+  1406→                }}
+  1407→                className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1408→              >
+  1409→                {fuelTypeOptions.map((type) => (
+  1410→                  <option key={type} value={type}>{type}</option>
+  1411→                ))}
+  1412→              </select>
+  1413→              <input
+  1414→                type="number"
+  1415→                value={priceValue}
+  1416→                onChange={(event) => {
+  1417→                  markEnrichTouched(gap);
+  1418→                  setPriceValue(event.target.value);
+  1419→                }}
+  1420→                placeholder={t('Price (XAF)', 'Prix (XAF)')}
+  1421→                className="h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1422→              />
+  1423→            </div>
+  1424→          </div>
+  1425→        );
+  1426→      }
+  1427→    }
+  1428→
+  1429→    if (fieldConfig.kind === 'text') {
+  1430→      const value = typeof getEnrichFieldValue(gap) === 'string' ? String(getEnrichFieldValue(gap)) : '';
+  1431→      const placeholder = language === 'fr' ? (fieldConfig.placeholderFr ?? fieldConfig.labelFr) : (fieldConfig.placeholderEn ?? fieldConfig.labelEn);
+  1432→      return (
+  1433→        <div className="space-y-2" key={gap}>
+  1434→          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+  1435→          {gap === 'openingHours' && (
+  1436→            <div className="flex flex-wrap gap-2">
+  1437→              {openingHourPresets.map((preset) => (
+  1438→                <button
+  1439→                  key={preset}
+  1440→                  type="button"
+  1441→                  onClick={() => setEnrichFieldValue(gap, preset)}
+  1442→                  className={`px-3 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${value === preset ? 'bg-[#0f2b46] text-white' : 'bg-gray-50 text-gray-500'}`}
+  1443→                >
+  1444→                  {preset}
+  1445→                </button>
+  1446→              ))}
+  1447→            </div>
+  1448→          )}
+  1449→          <input
+  1450→            value={value}
+  1451→            onChange={(event) => setEnrichFieldValue(gap, event.target.value)}
+  1452→            placeholder={placeholder}
+  1453→            className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1454→          />
+  1455→        </div>
+  1456→      );
+  1457→    }
+  1458→
+  1459→    if (fieldConfig.kind === 'number') {
+  1460→      const value = typeof getEnrichFieldValue(gap) === 'number' || typeof getEnrichFieldValue(gap) === 'string'
+  1461→        ? String(getEnrichFieldValue(gap))
+  1462→        : '';
+  1463→      return (
+  1464→        <div className="space-y-2" key={gap}>
+  1465→          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+  1466→          <input
+  1467→            type="number"
+  1468→            value={value}
+  1469→            onChange={(event) => setEnrichFieldValue(gap, event.target.value)}
+  1470→            className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1471→          />
+  1472→        </div>
+  1473→      );
+  1474→    }
+  1475→
+  1476→    if (fieldConfig.kind === 'single_select') {
+  1477→      const value = typeof getEnrichFieldValue(gap) === 'string' ? String(getEnrichFieldValue(gap)) : '';
+  1478→      if (options.length === 0) {
+  1479→        return (
+  1480→          <div className="space-y-2" key={gap}>
+  1481→            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+  1482→            <input
+  1483→              value={value}
+  1484→              onChange={(event) => setEnrichFieldValue(gap, event.target.value)}
+  1485→              className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1486→            />
+  1487→          </div>
+  1488→        );
+  1489→      }
+  1490→      return (
+  1491→        <div className="space-y-2" key={gap}>
+  1492→          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+  1493→          <select
+  1494→            value={value}
+  1495→            onChange={(event) => setEnrichFieldValue(gap, event.target.value)}
+  1496→            className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1497→          >
+  1498→            <option value="">{t('Select...', 'Selectionner...')}</option>
+  1499→            {options.map((option) => (
+  1500→              <option key={option.value} value={option.value}>{optionLabel(option, language)}</option>
+  1501→            ))}
+  1502→          </select>
+  1503→        </div>
+  1504→      );
+  1505→    }
+  1506→
+  1507→    if (fieldConfig.kind === 'multi_select') {
+  1508→      const selectedValues = normalizeStringList(getEnrichFieldValue(gap));
+  1509→      if (options.length === 0) {
+  1510→        const raw = enrichMultiRaw[gap] ?? selectedValues.join(', ');
+  1511→        const placeholder = language === 'fr'
+  1512→          ? (fieldConfig.placeholderFr ?? t('Valeurs separees par virgules', 'Valeurs separees par virgules'))
+  1513→          : (fieldConfig.placeholderEn ?? t('Comma-separated values', 'Valeurs separees par virgules'));
+  1514→        return (
+  1515→          <div className="space-y-2" key={gap}>
+  1516→            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+  1517→            <input
+  1518→              value={raw}
+  1519→              onChange={(event) => {
+  1520→                const nextRaw = event.target.value;
+  1521→                setEnrichMultiRaw((prev) => ({ ...prev, [gap]: nextRaw }));
+  1522→                const nextValues = nextRaw.split(',').map((value) => value.trim()).filter((value) => value.length > 0);
+  1523→                setEnrichFieldValue(gap, nextValues);
+  1524→              }}
+  1525→              placeholder={placeholder}
+  1526→              className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1527→            />
+  1528→          </div>
+  1529→        );
+  1530→      }
+  1531→      return (
+  1532→        <div className="space-y-2" key={gap}>
+  1533→          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+  1534→          <div className="flex flex-wrap gap-2">
+  1535→            {options.map((option) => (
+  1536→              <button
+  1537→                key={option.value}
+  1538→                type="button"
+  1539→                onClick={() => toggleEnrichMultiValue(gap, option.value)}
+  1540→                className={`px-3 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${selectedValues.includes(option.value) ? 'bg-[#0f2b46] text-white' : 'bg-gray-50 text-gray-500'}`}
+  1541→              >
+  1542→                {optionLabel(option, language)}
+  1543→              </button>
+  1544→            ))}
+  1545→          </div>
+  1546→        </div>
+  1547→      );
+  1548→    }
+  1549→
+  1550→    const fallbackRaw =
+  1551→      typeof getEnrichFieldValue(gap) === 'string' || typeof getEnrichFieldValue(gap) === 'number'
+  1552→        ? String(getEnrichFieldValue(gap))
+  1553→        : '';
+  1554→    return (
+  1555→      <div className="space-y-2" key={gap}>
+  1556→        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+  1557→        <input
+  1558→          value={fallbackRaw}
+  1559→          onChange={(event) => setEnrichFieldValue(gap, event.target.value)}
+  1560→          className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-3 text-xs"
+  1561→        />
+  1562→      </div>
+  1563→    );
+  1564→  };
+  1565→
+  1566→  const renderEnrichFields = () => (
+  1567→    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+  1568→      <h4 className="text-sm font-bold text-gray-900">{t('Enrich Missing Fields', 'Enrichir les champs manquants')}</h4>
+  1569→      <div className="flex flex-wrap gap-2">
+  1570→        {gaps.map((gap) => (
+  1571→          <span key={gap} className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-[#fff8f4] text-[#b85f3f] border border-[#f5d5c6]">
+  1572→            {getEnrichFieldLabel(gap, language)}
+  1573→          </span>
+  1574→        ))}
+  1575→      </div>
+  1576→      <div className="space-y-4">
+  1577→        {gaps.map((gap) => (
+  1578→          <React.Fragment key={`enrich-${gap}`}>
+  1579→            {renderEnrichFieldInput(gap)}
+  1580→          </React.Fragment>
+  1581→        ))}
+  1582→      </div>
+  1583→    </div>
+  1584→  );
+  1585→
+  1586→  const resetForAnotherCapture = () => {
+  1587→    if (photoPreview?.startsWith('blob:')) {
+  1588→      URL.revokeObjectURL(photoPreview);
+  1589→    }
+  1590→    setSubmitted(false);
+  1591→    setPhotoPreview(null);
+  1592→    setPhotoFile(null);
+  1593→    setDraftImageBase64(null);
+  1594→    setDraftClientExif(null);
+  1595→    setLocation(null);
+  1596→    setManualLatitude('');
+  1597→    setManualLongitude('');
+  1598→    setPhotoError('');
+  1599→    setLocationError('');
+  1600→    setErrorMessage('');
+  1601→    setSyncMessage('');
+  1602→    setPendingPayload(null);
+  1603→    setSelectedDedupPointId('');
+  1604→    setDedupCheck(null);
+  1605→    setSiteName('');
+  1606→    setOpeningHours('');
+  1607→    setProviders([]);
+  1608→    setMerchantId('');
+  1609→    setPaymentMethods([]);
+  1610→    setFuelTypes([]);
+  1611→    setPriceValue('');
+  1612→    setAdvertiserBrand('');
+  1613→    setRoadName('');
+  1614→    setStoreyCount('');
+  1615→    setEstimatedUnits('');
+  1616→    setEnrichValues({});
+  1617→    setEnrichTouched({});
+  1618→    setEnrichMultiRaw({});
+  1619→  };
+  1620→
+  1621→  const handleBackPress = () => {
+  1622→    if (isBatchMode) {
+  1623→      onBatchExit?.();
+  1624→    }
+  1625→    onBack();
+  1626→  };
+  1627→
+  1628→  const verticalIcon = <VerticalIcon name={VERTICALS[vertical]?.icon ?? 'pill'} size={18} />;
+  1629→
+  1630→  if (submitted) {
+  1631→    return (
+  1632→      <XPPopup
+  1633→        language={language}
+  1634→        totalXp={xpBreakdown.totalXp}
+  1635→        baseXp={xpBreakdown.baseXp}
+  1636→        qualityBonus={xpBreakdown.qualityBonus}
+  1637→        streakBonus={xpBreakdown.streakBonus}
+  1638→        syncMessage={syncMessage}
+  1639→        isBatchMode={isBatchMode}
+  1640→        onPrimary={resetForAnotherCapture}
+  1641→        onSecondary={() => {
+  1642→          if (isBatchMode) {
+  1643→            onBatchExit?.();
+  1644→          }
+  1645→          onComplete();
+  1646→        }}
+  1647→      />
+  1648→    );
+  1649→  }
+  1650→
+  1651→  return (
+  1652→    <div className="flex flex-col h-full bg-[#f9fafb]">
+  1653→      <div className="pt-6 px-6">
+  1654→        <div className="flex items-center justify-between mb-3">
+  1655→          <button onClick={handleBackPress} className="p-1 -ml-1 text-gray-500">
+  1656→            <ArrowLeft size={24} />
+  1657→          </button>
+  1658→          <span className="text-xs font-bold text-gray-900 uppercase tracking-[0.2em]">
+  1659→            {isEnrichMode ? t('Enrich Point', 'Enrichir point') : t('Create Point', 'Creer point')}
+  1660→          </span>
+  1661→          <span className="w-6"></span>
+  1662→        </div>
+  1663→        <div className="flex items-center space-x-2 text-[10px] font-bold uppercase tracking-widest text-[#4c7c59] mb-4">
+  1664→          <ShieldCheck size={12} />
+  1665→          <span>{t('Live photo + GPS mandatory', 'Photo live + GPS obligatoires')}</span>
+  1666→        </div>
+  1667→      </div>
+  1668→
+  1669→      <div className="flex-1 p-6 overflow-y-auto no-scrollbar space-y-5">
+  1670→        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+  1671→          <div className="flex items-center space-x-2 text-[#0f2b46]">
+  1672→            {verticalIcon}
+  1673→            <span className="text-sm font-bold">
+  1674→              {getCategoryLabel(vertical, language)}
+  1675→            </span>
+  1676→          </div>
+  1677→          {isEnrichMode && seedPoint && (
+  1678→            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 truncate max-w-[140px]">
+  1679→              {seedPoint.name}
+  1680→            </span>
+  1681→          )}
+  1682→        </div>
+  1683→
+  1684→        {assignment && (
+  1685→          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+  1686→            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">{t('Assignment Context', 'Contexte affectation')}</div>
+  1687→            <div className="mt-2 flex items-center justify-between gap-3">
+  1688→              <div>
+  1689→                <div className="text-sm font-bold text-gray-900">{assignment.zoneLabel}</div>
+  1690→                <div className="text-xs text-gray-500">
+  1691→                  {assignment.assignedVerticals.map((item) => getCategoryLabel(item, language)).join(', ')}
+  1692→                </div>
+  1693→              </div>
+  1694→              <div className="text-right">
+  1695→                <div className="text-[10px] font-bold uppercase tracking-widest text-[#0f2b46]">
+  1696→                  {assignment.pointsSubmitted}/{assignment.pointsExpected}
+  1697→                </div>
+  1698→                <div className="text-[10px] text-gray-400">{t('Due', 'Echeance')} {assignment.dueDate}</div>
+  1699→              </div>
+  1700→            </div>
+  1701→          </div>
+  1702→        )}
+  1703→
+  1704→        {isBatchMode && (
+  1705→          <div className="bg-[#0f2b46] text-white p-4 rounded-2xl shadow-sm flex items-center justify-between">
+  1706→            <div>
+  1707→              <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">{t('Batch Capture', 'Capture en lot')}</div>
+  1708→              <div className="mt-1 text-sm font-bold">{t('Captured', 'Captures')}: {batchCapturedCount}</div>
+  1709→            </div>
+  1710→            <button
+  1711→              type="button"
+  1712→              onClick={() => {
+  1713→                onBatchExit?.();
+  1714→                onComplete();
+  1715→              }}
+  1716→              className="rounded-full bg-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-widest"
+  1717→            >
+  1718→              {t('End Batch', 'Fin du lot')}
+  1719→            </button>
+  1720→          </div>
+  1721→        )}
+  1722→
+  1723→        {renderVerticalSelector()}
+  1724→        {renderPhotoBlock()}
+  1725→        {renderCommonLocationBlock()}
+  1726→        {isEnrichMode ? renderEnrichFields() : renderCreateFields()}
+  1727→
+  1728→        {errorMessage && (
+  1729→          <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-[10px] font-bold uppercase tracking-widest text-red-600">
+  1730→            {errorMessage}
+  1731→          </div>
+  1732→        )}
+  1733→
+  1734→        {dedupCheck && (
+  1735→          <div className="rounded-2xl border border-[#f5d5c6] bg-[#fff8f4] p-4 space-y-3">
+  1736→            <div className="text-[10px] font-bold uppercase tracking-widest text-[#b85f3f]">
+  1737→              {t('Potential Duplicate', 'Doublon potentiel')}
+  1738→            </div>
+  1739→            <div className="text-xs text-gray-700">
+  1740→              {t('A nearby point looks similar. Choose whether to enrich it or create a new one.', 'Un point proche semble similaire. Choisissez entre l\'enrichir ou creer un nouveau point.')}
+  1741→            </div>
+  1742→            <div className="space-y-2">
+  1743→              {dedupCheck.candidates.map((candidate) => {
+  1744→                const isSelected = selectedDedupPointId === candidate.pointId;
+  1745→                return (
+  1746→                  <button
+  1747→                    key={candidate.pointId}
+  1748→                    type="button"
+  1749→                    onClick={() => setSelectedDedupPointId(candidate.pointId)}
+  1750→                    className={`w-full rounded-xl border px-3 py-2 text-left ${
+  1751→                      isSelected ? 'border-[#c86b4a] bg-white' : 'border-[#f5d5c6] bg-[#fffdfb]'
+  1752→                    }`}
+  1753→                  >
+  1754→                    <div className="text-xs font-bold text-gray-900">
+  1755→                      {candidate.siteName || candidate.pointId}
+  1756→                    </div>
+  1757→                    <div className="text-[10px] text-gray-500">
+  1758→                      {candidate.distanceMeters}m · {t('similarity', 'similarite')}: {Math.round(candidate.similarityScore * 100)}%
+  1759→                    </div>
+  1760→                  </button>
+  1761→                );
+  1762→              })}
+  1763→            </div>
+  1764→            <div className="grid grid-cols-2 gap-2">
+  1765→              <button
+  1766→                type="button"
+  1767→                onClick={handleDedupUseExisting}
+  1768→                disabled={isResolvingDedup}
+  1769→                className={`h-10 rounded-xl text-[10px] font-bold uppercase tracking-widest ${
+  1770→                  isResolvingDedup ? 'bg-gray-100 text-gray-400' : 'bg-[#0f2b46] text-white'
+  1771→                }`}
+  1772→              >
+  1773→                {t('Enrich Existing', 'Enrichir existant')}
+  1774→              </button>
+  1775→              <button
+  1776→                type="button"
+  1777→                onClick={handleDedupCreateNew}
+  1778→                disabled={isResolvingDedup}
+  1779→                className={`h-10 rounded-xl text-[10px] font-bold uppercase tracking-widest ${
+  1780→                  isResolvingDedup ? 'bg-gray-100 text-gray-400' : 'bg-[#c86b4a] text-white'
+  1781→                }`}
+  1782→              >
+  1783→                {t('Create New', 'Creer nouveau')}
+  1784→              </button>
+  1785→            </div>
+  1786→            <button
+  1787→              type="button"
+  1788→              onClick={clearDedupPrompt}
+  1789→              className="text-[10px] font-bold uppercase tracking-widest text-gray-500"
+  1790→            >
+  1791→              {t('Dismiss', 'Ignorer')}
+  1792→            </button>
+  1793→          </div>
+  1794→        )}
+  1795→
+  1796→        {syncMessage && (
+  1797→          <div className="rounded-xl border border-[#d5e1eb] bg-white p-3 text-xs text-[#0f2b46] space-y-2">
+  1798→            <div>{syncMessage}</div>
+  1799→            {onQueueOpen && (
+  1800→              <button
+  1801→                type="button"
+  1802→                onClick={onQueueOpen}
+  1803→                className="text-[10px] font-bold uppercase tracking-widest text-[#0f2b46]"
+  1804→              >
+  1805→                {t('Open queue', 'Ouvrir la file')}
+  1806→              </button>
+  1807→            )}
+  1808→          </div>
+  1809→        )}
+  1810→      </div>
+  1811→
+  1812→      <div className="sticky bottom-0 z-20 p-6 pt-2 bg-[#f9fafb] border-t border-gray-100">
+  1813→        <button
+  1814→          onClick={handleSubmit}
+  1815→          disabled={isSubmitting || isResolvingDedup || Boolean(dedupCheck)}
+  1816→          className="w-full h-14 bg-[#0f2b46] text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg flex items-center justify-center space-x-2 hover:bg-[#0b2236] active:scale-95 transition-all disabled:opacity-70"
+  1817→        >
+  1818→          {isSubmitting ? (
+  1819→            <>
+  1820→              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+  1821→              <span>{t('Saving', 'Enregistrement')}</span>
+  1822→            </>
+  1823→          ) : (
+  1824→            <span>{isEnrichMode ? t('Save Enrichment', 'Enregistrer enrichissement') : t('Create Point', 'Creer point')}</span>
+  1825→          )}
+  1826→        </button>
+  1827→      </div>
+  1828→    </div>
+  1829→  );
+  1830→};
+  1831→
+  1832→export default ContributionFlow;
+  1833→

@@ -1,0 +1,1901 @@
+     1→# ADL Technical Architecture: Target State for Bonamoussadi Pilot
+     2→## Cloud Architect Deliverable
+     3→
+     4→**Teammate 3 -- Cloud Architect**
+     5→**Date:** March 2026
+     6→
+     7→---
+     8→
+     9→## Table of Contents
+    10→
+    11→1. [Architecture Overview](#1-architecture-overview)
+    12→2. [Offline-First Mobile Capture](#2-offline-first-mobile-capture)
+    13→3. [Storage Architecture](#3-storage-architecture)
+    14→4. [Sync Protocol](#4-sync-protocol)
+    15→5. [API Design](#5-api-design)
+    16→6. [Cost and Reliability Tradeoffs](#6-cost-and-reliability-tradeoffs)
+    17→7. [Technology Choices](#7-technology-choices)
+    18→
+    19→---
+    20→
+    21→## Existing System Inventory
+    22→
+    23→Before proposing the target architecture, here is what is already deployed and operational:
+    24→
+    25→| Layer | Current Technology | Status |
+    26→|---|---|---|
+    27→| **Frontend** | React 19 + Vite 6 SPA | Deployed on Vercel |
+    28→| **Backend API** | Vercel Serverless Functions (Node.js) | `/api/*` routes |
+    29→| **Primary Database** | PostgreSQL (Neon/Supabase-hosted) | `point_events`, `snapshots`, `snapshot_deltas`, `snapshot_stats`, `user_profiles` |
+    30→| **Legacy Fallback** | Vercel Edge Config | Read-only fallback when Postgres unavailable |
+    31→| **File Storage** | Vercel Blob (`@vercel/blob`) | Photo evidence uploads |
+    32→| **Offline Queue** | IndexedDB (`adl_offline_queue`) | Client-side queuing with exponential backoff |
+    33→| **Sync** | Custom `submissionSync.ts` + `offlineQueue.ts` | Sequential flush with idempotency keys |
+    34→| **Auth** | `@auth/core` + Google OAuth + email/password | Session-based |
+    35→| **AI** | Google Gemini (`@google/genai`) | Server-side search |
+    36→| **Analytics** | `@vercel/analytics` + `@vercel/speed-insights` | Page-level |
+    37→| **Maps** | Leaflet + React-Leaflet | POI visualization |
+    38→| **Charts** | Recharts | Dashboard analytics |
+    39→| **Cron** | Vercel Cron (`vercel.json`) | Weekly snapshot engine, Mondays 03:00 UTC |
+    40→| **Fraud Detection** | EXIF GPS extraction + haversine + IP geolocation | Server-side on submission |
+    41→
+    42→**Key architectural decision already made:** The system is event-sourced. All data enters as immutable `point_events` (CREATE_EVENT / ENRICH_EVENT), projected into `ProjectedPoint` objects, frozen into weekly `snapshots`, with `snapshot_deltas` computed between consecutive snapshots. This is the correct foundation. The architecture below extends it without replacing it.
+    43→
+    44→---
+    45→
+    46→## 1. Architecture Overview
+    47→
+    48→### 1.1 High-Level System Diagram
+    49→
+    50→```
+    51→                                    FIELD OPERATIONS
+    52→                                    (Bonamoussadi, Douala)
+    53→
+    54→    ┌─────────────────────────────────────────────────────────────┐
+    55→    │                                                             │
+    56→    │  ┌─────────────────────┐     ┌─────────────────────┐       │
+    57→    │  │  Field Agent App    │     │  Field Agent App    │       │
+    58→    │  │  (PWA on Android)   │     │  (PWA on Android)   │       │
+    59→    │  │                     │     │                     │       │
+    60→    │  │  ┌───────────────┐  │     │  ┌───────────────┐  │       │
+    61→    │  │  │ IndexedDB     │  │     │  │ IndexedDB     │  │       │
+    62→    │  │  │ Queue + Cache │  │     │  │ Queue + Cache │  │       │
+    63→    │  │  └───────┬───────┘  │     │  └───────┬───────┘  │       │
+    64→    │  │          │          │     │          │          │       │
+    65→    │  │  ┌───────┴───────┐  │     │  ┌───────┴───────┐  │       │
+    66→    │  │  │ Sync Engine   │  │     │  │ Sync Engine   │  │       │
+    67→    │  │  │ (adaptive)    │  │     │  │ (adaptive)    │  │       │
+    68→    │  │  └───────┬───────┘  │     │  └───────┴───────┘  │       │
+    69→    │  └──────────│──────────┘     └─────────────────────┘       │
+    70→    │             │                                               │
+    71→    │             │  MTN / Orange 3G/4G                           │
+    72→    │             │  (intermittent connectivity)                  │
+    73→    └─────────────┼───────────────────────────────────────────────┘
+    74→                  │
+    75→                  │ HTTPS
+    76→                  │
+    77→    ══════════════╪═══════════════════════════════════════════════
+    78→                  │           VERCEL EDGE NETWORK
+    79→    ══════════════╪═══════════════════════════════════════════════
+    80→                  │
+    81→                  ▼
+    82→    ┌─────────────────────────────────────────────────────────────┐
+    83→    │                     VERCEL PLATFORM                         │
+    84→    │                                                             │
+    85→    │  ┌──────────────────────────┐  ┌─────────────────────────┐ │
+    86→    │  │   API Layer              │  │   Static Assets         │ │
+    87→    │  │   (Serverless Functions) │  │   (Vite SPA bundle)     │ │
+    88→    │  │                          │  │                         │ │
+    89→    │  │  /api/submissions  POST  │  │   index.html            │ │
+    90→    │  │  /api/submissions  GET   │  │   assets/*.js           │ │
+    91→    │  │  /api/auth/*             │  │   assets/*.css          │ │
+    92→    │  │  /api/analytics    GET   │  │                         │ │
+    93→    │  │  /api/leaderboard  GET   │  │                         │ │
+    94→    │  │  /api/user         CRUD  │  │                         │ │
+    95→    │  │  /api/ai/search    POST  │  │                         │ │
+    96→    │  │  /api/health       GET   │  │                         │ │
+    97→    │  │                          │  │                         │ │
+    98→    │  │  ┌────────────────────┐  │  │                         │ │
+    99→    │  │  │ Fraud Engine       │  │  │                         │ │
+   100→    │  │  │ (EXIF + haversine  │  │  │                         │ │
+   101→    │  │  │  + IP geolocation) │  │  │                         │ │
+   102→    │  │  └────────────────────┘  │  │                         │ │
+   103→    │  └──────────┬───────────────┘  └─────────────────────────┘ │
+   104→    │             │                                               │
+   105→    │  ┌──────────┴───────────────────────────────────────────┐  │
+   106→    │  │              CRON JOBS (Vercel Cron)                  │  │
+   107→    │  │                                                       │  │
+   108→    │  │  Weekly:  /api/analytics?view=cron  (Mon 03:00 UTC)  │  │
+   109→    │  │           -> runWeeklySnapshot()                      │  │
+   110→    │  │           -> computeDeltas()                          │  │
+   111→    │  │           -> upsertStats()                            │  │
+   112→    │  │                                                       │  │
+   113→    │  │  Daily:   /api/road-snapshot (rainy season only)     │  │
+   114→    │  │           -> transport_road deltas                    │  │
+   115→    │  │                                                       │  │
+   116→    │  │  Monthly: /api/monthly-rollup                        │  │
+   117→    │  │           -> monthly_stats aggregation                │  │
+   118→    │  └──────────────────────────────────────────────────────┘  │
+   119→    │                                                             │
+   120→    └──────────────┬──────────────────────┬───────────────────────┘
+   121→                   │                      │
+   122→                   ▼                      ▼
+   123→    ┌──────────────────────────┐  ┌──────────────────────────────┐
+   124→    │   POSTGRESQL (Neon)      │  │   VERCEL BLOB STORAGE        │
+   125→    │   (Primary Database)     │  │   (File Storage)             │
+   126→    │                          │  │                              │
+   127→    │   ┌────────────────────┐ │  │   /photos/{eventId}.jpg     │
+   128→    │   │ point_events       │ │  │   /photos/{eventId}_2.jpg   │
+   129→    │   │ (immutable log)    │ │  │                              │
+   130→    │   ├────────────────────┤ │  │   Max: 4.5MB per upload     │
+   131→    │   │ snapshots          │ │  │   Compressed client-side    │
+   132→    │   │ (weekly frozen)    │ │  │                              │
+   133→    │   ├────────────────────┤ │  └──────────────────────────────┘
+   134→    │   │ snapshot_deltas    │ │
+   135→    │   │ (change records)   │ │  ┌──────────────────────────────┐
+   136→    │   ├────────────────────┤ │  │   VERCEL EDGE CONFIG         │
+   137→    │   │ snapshot_stats     │ │  │   (Read Fallback Cache)      │
+   138→    │   │ (aggregates)       │ │  │                              │
+   139→    │   ├────────────────────┤ │  │   Seed events (read-only)    │
+   140→    │   │ monthly_stats      │ │  │   Activated when Postgres    │
+   141→    │   │ (monthly rollup)   │ │  │   is temporarily unavailable │
+   142→    │   ├────────────────────┤ │  └──────────────────────────────┘
+   143→    │   │ user_profiles      │ │
+   144→    │   │ (auth + accounts)  │ │
+   145→    │   ├────────────────────┤ │
+   146→    │   │ collection_        │ │
+   147→    │   │ assignments        │ │
+   148→    │   │ (zone assignments) │ │
+   149→    │   └────────────────────┘ │
+   150→    │                          │
+   151→    │   Region: AWS us-east-1  │
+   152→    │   (Neon default)         │
+   153→    │                          │
+   154→    └──────────────────────────┘
+   155→```
+   156→
+   157→### 1.2 Data Flow Diagram
+   158→
+   159→```
+   160→FIELD AGENT SUBMISSION FLOW
+   161→═══════════════════════════
+   162→
+   163→  Agent captures POI
+   164→       │
+   165→       ▼
+   166→  ┌─────────────────────┐
+   167→  │ 1. Compress photo    │  Client-side: resize to 1280px max,
+   168→  │    (client-side)     │  JPEG quality 0.7, target < 500KB
+   169→  └──────────┬──────────┘
+   170→             │
+   171→             ▼
+   172→  ┌─────────────────────┐
+   173→  │ 2. Enqueue to       │  IndexedDB: adl_offline_queue
+   174→  │    IndexedDB         │  Status: 'pending'
+   175→  │                      │  Includes: idempotencyKey, payload,
+   176→  │                      │  compressed photo as Blob
+   177→  └──────────┬──────────┘
+   178→             │
+   179→             ▼
+   180→  ┌─────────────────────┐
+   181→  │ 3. Attempt sync     │  If online:
+   182→  │    immediately       │    -> POST /api/submissions
+   183→  │                      │    -> Upload photo to Vercel Blob
+   184→  │                      │  If offline:
+   185→  │                      │    -> Stay in queue, retry later
+   186→  └──────────┬──────────┘
+   187→             │ (when online)
+   188→             ▼
+   189→  ┌─────────────────────┐
+   190→  │ 4. Server receives   │  Validates payload:
+   191→  │    submission         │  - Geofence check (Bonamoussadi bbox)
+   192→  │                      │  - EXIF GPS extraction + haversine
+   193→  │                      │  - IP geolocation cross-reference
+   194→  │                      │  - Idempotency key dedup
+   195→  │                      │  - Category validation
+   196→  └──────────┬──────────┘
+   197→             │
+   198→             ├──────────────────────────┐
+   199→             │                          │
+   200→             ▼                          ▼
+   201→  ┌─────────────────────┐  ┌─────────────────────┐
+   202→  │ 5a. Insert into      │  │ 5b. Upload photo    │
+   203→  │     point_events     │  │     to Vercel Blob  │
+   204→  │     (Postgres)       │  │                     │
+   205→  └──────────┬──────────┘  └─────────────────────┘
+   206→             │
+   207→             │ (weekly cron)
+   208→             ▼
+   209→  ┌─────────────────────┐
+   210→  │ 6. Snapshot engine   │  projectPointsFromEvents()
+   211→  │    runs              │  -> buildSnapshotRows()
+   212→  │                      │  -> computeDeltas()
+   213→  │                      │  -> upsertStats()
+   214→  │                      │  -> detectAnomalies()
+   215→  └──────────┬──────────┘
+   216→             │
+   217→             ▼
+   218→  ┌─────────────────────┐
+   219→  │ 7. Dashboard +       │  Admin reviews queue
+   220→  │    API consumers     │  Clients query delta feeds
+   221→  │    see fresh data    │  Exportable datasets
+   222→  └─────────────────────┘
+   223→```
+   224→
+   225→### 1.3 Network Topology for Cameroon Context
+   226→
+   227→```
+   228→NETWORK PATH: BONAMOUSSADI -> VERCEL
+   229→═════════════════════════════════════
+   230→
+   231→  Agent phone (Bonamoussadi, Douala)
+   232→       │
+   233→       │  MTN / Orange cellular
+   234→       │  Typical: 3G (1-5 Mbps down, 0.3-1 Mbps up)
+   235→       │  Occasional 4G: (10-30 Mbps down, 3-10 Mbps up)
+   236→       │  Latency: 80-200ms to Lagos IX, 150-400ms to Europe
+   237→       │
+   238→       ▼
+   239→  ┌─────────────────────┐
+   240→  │ Local cell tower     │
+   241→  │ (Bonamoussadi area)  │
+   242→  └──────────┬──────────┘
+   243→             │
+   244→             ▼
+   245→  ┌─────────────────────┐
+   246→  │ MTN/Orange backbone  │
+   247→  │ Douala PoP           │
+   248→  └──────────┬──────────┘
+   249→             │
+   250→             │  Submarine cable (SAT-3/WASC or WACS)
+   251→             │  Douala -> Europe / US
+   252→             │
+   253→             ▼
+   254→  ┌─────────────────────┐
+   255→  │ Vercel Edge          │
+   256→  │ (nearest PoP)        │  Static assets served from edge
+   257→  │                      │  API requests routed to origin
+   258→  └──────────┬──────────┘
+   259→             │
+   260→             ▼
+   261→  ┌─────────────────────┐
+   262→  │ Vercel Serverless    │
+   263→  │ (us-east-1)          │  API function execution
+   264→  └──────────┬──────────┘
+   265→             │
+   266→             ▼
+   267→  ┌─────────────────────┐
+   268→  │ Neon Postgres        │
+   269→  │ (us-east-1)          │  Database queries
+   270→  └─────────────────────┘
+   271→
+   272→  Total round-trip (Douala -> Vercel API -> Postgres -> response):
+   273→    Best case:   300-500ms  (4G, good conditions)
+   274→    Typical:     800-2000ms (3G, normal load)
+   275→    Degraded:    3-10s      (congested network, 2G fallback)
+   276→    Offline:     ∞          (queue locally, sync later)
+   277→```
+   278→
+   279→---
+   280→
+   281→## 2. Offline-First Mobile Capture
+   282→
+   283→### 2.1 Current State Assessment
+   284→
+   285→The existing offline implementation is functional but minimal:
+   286→
+   287→**What works:**
+   288→- IndexedDB-based queue (`adl_offline_queue` store) with `pending`/`syncing`/`failed`/`synced` states
+   289→- Idempotency keys for deduplication on retry
+   290→- Exponential backoff with jitter (base 1s, max 30s)
+   291→- Error classification (retryable vs permanent)
+   292→- Sync error recording for diagnostics
+   293→- Client device profiling (`deviceProfile.ts`)
+   294→
+   295→**What is missing for pilot readiness:**
+   296→- No local data cache (agents cannot view existing POIs offline)
+   297→- No photo staging (photos are not stored locally if upload fails)
+   298→- No bandwidth-aware sync (same behavior on 2G vs 4G)
+   299→- No upload prioritization (text and photos treated equally)
+   300→- No sync progress visibility beyond queue count
+   301→- No assignment data cached locally
+   302→- No battery/data usage optimization
+   303→
+   304→### 2.2 Target Offline Architecture
+   305→
+   306→```
+   307→ENHANCED OFFLINE ARCHITECTURE
+   308→═══════════════════════════════
+   309→
+   310→  IndexedDB Database: adl_offline_queue (v3)
+   311→  ┌──────────────────────────────────────────────────────────┐
+   312→  │                                                          │
+   313→  │  Store: submission_queue        (existing, enhanced)     │
+   314→  │  ├── QueueItem                                          │
+   315→  │  │   ├── id: string                                     │
+   316→  │  │   ├── idempotencyKey: string                         │
+   317→  │  │   ├── payload: SubmissionInput                       │
+   318→  │  │   ├── status: 'pending'|'syncing'|'failed'|'synced'  │
+   319→  │  │   ├── priority: 1-5          (NEW)                   │
+   320→  │  │   ├── payloadSizeBytes: number (NEW)                 │
+   321→  │  │   ├── hasPhoto: boolean       (NEW)                  │
+   322→  │  │   ├── photoBlob: Blob | null  (NEW - staged photo)  │
+   323→  │  │   ├── photoSynced: boolean    (NEW)                  │
+   324→  │  │   ├── attempts: number                               │
+   325→  │  │   ├── retryCount: number                             │
+   326→  │  │   ├── nextRetryAt: string                            │
+   327→  │  │   ├── lastError: string                              │
+   328→  │  │   ├── createdAt: string                              │
+   329→  │  │   └── updatedAt: string                              │
+   330→  │  │                                                      │
+   331→  │  Store: submission_sync_errors   (existing)             │
+   332→  │  │                                                      │
+   333→  │  Store: local_poi_cache          (NEW)                  │
+   334→  │  ├── CachedPOI                                          │
+   335→  │  │   ├── pointId: string                                │
+   336→  │  │   ├── category: string                               │
+   337→  │  │   ├── latitude: number                               │
+   338→  │  │   ├── longitude: number                              │
+   339→  │  │   ├── details: object                                │
+   340→  │  │   ├── photoUrl: string | null                        │
+   341→  │  │   ├── lastSyncedAt: string                           │
+   342→  │  │   └── source: string                                 │
+   343→  │  │                                                      │
+   344→  │  Store: local_assignments        (NEW)                  │
+   345→  │  ├── CachedAssignment                                   │
+   346→  │  │   ├── id: string                                     │
+   347→  │  │   ├── zoneId: string                                 │
+   348→  │  │   ├── zoneBounds: object                             │
+   349→  │  │   ├── assignedVerticals: string[]                    │
+   350→  │  │   ├── dueDate: string                                │
+   351→  │  │   ├── pointsExpected: number                         │
+   352→  │  │   ├── status: string                                 │
+   353→  │  │   └── syncedAt: string                               │
+   354→  │  │                                                      │
+   355→  │  Store: network_metrics          (NEW)                  │
+   356→  │  ├── NetworkSample                                      │
+   357→  │  │   ├── timestamp: string                              │
+   358→  │  │   ├── rttMs: number                                  │
+   359→  │  │   ├── effectiveType: string   ('2g'|'3g'|'4g')     │
+   360→  │  │   ├── downlinkMbps: number                           │
+   361→  │  │   └── syncSuccess: boolean                           │
+   362→  │  │                                                      │
+   363→  │  Store: photo_staging            (NEW)                  │
+   364→  │  ├── StagedPhoto                                        │
+   365→  │  │   ├── id: string                                     │
+   366→  │  │   ├── queueItemId: string                            │
+   367→  │  │   ├── blob: Blob                                     │
+   368→  │  │   ├── originalSizeBytes: number                      │
+   369→  │  │   ├── compressedSizeBytes: number                    │
+   370→  │  │   ├── mimeType: string                               │
+   371→  │  │   ├── status: 'staged'|'uploading'|'uploaded'        │
+   372→  │  │   └── createdAt: string                              │
+   373→  │  │                                                      │
+   374→  └──────────────────────────────────────────────────────────┘
+   375→
+   376→  Estimated local storage per agent:
+   377→    Queue items (50 pending):     ~50 KB
+   378→    POI cache (500 entities):     ~500 KB
+   379→    Assignments (5 active):       ~10 KB
+   380→    Network metrics (100 samples): ~20 KB
+   381→    Photo staging (20 photos):    ~10 MB
+   382→    ────────────────────────────────────
+   383→    Total:                        ~11 MB  (well within IndexedDB limits)
+   384→```
+   385→
+   386→### 2.3 Photo Compression and Staging
+   387→
+   388→```typescript
+   389→// Target: compress photos to < 500KB while maintaining evidence quality
+   390→
+   391→interface PhotoCompressionConfig {
+   392→  maxWidth: 1280;           // px - sufficient for signage readability
+   393→  maxHeight: 1280;          // px
+   394→  quality: 0.7;             // JPEG quality (0-1)
+   395→  targetSizeBytes: 500_000; // 500KB target
+   396→  maxSizeBytes: 2_000_000;  // 2MB hard limit (reject if can't compress below)
+   397→  format: 'image/jpeg';     // Always JPEG for size efficiency
+   398→}
+   399→
+   400→// Compression pipeline:
+   401→// 1. Read photo from camera/file input
+   402→// 2. Draw to canvas at maxWidth/maxHeight (maintain aspect ratio)
+   403→// 3. Export as JPEG at quality 0.7
+   404→// 4. If > targetSize, reduce quality in steps (0.6, 0.5, 0.4)
+   405→// 5. If > maxSize after quality 0.4, reduce dimensions by 50%
+   406→// 6. Store compressed Blob in photo_staging IndexedDB store
+   407→// 7. Original is discarded after staging
+   408→
+   409→// EXIF preservation:
+   410→// Extract GPS coordinates BEFORE compression (canvas strips EXIF)
+   411→// Store extracted GPS in the QueueItem payload alongside the photo
+   412→// This is critical for fraud detection on the server
+   413→```
+   414→
+   415→**Photo staging flow:**
+   416→
+   417→```
+   418→  Camera capture
+   419→       │
+   420→       ▼
+   421→  ┌─────────────────────┐
+   422→  │ Extract EXIF GPS     │  Using exifr (already in dependencies)
+   423→  │ from original        │  before any processing
+   424→  └──────────┬──────────┘
+   425→             │
+   426→             ▼
+   427→  ┌─────────────────────┐
+   428→  │ Compress to canvas   │  1280px max, JPEG 0.7
+   429→  │ → JPEG blob          │  Target: < 500KB
+   430→  └──────────┬──────────┘
+   431→             │
+   432→             ▼
+   433→  ┌─────────────────────┐
+   434→  │ Store in IndexedDB   │  photo_staging store
+   435→  │ photo_staging        │  Status: 'staged'
+   436→  └──────────┬──────────┘
+   437→             │
+   438→             ▼
+   439→  ┌─────────────────────┐
+   440→  │ Create QueueItem     │  Links to staged photo
+   441→  │ in submission_queue  │  hasPhoto: true
+   442→  └─────────────────────┘
+   443→```
+   444→
+   445→### 2.4 Queue Management and Prioritization
+   446→
+   447→```
+   448→SYNC PRIORITY LEVELS
+   449→═════════════════════
+   450→
+   451→Priority 1 (CRITICAL):  Road blockage events (isBlocked = true)
+   452→                         These have real-time commercial value.
+   453→                         Sync immediately if any connectivity exists.
+   454→
+   455→Priority 2 (HIGH):      Text-only submissions (CREATE_EVENT / ENRICH_EVENT
+   456→                         without photo). Small payload (~1-3 KB).
+   457→                         Sync over any connection including 2G.
+   458→
+   459→Priority 3 (NORMAL):    Submissions with photos, events older than 1 hour.
+   460→                         Sync when 3G+ detected.
+   461→
+   462→Priority 4 (LOW):       POI cache refresh (download updated POI list).
+   463→                         Sync when on 4G or WiFi.
+   464→
+   465→Priority 5 (DEFERRED):  Assignment downloads, map tile caching.
+   466→                         Sync on WiFi or when charging.
+   467→```
+   468→
+   469→### 2.5 Conflict Resolution Strategy
+   470→
+   471→```
+   472→CONFLICT RESOLUTION RULES
+   473→══════════════════════════
+   474→
+   475→The event-sourced model largely eliminates conflicts because events are
+   476→immutable and append-only. Two agents can submit events for the same
+   477→point_id without conflict -- both are stored and merged during projection.
+   478→
+   479→However, two conflict scenarios exist:
+   480→
+   481→SCENARIO 1: Duplicate entity creation
+   482→  Agent A creates "Pharmacy near Carrefour" at point X
+   483→  Agent B creates "Pharmacie du Carrefour" at point X + 15m
+   484→  Both are offline, both sync later.
+   485→
+   486→  Resolution: Server-side dedup (Teammate 2, Section 2.3)
+   487→  - Spatial proximity check (25m radius, same category)
+   488→  - Name similarity scoring
+   489→  - If score > 0.7: flag for admin merge review
+   490→  - If score < 0.7: accept as separate entities
+   491→  - Admin merge creates MERGE_EVENT
+   492→
+   493→SCENARIO 2: Contradictory enrichments
+   494→  Agent A submits: pharmacy isOpenNow = true (at 09:00)
+   495→  Agent B submits: pharmacy isOpenNow = false (at 14:00)
+   496→  Both for the same point_id.
+   497→
+   498→  Resolution: Last-write-wins (already implemented)
+   499→  - projectPointsFromEvents() orders events by created_at
+   500→  - Latest event's value takes precedence for scalar fields
+   501→  - Both events are preserved in the log
+   502→  - Delta engine captures the change
+   503→
+   504→SCENARIO 3: Offline edits to stale data
+   505→  Agent views cached POI data from 3 days ago (last sync).
+   506→  Agent submits ENRICH_EVENT based on outdated state.
+   507→
+   508→  Resolution: Accept unconditionally
+   509→  - The event records what the agent observed in the field
+   510→  - The timestamp records when the observation was made
+   511→  - If the data is older than 72 hours, flag for admin review
+   512→    (Teammate 2, Section 3.5, Rule 3)
+   513→  - The admin can accept or discard the late event
+   514→```
+   515→
+   516→### 2.6 Battery and Data Usage Optimization
+   517→
+   518→```
+   519→BATTERY OPTIMIZATION
+   520→═════════════════════
+   521→
+   522→1. GPS USAGE
+   523→   - Request high-accuracy GPS only when agent taps "Capture"
+   524→   - Use coarse location (network-based) for map display
+   525→   - Stop GPS polling after coordinates are captured
+   526→   - Target: GPS active < 30 seconds per capture
+   527→
+   528→2. NETWORK USAGE
+   529→   - Compress photos client-side (original 3-5MB → compressed 300-500KB)
+   530→   - Batch sync: wait for 3+ pending items before syncing (unless Priority 1)
+   531→   - Adaptive polling interval:
+   532→     Foreground + queue items: check every 30 seconds
+   533→     Foreground + empty queue: check every 5 minutes
+   534→     Background: check every 15 minutes (using Service Worker)
+   535→     No connectivity: pause polling entirely
+   536→
+   537→3. SCREEN
+   538→   - Dark mode option for AMOLED screens (common on mid-range Android)
+   539→   - Minimize animations during capture workflow
+   540→   - Keep camera viewfinder active only during photo capture
+   541→
+   542→4. DATA BUDGET
+   543→   Per submission (text only):     ~1-3 KB
+   544→   Per submission (with photo):    ~300-500 KB
+   545→   POI cache refresh (500 POIs):   ~250 KB (gzipped JSON)
+   546→   Assignment download:            ~5 KB
+   547→
+   548→   Daily budget per agent (typical):
+   549→     20 captures with photos:  20 * 400KB = ~8 MB
+   550→     5 enrichments text-only:  5 * 2KB = ~10 KB
+   551→     1 POI cache refresh:      ~250 KB
+   552→     Overhead (TLS, headers):  ~500 KB
+   553→     ─────────────────────────────────
+   554→     Total: ~9 MB / day
+   555→
+   556→   Monthly budget per agent: ~200 MB
+   557→
+   558→   Cameroon mobile data cost:
+   559→     MTN: 1GB = ~2,500 XAF (~$4 USD)
+   560→     Orange: 1GB = ~2,000 XAF (~$3.30 USD)
+   561→     ADL cost per agent: ~500 XAF/month ($0.80) for data
+   562→```
+   563→
+   564→---
+   565→
+   566→## 3. Storage Architecture
+   567→
+   568→### 3.1 Primary Database: PostgreSQL on Neon
+   569→
+   570→The existing PostgreSQL deployment on Neon is the correct choice and should remain as the primary database. Here is the complete storage topology:
+   571→
+   572→```
+   573→STORAGE TOPOLOGY
+   574→═════════════════
+   575→
+   576→┌──────────────────────────────────────────────────────────────────┐
+   577→│                   NEON POSTGRESQL                                 │
+   578→│                   (Primary Database)                              │
+   579→│                                                                   │
+   580→│   ┌─────────────────────────────────────────────────┐            │
+   581→│   │  EVENT STORE (append-only)                       │            │
+   582→│   │                                                  │            │
+   583→│   │  point_events            ~2,000 rows pilot       │            │
+   584→│   │  ├── id (uuid PK)       ~6,000 rows 6 weeks     │            │
+   585→│   │  ├── point_id                                    │            │
+   586→│   │  ├── event_type          Indexes:                │            │
+   587→│   │  ├── user_id             - created_at DESC       │            │
+   588→│   │  ├── category            - (point_id, created_at)│            │
+   589→│   │  ├── latitude            - (user_id, created_at) │            │
+   590→│   │  ├── longitude           - external_id           │            │
+   591→│   │  ├── details (JSONB)     - (category, created_at)│            │
+   592→│   │  ├── photo_url                                   │            │
+   593→│   │  ├── created_at                                  │            │
+   594→│   │  ├── source                                      │            │
+   595→│   │  └── external_id                                 │            │
+   596→│   └─────────────────────────────────────────────────┘            │
+   597→│                                                                   │
+   598→│   ┌─────────────────────────────────────────────────┐            │
+   599→│   │  TIME-SERIES STORE (frozen weekly)               │            │
+   600→│   │                                                  │            │
+   601→│   │  snapshots               ~500 rows/week          │            │
+   602→│   │  ├── snapshot_date       ~3,000 rows 6 weeks     │            │
+   603→│   │  ├── point_id                                    │            │
+   604→│   │  ├── vertical_id         UNIQUE(snapshot_date,   │            │
+   605→│   │  ├── details (JSONB)            point_id)        │            │
+   606→│   │  └── ...                                         │            │
+   607→│   │                                                  │            │
+   608→│   │  snapshot_deltas         ~2,000 rows/week        │            │
+   609→│   │  ├── snapshot_date       ~12,000 rows 6 weeks    │            │
+   610→│   │  ├── baseline_date                               │            │
+   611→│   │  ├── delta_type                                  │            │
+   612→│   │  └── ...                                         │            │
+   613→│   │                                                  │            │
+   614→│   │  snapshot_stats          ~7 rows/week            │            │
+   615→│   │  ├── snapshot_date       ~42 rows 6 weeks        │            │
+   616→│   │  ├── vertical_id                                 │            │
+   617→│   │  ├── z-scores                                    │            │
+   618→│   │  └── anomaly_flags                               │            │
+   619→│   │                                                  │            │
+   620→│   │  monthly_stats           ~7 rows/month           │            │
+   621→│   │  ├── month                                       │            │
+   622→│   │  ├── vertical_id                                 │            │
+   623→│   │  └── aggregates                                  │            │
+   624→│   └─────────────────────────────────────────────────┘            │
+   625→│                                                                   │
+   626→│   ┌─────────────────────────────────────────────────┐            │
+   627→│   │  OPERATIONAL STORE                               │            │
+   628→│   │                                                  │            │
+   629→│   │  user_profiles           ~30 rows                │            │
+   630→│   │  collection_assignments  ~50 rows 6 weeks        │            │
+   631→│   └─────────────────────────────────────────────────┘            │
+   632→│                                                                   │
+   633→│   Estimated total rows after 6-week pilot: ~21,100               │
+   634→│   Estimated database size: ~50-100 MB (including indexes)        │
+   635→│                                                                   │
+   636→│   Neon Plan: Free tier (0.5 GB storage, 190 compute hours)      │
+   637→│   Sufficient for pilot. Upgrade to Launch ($19/mo) at scale.    │
+   638→│                                                                   │
+   639→└──────────────────────────────────────────────────────────────────┘
+   640→
+   641→┌──────────────────────────────────────────────────────────────────┐
+   642→│                   VERCEL BLOB STORAGE                             │
+   643→│                   (Photo Evidence)                                │
+   644→│                                                                   │
+   645→│   Bucket structure:                                               │
+   646→│     /photos/{eventId}.jpg         Primary evidence photo          │
+   647→│     /photos/{eventId}_2.jpg       Secondary evidence photo        │
+   648→│                                                                   │
+   649→│   Estimated volume (6-week pilot):                               │
+   650→│     ~500 POIs * 1.5 photos avg * 400KB avg = ~300 MB            │
+   651→│     Enrichment photos: ~1,000 * 400KB = ~400 MB                 │
+   652→│     ─────────────────────────────────────────────────            │
+   653→│     Total: ~700 MB                                                │
+   654→│                                                                   │
+   655→│   Vercel Blob: Free tier includes 1 GB.                          │
+   656→│   Pro plan ($20/mo) includes 5 GB. Sufficient for pilot.        │
+   657→│                                                                   │
+   658→└──────────────────────────────────────────────────────────────────┘
+   659→
+   660→┌──────────────────────────────────────────────────────────────────┐
+   661→│                   VERCEL EDGE CONFIG                              │
+   662→│                   (Read-Only Fallback)                            │
+   663→│                                                                   │
+   664→│   Purpose: When Postgres is temporarily unavailable, the         │
+   665→│   system falls back to Edge Config for read operations.          │
+   666→│   This is already implemented in lib/server/storage/index.ts.   │
+   667→│                                                                   │
+   668→│   Contains: Seed events (OSM imports, baseline data)             │
+   669→│   Size limit: 512 KB (Edge Config free tier)                     │
+   670→│                                                                   │
+   671→│   NOT used for writes. Writes always go to Postgres.             │
+   672→│                                                                   │
+   673→└──────────────────────────────────────────────────────────────────┘
+   674→```
+   675→
+   676→### 3.2 Cache Layer Strategy
+   677→
+   678→```
+   679→CACHE ARCHITECTURE (3 TIERS)
+   680→══════════════════════════════
+   681→
+   682→TIER 1: CLIENT-SIDE CACHE (IndexedDB)
+   683→───────────────────────────────────────
+   684→  What:     POI data for the agent's assigned zone
+   685→  Freshness: Refreshed on each successful sync, max age 24 hours
+   686→  Size:     ~500 KB per agent (500 POIs compressed)
+   687→  Eviction: LRU by zone; only active assignment zones cached
+   688→  Purpose:  Enable offline map display and dedup checks
+   689→
+   690→TIER 2: EDGE CACHE (Vercel Edge Network)
+   691→─────────────────────────────────────────
+   692→  What:     Static assets (JS, CSS, images), GET API responses
+   693→  Freshness: Static assets: immutable (hashed filenames)
+   694→             API responses: stale-while-revalidate, 60s
+   695→  Purpose:  Reduce latency for agents in Douala
+   696→  Config:
+   697→    headers: [
+   698→      {
+   699→        source: "/api/submissions",
+   700→        headers: [{ key: "Cache-Control", value: "no-store" }]
+   701→      },
+   702→      {
+   703→        source: "/api/analytics",
+   704→        headers: [{ key: "Cache-Control", value: "public, s-maxage=300, stale-while-revalidate=600" }]
+   705→      }
+   706→    ]
+   707→
+   708→TIER 3: READ FALLBACK (Vercel Edge Config)
+   709→──────────────────────────────────────────
+   710→  What:     Seed data and last-known-good state
+   711→  Freshness: Updated manually or by migration scripts
+   712→  Purpose:  Ensure reads succeed even during Postgres outages
+   713→  Already implemented: edgeFallbackStore.ts
+   714→```
+   715→
+   716→### 3.3 Data Retention and Archival Policy
+   717→
+   718→```
+   719→RETENTION POLICY
+   720→═════════════════
+   721→
+   722→DATA TYPE              RETENTION        ARCHIVAL STRATEGY
+   723→─────────────────────────────────────────────────────────────────
+   724→point_events           Indefinite       Never delete (immutable log).
+   725→                                        At 100K+ rows: partition by
+   726→                                        year using Postgres partitioning.
+   727→
+   728→snapshots              6 months         After 6 months: export to
+   729→                       (hot storage)    Parquet files on Vercel Blob,
+   730→                                        delete from Postgres.
+   731→
+   732→snapshot_deltas        3 months         After 3 months: aggregate
+   733→                       (hot storage)    into monthly_stats, export
+   734→                                        raw deltas to Parquet, delete.
+   735→
+   736→snapshot_stats         Indefinite       Small table (~7 rows/week).
+   737→                                        Never delete.
+   738→
+   739→monthly_stats          Indefinite       Small table (~7 rows/month).
+   740→                                        Never delete.
+   741→
+   742→user_profiles          Indefinite       Small table. Never delete.
+   743→                                        Comply with erasure requests
+   744→                                        per Cameroon Law 2024/017.
+   745→
+   746→collection_assignments 6 months         After 6 months: export to
+   747→                                        CSV on Vercel Blob, delete.
+   748→
+   749→Photo blobs            12 months        After 12 months: compress
+   750→                       (hot storage)    to thumbnail (100px), delete
+   751→                                        original. Retain thumbnail
+   752→                                        indefinitely as evidence.
+   753→
+   754→IndexedDB (client)     Auto-managed     Clear synced items after 24h.
+   755→                                        Clear POI cache after 7 days.
+   756→                                        Photos deleted after upload.
+   757→```
+   758→
+   759→### 3.4 Estimated Storage Costs for 6-Week Pilot
+   760→
+   761→| Resource | Provider | Estimated Usage | Cost |
+   762→|---|---|---|---|
+   763→| **PostgreSQL** | Neon Free Tier | ~100 MB, 190 compute-hours | **$0** |
+   764→| **Blob Storage** | Vercel Pro | ~700 MB photos | Included in Pro ($20/mo) |
+   765→| **Edge Config** | Vercel Pro | ~200 KB seed data | Included in Pro |
+   766→| **Bandwidth** (Vercel) | Vercel Pro | ~5 GB/month (20 agents) | Included in Pro (100 GB) |
+   767→| | | | |
+   768→| **Total infrastructure** | | | **$20/month** |
+   769→
+   770→At this scale, Neon Free Tier (0.5 GB storage, 190 compute-hours/month) is sufficient. The Vercel Pro plan at $20/month covers blob storage, bandwidth, edge config, and serverless function execution.
+   771→
+   772→---
+   773→
+   774→## 4. Sync Protocol
+   775→
+   776→### 4.1 Enhanced Sync Engine Design
+   777→
+   778→The existing `flushOfflineQueue()` in `offlineQueue.ts` is a good foundation. The enhanced sync engine adds bandwidth awareness, upload prioritization, and resumable photo uploads.
+   779→
+   780→```
+   781→SYNC ENGINE STATE MACHINE
+   782→═══════════════════════════
+   783→
+   784→  ┌──────────┐   connectivity    ┌──────────────┐
+   785→  │          │   detected        │              │
+   786→  │  IDLE    ├──────────────────►│  PROBING     │
+   787→  │          │                   │  (measure    │
+   788→  │          │◄──────────────────┤   bandwidth) │
+   789→  │          │   no connectivity │              │
+   790→  └────┬─────┘                   └──────┬───────┘
+   791→       │                                │
+   792→       │  timer tick                    │  probe complete
+   793→       │  (check queue)                 │  (RTT + speed measured)
+   794→       │                                │
+   795→       ▼                                ▼
+   796→  ┌──────────┐                   ┌──────────────┐
+   797→  │ CHECK    │                   │  CLASSIFY    │
+   798→  │ QUEUE    │                   │  CONNECTION  │
+   799→  │          │                   │              │
+   800→  │ pending  │                   │  2G: text    │
+   801→  │ items?   │                   │  3G: text +  │
+   802→  │          │                   │      photos  │
+   803→  └────┬─────┘                   │  4G: all     │
+   804→       │                         │  WiFi: all   │
+   805→       │ yes, items pending      │  + cache     │
+   806→       │                         └──────┬───────┘
+   807→       ▼                                │
+   808→  ┌──────────────────────────────────────┴──────────┐
+   809→  │                                                  │
+   810→  │              SYNC LOOP                           │
+   811→  │                                                  │
+   812→  │  1. Sort queue by priority (1=highest, 5=lowest) │
+   813→  │  2. Filter by connection class:                  │
+   814→  │     2G: only priority 1-2 (text, critical)       │
+   815→  │     3G: priority 1-4 (text + photos)             │
+   816→  │     4G/WiFi: all priorities                      │
+   817→  │  3. For each item:                               │
+   818→  │     a. If text-only: POST /api/submissions       │
+   819→  │     b. If has photo:                             │
+   820→  │        i.  POST /api/submissions (text first)    │
+   821→  │        ii. Upload photo to Vercel Blob           │
+   822→  │     c. On success: remove from queue             │
+   823→  │     d. On failure: exponential backoff           │
+   824→  │  4. Update sync status UI                        │
+   825→  │                                                  │
+   826→  └──────────────────────────────────────────────────┘
+   827→```
+   828→
+   829→### 4.2 Upload Priority Rules
+   830→
+   831→```
+   832→UPLOAD PRIORITY MATRIX
+   833→═══════════════════════
+   834→
+   835→PRIORITY   CONTENT            SIZE     MIN CONNECTION   MAX RETRY
+   836→────────────────────────────────────────────────────────────────────
+   837→1          Road blockage      ~2 KB    2G (any)         Unlimited
+   838→           (isBlocked=true)
+   839→
+   840→2          Text submissions    ~2 KB    2G (any)         10 retries
+   841→           (no photo)
+   842→
+   843→3          Photo uploads       ~400KB   3G (>0.5 Mbps)   5 retries
+   844→           (normal priority)
+   845→
+   846→4          POI cache download  ~250KB   3G (>1 Mbps)     3 retries
+   847→           (GET, background)
+   848→
+   849→5          Assignments +       ~50KB    4G/WiFi          2 retries
+   850→           map tiles
+   851→           (background)
+   852→
+   853→BANDWIDTH MEASUREMENT:
+   854→  The sync engine measures bandwidth by timing a small probe request:
+   855→
+   856→  async function measureBandwidth(): Promise<ConnectionClass> {
+   857→    // Use Navigator.connection API if available (Chrome Android)
+   858→    const conn = (navigator as any).connection;
+   859→    if (conn?.effectiveType) {
+   860→      return conn.effectiveType; // '2g', '3g', '4g'
+   861→    }
+   862→
+   863→    // Fallback: time a HEAD request to /api/health
+   864→    const start = performance.now();
+   865→    try {
+   866→      await fetch('/api/health', { method: 'HEAD' });
+   867→      const rttMs = performance.now() - start;
+   868→      if (rttMs > 2000) return '2g';
+   869→      if (rttMs > 500) return '3g';
+   870→      return '4g';
+   871→    } catch {
+   872→      return 'offline';
+   873→    }
+   874→  }
+   875→```
+   876→
+   877→### 4.3 Resumable Photo Uploads
+   878→
+   879→```
+   880→RESUMABLE UPLOAD PROTOCOL
+   881→══════════════════════════
+   882→
+   883→For photos > 200KB, use chunked upload to handle dropped connections:
+   884→
+   885→1. Client splits photo Blob into 100KB chunks
+   886→2. Each chunk uploaded with:
+   887→   POST /api/submissions/upload-chunk
+   888→   Headers:
+   889→     X-Upload-Id: {queueItemId}
+   890→     X-Chunk-Index: {0, 1, 2, ...}
+   891→     X-Total-Chunks: {N}
+   892→     Content-Type: application/octet-stream
+   893→   Body: raw chunk bytes
+   894→
+   895→3. Server stores chunks in temporary storage (Vercel /tmp)
+   896→4. When all chunks received:
+   897→   - Reassemble into complete file
+   898→   - Upload to Vercel Blob
+   899→   - Return blob URL
+   900→   - Update point_event.photo_url
+   901→
+   902→5. If upload interrupted:
+   903→   - Client queries: GET /api/submissions/upload-status?id={queueItemId}
+   904→   - Server returns: { receivedChunks: [0, 1], totalExpected: 4 }
+   905→   - Client resumes from chunk 2
+   906→
+   907→6. Timeout: Incomplete uploads cleaned up after 1 hour
+   908→
+   909→SIMPLIFIED ALTERNATIVE (recommended for pilot):
+   910→  For the 6-week pilot with photos < 500KB after compression,
+   911→  standard single-request upload is sufficient. The retry mechanism
+   912→  in flushOfflineQueue already handles failures. Implement chunked
+   913→  uploads only if field testing reveals persistent upload failures.
+   914→```
+   915→
+   916→### 4.4 Server-Side Deduplication on Receive
+   917→
+   918→```
+   919→SERVER DEDUP FLOW
+   920→══════════════════
+   921→
+   922→Already partially implemented via idempotency keys. Enhancement:
+   923→
+   924→1. IDEMPOTENCY KEY CHECK (existing)
+   925→   - Client sends X-Idempotency-Key header
+   926→   - Server checks: does this key already exist?
+   927→   - If yes: return 200 with existing event (not 409 Conflict)
+   928→   - If no: proceed with insert
+   929→
+   930→2. CONTENT HASH CHECK (new)
+   931→   - Compute SHA-256 of (category + point_id + event_type +
+   932→     latitude.toFixed(5) + longitude.toFixed(5) +
+   933→     JSON.stringify(sortedDetails))
+   934→   - Store hash in point_events.content_hash column
+   935→   - Check for duplicate hash within last 24 hours
+   936→   - If found: return 200 (treat as successful, skip insert)
+   937→
+   938→3. SPATIAL TEMPORAL CHECK (new, for CREATE events)
+   939→   - Check: does a CREATE_EVENT exist for same category
+   940→     within 25m and within last 4 hours by the same user?
+   941→   - If yes: flag as potential duplicate, store but mark
+   942→     for admin review
+   943→
+   944→SQL for content hash:
+   945→  ALTER TABLE point_events
+   946→    ADD COLUMN IF NOT EXISTS content_hash text;
+   947→  CREATE INDEX IF NOT EXISTS idx_point_events_content_hash
+   948→    ON point_events (content_hash)
+   949→    WHERE content_hash IS NOT NULL;
+   950→```
+   951→
+   952→### 4.5 Sync Status Visibility for Field Agents
+   953→
+   954→```
+   955→SYNC STATUS UI COMPONENT
+   956→═══════════════════════════
+   957→
+   958→The agent sees a persistent sync indicator in the app header:
+   959→
+   960→  ┌──────────────────────────────────────────────┐
+   961→  │  ADL Capture                    ⬤ 3 pending  │
+   962→  │                                  ↑ syncing   │
+   963→  └──────────────────────────────────────────────┘
+   964→
+   965→States:
+   966→  ⬤ (green)  "All synced"          - Queue empty, online
+   967→  ⬤ (yellow) "3 pending"           - Items in queue, syncing
+   968→  ⬤ (orange) "Offline (5 queued)"  - No connectivity, items waiting
+   969→  ⬤ (red)    "2 failed"            - Permanent failures need attention
+   970→
+   971→Tapping the indicator opens a sync detail panel:
+   972→
+   973→  ┌──────────────────────────────────────────────┐
+   974→  │  Sync Status                                  │
+   975→  │                                               │
+   976→  │  Connection: 3G (Orange)  ↑ 0.8 Mbps         │
+   977→  │  Last sync: 2 minutes ago                     │
+   978→  │                                               │
+   979→  │  Pending:  3 submissions                      │
+   980→  │  ├── Pharmacy (text)       ● syncing...       │
+   981→  │  ├── Billboard (+ photo)   ○ waiting          │
+   982→  │  └── Road blockage         ● syncing...       │
+   983→  │                                               │
+   984→  │  Failed:   1 submission                       │
+   985→  │  └── Mobile Money agent    ✗ invalid GPS      │
+   986→  │      [View Details] [Retry] [Discard]         │
+   987→  │                                               │
+   988→  │  Today's stats:                               │
+   989→  │  ├── Uploaded: 12 submissions, 8 photos       │
+   990→  │  ├── Data used: ~4.2 MB                       │
+   991→  │  └── Battery impact: minimal                  │
+   992→  │                                               │
+   993→  │  [Force Sync Now]                             │
+   994→  └──────────────────────────────────────────────┘
+   995→```
+   996→
+   997→---
+   998→
+   999→## 5. API Design
+  1000→
+  1001→### 5.1 API Surface Overview
+  1002→
+  1003→The existing API routes handle the core operations. Below is the complete target API surface, noting what exists and what is new.
+  1004→
+  1005→```
+  1006→API ROUTE MAP
+  1007→══════════════
+  1008→
+  1009→METHOD  PATH                              STATUS    PURPOSE
+  1010→────────────────────────────────────────────────────────────────────
+  1011→
+  1012→FIELD AGENT APIs
+  1013→────────────────────────────────────────────────────────────────────
+  1014→POST    /api/submissions                  EXISTS    Submit event
+  1015→GET     /api/submissions                  EXISTS    List events (filtered)
+  1016→GET     /api/submissions?offline=true     NEW       Download POI cache
+  1017→                                                    for offline use
+  1018→POST    /api/submissions/upload-chunk     NEW       Resumable photo chunk
+  1019→GET     /api/submissions/upload-status    NEW       Check chunk progress
+  1020→GET     /api/assignments                  NEW       Get agent's assignments
+  1021→PUT     /api/assignments/:id/status       NEW       Update assignment status
+  1022→
+  1023→AUTHENTICATION
+  1024→────────────────────────────────────────────────────────────────────
+  1025→GET     /api/auth/signin/:provider        EXISTS    OAuth redirect
+  1026→GET     /api/auth/callback/:provider      EXISTS    OAuth callback
+  1027→POST    /api/auth/signin                  EXISTS    Email/password login
+  1028→GET     /api/auth/session                 EXISTS    Current session
+  1029→POST    /api/auth/signout                 EXISTS    Logout
+  1030→
+  1031→ADMIN APIs
+  1032→────────────────────────────────────────────────────────────────────
+  1033→GET     /api/analytics                    EXISTS    Dashboard data
+  1034→GET     /api/analytics?view=cron          EXISTS    Trigger snapshot (cron)
+  1035→GET     /api/analytics?view=deltas        NEW       Delta feed
+  1036→GET     /api/analytics?view=stats         NEW       Vertical-level stats
+  1037→POST    /api/admin/assignments            NEW       Create assignment
+  1038→GET     /api/admin/review-queue           NEW       Flagged submissions
+  1039→PUT     /api/admin/review-queue/:id       NEW       Approve/reject
+  1040→POST    /api/admin/merge-points           NEW       Merge duplicate entities
+  1041→GET     /api/admin/agents                 NEW       Agent performance
+  1042→
+  1043→CLIENT-FACING APIs (data consumers)
+  1044→────────────────────────────────────────────────────────────────────
+  1045→GET     /api/data/snapshots               NEW       Latest snapshot data
+  1046→GET     /api/data/deltas                  NEW       Delta feed (date range)
+  1047→GET     /api/data/export                  NEW       CSV/JSON export
+  1048→GET     /api/data/verticals/:id           NEW       Vertical-specific data
+  1049→GET     /api/data/poi/:pointId            NEW       Single POI history
+  1050→
+  1051→UTILITY
+  1052→────────────────────────────────────────────────────────────────────
+  1053→GET     /api/health                       EXISTS    Health check
+  1054→GET     /api/leaderboard                  EXISTS    Agent XP rankings
+  1055→GET     /api/user                         EXISTS    User profile
+  1056→PUT     /api/user                         EXISTS    Update profile
+  1057→POST    /api/ai/search                    EXISTS    Gemini AI search
+  1058→```
+  1059→
+  1060→### 5.2 Field Agent API Details
+  1061→
+  1062→```
+  1063→POST /api/submissions
+  1064→═════════════════════
+  1065→
+  1066→Request:
+  1067→  Headers:
+  1068→    Content-Type: application/json
+  1069→    Authorization: Bearer {sessionToken}
+  1070→    X-Idempotency-Key: {uuid}         (for dedup on retry)
+  1071→
+  1072→  Body:
+  1073→  {
+  1074→    "eventType": "CREATE_EVENT",       // or "ENRICH_EVENT"
+  1075→    "category": "mobile_money",
+  1076→    "pointId": "mobile_money-s16gdq-a1b2c3d4",  // auto-generated for CREATE
+  1077→    "location": {
+  1078→      "latitude": 4.0823,
+  1079→      "longitude": 9.7356
+  1080→    },
+  1081→    "details": {
+  1082→      "name": "MoMo Kiosk Carrefour",
+  1083→      "providers": ["MTN", "Orange"],
+  1084→      "isActive": true,
+  1085→      "hasFloat": true,
+  1086→      "clientDevice": { ... }          // auto-injected by client
+  1087→    },
+  1088→    "photoBase64": "data:image/jpeg;base64,...",  // or separate upload
+  1089→    "source": "field_agent"
+  1090→  }
+  1091→
+  1092→Response (201 Created):
+  1093→  {
+  1094→    "id": "event-uuid",
+  1095→    "pointId": "mobile_money-s16gdq-a1b2c3d4",
+  1096→    "photoUrl": "https://blob.vercel-storage.com/photos/event-uuid.jpg",
+  1097→    "fraudCheck": {
+  1098→      "gpsMatch": true,
+  1099→      "ipMatch": true,
+  1100→      "withinGeofence": true,
+  1101→      "distance_m": 12.5
+  1102→    }
+  1103→  }
+  1104→
+  1105→Response (409 Conflict -- idempotent):
+  1106→  Returns existing event data (treat as success on client)
+  1107→
+  1108→Response (422 Unprocessable):
+  1109→  {
+  1110→    "error": "Outside Bonamoussadi geofence",
+  1111→    "retryable": false
+  1112→  }
+  1113→
+  1114→
+  1115→GET /api/submissions?offline=true
+  1116→══════════════════════════════════
+  1117→
+  1118→Purpose: Download a compressed snapshot of all POIs for offline cache.
+  1119→
+  1120→Request:
+  1121→  Headers:
+  1122→    Authorization: Bearer {sessionToken}
+  1123→    Accept-Encoding: gzip
+  1124→
+  1125→  Query params:
+  1126→    offline=true             Required flag
+  1127→    zone=bona-zone-B         Optional zone filter
+  1128→    since=2026-03-01         Optional incremental (only changed since)
+  1129→
+  1130→Response (200 OK):
+  1131→  Content-Type: application/json
+  1132→  Content-Encoding: gzip
+  1133→
+  1134→  {
+  1135→    "syncedAt": "2026-03-03T10:00:00Z",
+  1136→    "totalPoints": 487,
+  1137→    "points": [
+  1138→      {
+  1139→        "pointId": "mobile_money-s16gdq-a1b2c3d4",
+  1140→        "category": "mobile_money",
+  1141→        "latitude": 4.0823,
+  1142→        "longitude": 9.7356,
+  1143→        "details": { "name": "MoMo Kiosk", "providers": ["MTN"] },
+  1144→        "photoUrl": "https://...",
+  1145→        "updatedAt": "2026-03-02T15:30:00Z"
+  1146→      },
+  1147→      ...
+  1148→    ]
+  1149→  }
+  1150→
+  1151→  Size estimate: ~250 KB gzipped for 500 POIs
+  1152→```
+  1153→
+  1154→### 5.3 Admin API Details
+  1155→
+  1156→```
+  1157→GET /api/admin/review-queue
+  1158→════════════════════════════
+  1159→
+  1160→Purpose: List submissions flagged for admin review.
+  1161→
+  1162→Flags that trigger review:
+  1163→  - Fraud check failed (GPS mismatch, IP mismatch, outside geofence)
+  1164→  - Potential duplicate (spatial proximity match)
+  1165→  - Late submission (> 72 hours old when synced)
+  1166→  - Low confidence score (< 40)
+  1167→  - Anomaly detected by snapshot engine (z-score > 2)
+  1168→
+  1169→Response:
+  1170→  {
+  1171→    "queue": [
+  1172→      {
+  1173→        "eventId": "uuid",
+  1174→        "pointId": "pharmacy-s16gdp-x1y2z3",
+  1175→        "category": "pharmacy",
+  1176→        "agentId": "user-123",
+  1177→        "agentName": "Kouam J.",
+  1178→        "flags": ["gps_mismatch", "potential_duplicate"],
+  1179→        "details": { ... },
+  1180→        "photoUrl": "https://...",
+  1181→        "createdAt": "2026-03-03T09:15:00Z",
+  1182→        "duplicateCandidates": [
+  1183→          {
+  1184→            "pointId": "pharmacy-s16gdp-a4b5c6",
+  1185→            "name": "Pharmacie du Carrefour",
+  1186→            "distance_m": 18.3,
+  1187→            "similarity": 0.82
+  1188→          }
+  1189→        ]
+  1190→      }
+  1191→    ],
+  1192→    "totalPending": 12,
+  1193→    "totalReviewed": 847
+  1194→  }
+  1195→
+  1196→
+  1197→POST /api/admin/merge-points
+  1198→═════════════════════════════
+  1199→
+  1200→Purpose: Merge two duplicate entities into one.
+  1201→
+  1202→Request:
+  1203→  {
+  1204→    "keepPointId": "pharmacy-s16gdp-a1b2c3",    // Entity to keep
+  1205→    "mergePointId": "pharmacy-s16gdp-x4y5z6",   // Entity to merge into keep
+  1206→    "reason": "Same pharmacy, different entrance photos"
+  1207→  }
+  1208→
+  1209→Effect:
+  1210→  1. Creates MERGE_EVENT on the kept entity
+  1211→  2. Creates CLOSE_EVENT on the merged entity with reference to kept entity
+  1212→  3. All future queries return only the kept entity
+  1213→  4. Historical events from merged entity are preserved
+  1214→```
+  1215→
+  1216→### 5.4 Client-Facing (Data Consumer) APIs
+  1217→
+  1218→```
+  1219→GET /api/data/deltas
+  1220→═════════════════════
+  1221→
+  1222→Purpose: Feed of changes for data consumers (the commercial product).
+  1223→
+  1224→Query params:
+  1225→  vertical=mobile_money      Filter by vertical
+  1226→  since=2026-02-24           Start date (ISO)
+  1227→  until=2026-03-03           End date (ISO)
+  1228→  significance=high,medium   Filter by significance
+  1229→  format=json                json or csv
+  1230→
+  1231→Response:
+  1232→  {
+  1233→    "period": { "from": "2026-02-24", "to": "2026-03-03" },
+  1234→    "vertical": "mobile_money",
+  1235→    "summary": {
+  1236→      "totalPoints": 142,
+  1237→      "newPoints": 8,
+  1238→      "removedPoints": 3,
+  1239→      "changedPoints": 22,
+  1240→      "unchangedPoints": 109,
+  1241→      "netGrowth": 5,
+  1242→      "weekOverWeekGrowth": 3.65
+  1243→    },
+  1244→    "deltas": [
+  1245→      {
+  1246→        "pointId": "mobile_money-s16gdq-a1b2c3",
+  1247→        "deltaType": "new",
+  1248→        "significance": "high",
+  1249→        "location": { "latitude": 4.0823, "longitude": 9.7356 },
+  1250→        "details": { "name": "New MoMo Agent", "providers": ["MTN"] },
+  1251→        "photoUrl": "https://..."
+  1252→      },
+  1253→      {
+  1254→        "pointId": "mobile_money-s16gdp-x4y5z6",
+  1255→        "deltaType": "changed",
+  1256→        "field": "isActive",
+  1257→        "previousValue": true,
+  1258→        "currentValue": false,
+  1259→        "significance": "high",
+  1260→        "summary": "Agent went inactive"
+  1261→      }
+  1262→    ],
+  1263→    "anomalies": [
+  1264→      {
+  1265→        "metric": "removed_count",
+  1266→        "zScore": 2.3,
+  1267→        "direction": "increase",
+  1268→        "description": "Unusual number of agent closures this week"
+  1269→      }
+  1270→    ]
+  1271→  }
+  1272→
+  1273→
+  1274→GET /api/data/export
+  1275→═════════════════════
+  1276→
+  1277→Purpose: Bulk data export for enterprise clients.
+  1278→
+  1279→Query params:
+  1280→  vertical=pharmacy          Required
+  1281→  snapshot_date=2026-03-03   Optional (defaults to latest)
+  1282→  format=csv                 csv, json, or geojson
+  1283→
+  1284→Response (CSV):
+  1285→  Content-Type: text/csv
+  1286→  Content-Disposition: attachment; filename="adl-pharmacy-2026-03-03.csv"
+  1287→
+  1288→  point_id,category,name,latitude,longitude,is_formal,is_open,is_on_duty,...
+  1289→  pharmacy-s16gdp-a1b2c3,pharmacy,Pharmacie Bonamoussadi,4.0835,9.7412,true,true,false,...
+  1290→
+  1291→Response (GeoJSON):
+  1292→  Content-Type: application/geo+json
+  1293→
+  1294→  {
+  1295→    "type": "FeatureCollection",
+  1296→    "features": [
+  1297→      {
+  1298→        "type": "Feature",
+  1299→        "geometry": { "type": "Point", "coordinates": [9.7412, 4.0835] },
+  1300→        "properties": {
+  1301→          "pointId": "pharmacy-s16gdp-a1b2c3",
+  1302→          "category": "pharmacy",
+  1303→          "name": "Pharmacie Bonamoussadi",
+  1304→          ...
+  1305→        }
+  1306→      }
+  1307→    ]
+  1308→  }
+  1309→```
+  1310→
+  1311→### 5.5 Authentication and Authorization Model
+  1312→
+  1313→```
+  1314→AUTH MODEL
+  1315→═══════════
+  1316→
+  1317→CURRENT (keep):
+  1318→  - Google OAuth via @auth/core (for admin/team)
+  1319→  - Email/password via bcrypt (for field agents)
+  1320→  - Session-based auth with httpOnly cookies
+  1321→
+  1322→ENHANCEMENT FOR PILOT:
+  1323→
+  1324→ROLES:
+  1325→  ┌────────────┬──────────────────────────────────────────────────────┐
+  1326→  │ Role       │ Permissions                                         │
+  1327→  ├────────────┼──────────────────────────────────────────────────────┤
+  1328→  │ agent      │ POST /api/submissions                               │
+  1329→  │            │ GET  /api/submissions (own data only)                │
+  1330→  │            │ GET  /api/submissions?offline=true                   │
+  1331→  │            │ GET  /api/assignments (own assignments)              │
+  1332→  │            │ PUT  /api/assignments/:id/status                     │
+  1333→  │            │ GET  /api/leaderboard                                │
+  1334→  │            │ GET  /api/user (own profile)                         │
+  1335→  │            │ PUT  /api/user (own profile)                         │
+  1336→  ├────────────┼──────────────────────────────────────────────────────┤
+  1337→  │ admin      │ All agent permissions +                              │
+  1338→  │            │ GET  /api/analytics (all views)                      │
+  1339→  │            │ GET  /api/submissions (all data)                     │
+  1340→  │            │ POST /api/admin/assignments                          │
+  1341→  │            │ GET  /api/admin/review-queue                         │
+  1342→  │            │ PUT  /api/admin/review-queue/:id                     │
+  1343→  │            │ POST /api/admin/merge-points                         │
+  1344→  │            │ GET  /api/admin/agents                               │
+  1345→  │            │ DELETE /api/submissions/:id                          │
+  1346→  ├────────────┼──────────────────────────────────────────────────────┤
+  1347→  │ client     │ GET  /api/data/* (read-only, API key auth)           │
+  1348→  │            │ Rate limited: 100 requests/minute                   │
+  1349→  └────────────┴──────────────────────────────────────────────────────┘
+  1350→
+  1351→CLIENT API KEY AUTH (new):
+  1352→  For data consumers, implement simple API key authentication:
+  1353→
+  1354→  Header: X-API-Key: adl_live_xxxxxxxxxxxxxxxxxxxx
+  1355→
+  1356→  Keys stored in a new table:
+  1357→  CREATE TABLE api_keys (
+  1358→    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  1359→    key_hash text NOT NULL UNIQUE,    -- SHA-256 of the key
+  1360→    client_name text NOT NULL,
+  1361→    permissions text[] NOT NULL,       -- ['data:read', 'data:export']
+  1362→    rate_limit_per_minute integer DEFAULT 100,
+  1363→    is_active boolean DEFAULT true,
+  1364→    created_at timestamptz DEFAULT now(),
+  1365→    last_used_at timestamptz
+  1366→  );
+  1367→```
+  1368→
+  1369→---
+  1370→
+  1371→## 6. Cost and Reliability Tradeoffs
+  1372→
+  1373→### 6.1 Monthly Infrastructure Costs for Pilot
+  1374→
+  1375→```
+  1376→PILOT COST MODEL (10-20 field agents, ~500 POIs, 6 weeks)
+  1377→═══════════════════════════════════════════════════════════
+  1378→
+  1379→INFRASTRUCTURE
+  1380→───────────────────────────────────────────────────────────
+  1381→
+  1382→Service              Plan          Monthly Cost    Notes
+  1383→─────────────────────────────────────────────────────────
+  1384→Vercel               Pro           $20/month       100GB bandwidth,
+  1385→                                                   serverless functions,
+  1386→                                                   blob storage (5GB),
+  1387→                                                   edge config,
+  1388→                                                   cron jobs,
+  1389→                                                   analytics
+  1390→
+  1391→Neon PostgreSQL      Free Tier     $0/month        0.5 GB storage,
+  1392→                                                   190 compute-hours,
+  1393→                                                   1 project
+  1394→
+  1395→Domain (optional)    Vercel        ~$12/year       africandatalayer.com
+  1396→                                   ($1/month)      or similar
+  1397→
+  1398→─────────────────────────────────────────────────────────
+  1399→Infrastructure subtotal:           $20-21/month
+  1400→─────────────────────────────────────────────────────────
+  1401→
+  1402→OPERATIONAL
+  1403→───────────────────────────────────────────────────────────
+  1404→
+  1405→Service              Plan          Monthly Cost    Notes
+  1406→─────────────────────────────────────────────────────────
+  1407→Google Gemini API    Free Tier     $0/month        15 RPM, 1M tokens/day
+  1408→                     (pay-as-you-go                sufficient for pilot
+  1409→                      if exceeded)                 search usage
+  1410→
+  1411→Field agent data     MTN/Orange    ~10,000 XAF     ~200MB/agent/month
+  1412→                     mobile data   (~$16 USD)      for 20 agents total
+  1413→                     per agent     total for 20    (ADL should provide
+  1414→                                                   data bundles)
+  1415→
+  1416→SMS notifications    (optional)    ~5,000 XAF      For assignment alerts
+  1417→                                   (~$8 USD)       50 SMS/month
+  1418→
+  1419→─────────────────────────────────────────────────────────
+  1420→Operational subtotal:              ~$24-44/month
+  1421→─────────────────────────────────────────────────────────
+  1422→
+  1423→TOTAL MONTHLY COST (PILOT):       ~$44-65/month
+  1424→TOTAL 6-WEEK PILOT COST:          ~$66-98
+  1425→```
+  1426→
+  1427→### 6.2 Scaling Cost Curve
+  1428→
+  1429→```
+  1430→SCALING MODEL
+  1431→══════════════
+  1432→
+  1433→                    PILOT        10x              100x
+  1434→                    (now)        (6 months)       (2 years)
+  1435→──────────────────────────────────────────────────────────────
+  1436→Field agents        10-20        100-200          1,000-2,000
+  1437→POIs                500          5,000            50,000
+  1438→Events/month        2,000        20,000           200,000
+  1439→Photos/month        1,500        15,000           150,000
+  1440→Photo storage       700 MB       7 GB             70 GB
+  1441→DB size             100 MB       1 GB             10 GB
+  1442→API calls/month     50K          500K             5M
+  1443→Bandwidth/month     5 GB         50 GB            500 GB
+  1444→──────────────────────────────────────────────────────────────
+  1445→
+  1446→COST AT EACH SCALE
+  1447→──────────────────────────────────────────────────────────────
+  1448→
+  1449→                    PILOT        10x              100x
+  1450→──────────────────────────────────────────────────────────────
+  1451→Vercel              $20          $20              $150-300
+  1452→                    (Pro)        (Pro, still      (Enterprise, or
+  1453→                                 within limits)   migrate to
+  1454→                                                  self-hosted)
+  1455→
+  1456→Neon Postgres       $0           $19              $69-199
+  1457→                    (Free)       (Launch)         (Scale/Business)
+  1458→
+  1459→Photo storage       $0           $20-50           $100-300
+  1460→                    (included    (Vercel Blob     (migrate to
+  1461→                     in Vercel)  overages or      Cloudflare R2
+  1462→                                 Cloudflare R2)   or S3)
+  1463→
+  1464→Agent data          $16          $160             $1,600
+  1465→                    (20 agents)  (200 agents)     (2,000 agents)
+  1466→
+  1467→Total infra         $20          $60-90           $320-800
+  1468→Total w/ ops        $44-65       $250-400         $2,000-4,000
+  1469→──────────────────────────────────────────────────────────────
+  1470→
+  1471→KEY INFLECTION POINTS:
+  1472→  - At ~5,000 POIs: Neon Free Tier runs out of storage -> $19/mo
+  1473→  - At ~5 GB photos: Vercel Blob limits hit -> add Cloudflare R2
+  1474→  - At ~100 GB bandwidth: Vercel Pro bandwidth limit -> Enterprise
+  1475→  - At ~200 agents: consider moving API to self-hosted (Hetzner/Fly.io)
+  1476→    to control costs and add African-region server
+  1477→
+  1478→MIGRATION TRIGGERS (from current Vercel-only stack):
+  1479→  1. If API latency from Cameroon consistently > 2s:
+  1480→     Add a compute node in EU-West or Africa (Fly.io has JNB region)
+  1481→  2. If photo storage > 10 GB:
+  1482→     Migrate to Cloudflare R2 (free egress, $0.015/GB storage)
+  1483→  3. If monthly Vercel bill > $300:
+  1484→     Move API to Fly.io or Railway, keep Vercel for frontend CDN
+  1485→```
+  1486→
+  1487→### 6.3 Single Points of Failure and Mitigation
+  1488→
+  1489→```
+  1490→FAILURE MODE ANALYSIS
+  1491→══════════════════════
+  1492→
+  1493→COMPONENT              SPOF?   IMPACT           MITIGATION
+  1494→──────────────────────────────────────────────────────────────────
+  1495→
+  1496→Vercel Platform        YES     Total API         - Client-side offline queue
+  1497→                               outage            absorbs submissions
+  1498→                                                 - Edge Config fallback for
+  1499→                                                 reads (already implemented)
+  1500→                                                 - Vercel has 99.99% SLA
+  1501→                                                 on Pro plan
+  1502→                                                 - Status: status.vercel.com
+  1503→
+  1504→Neon PostgreSQL        YES     No writes,        - Edge Config read fallback
+  1505→                               degraded reads    (already implemented)
+  1506→                                                 - StorageUnavailableError
+  1507→                                                 handling (already in db.ts)
+  1508→                                                 - Client queue absorbs
+  1509→                                                 write failures
+  1510→                                                 - Neon: 99.95% SLA
+  1511→
+  1512→Vercel Blob Storage    YES     No photo          - Photos staged locally in
+  1513→                               uploads           IndexedDB until upload
+  1514→                                                 succeeds
+  1515→                                                 - Text submissions still
+  1516→                                                 work without photos
+  1517→                                                 - Blob has Vercel's SLA
+  1518→
+  1519→MTN/Orange Network     YES     No sync from      - THIS IS THE #1 RISK
+  1520→(Cameroon cellular)            field              - Offline-first design
+  1521→                                                 makes this a delay,
+  1522→                                                 not a failure
+  1523→                                                 - Agent can capture all
+  1524→                                                 day and sync at end of
+  1525→                                                 day from better location
+  1526→                                                 - WiFi at team office as
+  1527→                                                 backup sync point
+  1528→
+  1529→Power Grid (ENEO)      NO      Phone batteries   - Mid-range Android phones
+  1530→                               die                have 4000-5000 mAh
+  1531→                                                 - 8-10 hours active use
+  1532→                                                 - Portable power banks
+  1533→                                                 ($5-10) as field kit
+  1534→                                                 - Data in IndexedDB
+  1535→                                                 survives restart
+  1536→
+  1537→Field Agent Phone      NO      Agent loses       - IndexedDB persists across
+  1538→                               work              app restarts
+  1539→                                                 - Synced data is on server
+  1540→                                                 - Unsynced data is at risk
+  1541→                                                 only if phone is destroyed
+  1542→                                                 before ever syncing
+  1543→
+  1544→Admin Single Person    YES     Review queue       - Multiple admins (2-3)
+  1545→                               blocked           - Auto-approve rules for
+  1546→                                                 low-risk submissions
+  1547→                                                 - Confidence score auto-
+  1548→                                                 publishing (Section 4.4
+  1549→                                                 of Teammate 2's doc)
+  1550→```
+  1551→
+  1552→### 6.4 Disaster Recovery Plan
+  1553→
+  1554→```
+  1555→DISASTER RECOVERY
+  1556→══════════════════
+  1557→
+  1558→SCENARIO 1: Neon PostgreSQL data loss
+  1559→  Prevention:
+  1560→    - Neon provides point-in-time recovery (PITR) on paid plans
+  1561→    - On Free Tier: no automatic PITR
+  1562→
+  1563→  Recovery plan (pilot):
+  1564→    1. Events are the source of truth. All other tables are derived.
+  1565→    2. Weekly: run pg_dump via Neon console, store in Vercel Blob
+  1566→    3. If data loss: restore from latest dump
+  1567→    4. Replay any events from agent offline queues that haven't
+  1568→       been acknowledged
+  1569→    5. Re-run snapshot engine to rebuild snapshots/deltas/stats
+  1570→
+  1571→  Recovery time: 1-4 hours
+  1572→  Data loss window: up to 7 days (weekly backup) minus any
+  1573→    events still in agent offline queues
+  1574→
+  1575→SCENARIO 2: Vercel Blob storage loss (photos)
+  1576→  Prevention: Vercel Blob is backed by Cloudflare R2 with
+  1577→    11 nines durability.
+  1578→
+  1579→  Recovery plan:
+  1580→    - Photos are evidence, not source data. Loss is painful
+  1581→      but not catastrophic -- the event data survives.
+  1582→    - Re-collection of photos can be done on next field visit.
+  1583→    - For pilot: accept the risk. At scale: replicate to a
+  1584→      second blob store.
+  1585→
+  1586→SCENARIO 3: Complete Vercel account compromise
+  1587→  Prevention:
+  1588→    - 2FA on Vercel account
+  1589→    - Separate admin accounts (no shared credentials)
+  1590→    - Environment variables for all secrets
+  1591→
+  1592→  Recovery plan:
+  1593→    1. Restore from git repository (all code is in GitHub)
+  1594→    2. Re-deploy to new Vercel project
+  1595→    3. Restore database from Neon backup
+  1596→    4. Update DNS
+  1597→    5. Recovery time: 2-4 hours
+  1598→
+  1599→BACKUP SCHEDULE (PILOT):
+  1600→  - Database (pg_dump):  Weekly, stored in Vercel Blob
+  1601→  - Code:                Continuous (GitHub, already in place)
+  1602→  - Config (.env):       Documented in .env.example (already exists)
+  1603→  - Photos:              No backup (accept risk for pilot)
+  1604→```
+  1605→
+  1606→### 6.5 SLA Targets
+  1607→
+  1608→```
+  1609→SLA TARGETS BY COMPONENT
+  1610→══════════════════════════
+  1611→
+  1612→Component               Target      Measurement
+  1613→──────────────────────────────────────────────────────────────
+  1614→API availability        99.5%       Uptime of /api/health endpoint
+  1615→                                    (Vercel provides 99.99%, but
+  1616→                                    Neon free tier may have more
+  1617→                                    downtime, so target 99.5%)
+  1618→
+  1619→Submission acceptance   99.9%       % of submissions accepted within
+  1620→                                    24 hours of creation (including
+  1621→                                    offline queue retry). NOT
+  1622→                                    real-time -- offline-first means
+  1623→                                    eventual consistency.
+  1624→
+  1625→Photo upload success    95%         % of photos successfully uploaded
+  1626→                                    within 48 hours of capture.
+  1627→                                    5% tolerance for persistent
+  1628→                                    network issues.
+  1629→
+  1630→Snapshot freshness      < 7 days    Time between snapshot runs.
+  1631→                                    Weekly cron on Monday 03:00 UTC.
+  1632→                                    Transport road: < 24 hours
+  1633→                                    during rainy season.
+  1634→
+  1635→Admin review response   < 48 hours  Time from flagged submission to
+  1636→                                    admin decision (approve/reject).
+  1637→
+  1638→Delta publication       < 24 hours  Time from snapshot run to delta
+  1639→                                    availability in /api/data/deltas.
+  1640→
+  1641→Data export             < 5 minutes Time to generate and serve a
+  1642→                                    full CSV/GeoJSON export.
+  1643→
+  1644→Client API response     < 3 seconds p95 response time for GET
+  1645→                                    /api/data/* endpoints.
+  1646→                                    (Limited by Cameroon network
+  1647→                                    latency, not server processing.)
+  1648→```
+  1649→
+  1650→---
+  1651→
+  1652→## 7. Technology Choices
+  1653→
+  1654→### 7.1 Decision Matrix
+  1655→
+  1656→| Decision | Choice | Alternatives Considered | Why This Fits Cameroon Context |
+  1657→|---|---|---|---|
+  1658→| **Hosting** | Vercel (keep) | Fly.io, Railway, Hetzner, AWS | Already deployed; free SSL; global CDN reduces latency from Douala; serverless = no server to manage; generous free/Pro tier for pilot budget |
+  1659→| **Database** | Neon PostgreSQL (keep) | Supabase, PlanetScale, CockroachDB, Turso | Already in use; free tier covers pilot; serverless scaling; JSONB support critical for flexible event details; familiar SQL |
+  1660→| **File Storage** | Vercel Blob (keep) | Cloudflare R2, AWS S3, Supabase Storage | Already integrated; CDN-backed; simple API; 5 GB on Pro plan; migrate to R2 at scale for cost savings |
+  1661→| **Offline Storage** | IndexedDB (keep, enhance) | SQLite (via sql.js), localStorage | Already implemented; 50MB+ capacity on Android Chrome; no native dependency needed; good enough for queue + cache |
+  1662→| **Frontend Framework** | React 19 + Vite (keep) | Next.js, SvelteKit, Remix | Already built; SPA model works well for PWA; no SSR needed for field app; fast builds with Vite |
+  1663→| **Maps** | Leaflet (keep) | Mapbox GL JS, Google Maps | Already integrated; free; OpenStreetMap tiles work offline with caching; no API key required |
+  1664→| **Auth** | @auth/core (keep) | Clerk, Auth0, Supabase Auth | Already implemented; supports Google + email/password; no extra cost; add phone auth later |
+  1665→| **AI Search** | Google Gemini (keep) | OpenAI, Anthropic, local model | Already integrated; free tier sufficient; server-side only (no client cost) |
+  1666→| **Monitoring** | Vercel Analytics (keep) + add Sentry (free tier) | Datadog, New Relic | Analytics already integrated; add Sentry for error tracking at $0/month (free 5K events) |
+  1667→| **Cron** | Vercel Cron (keep) | GitHub Actions, external cron | Already configured; no extra service to manage |
+  1668→
+  1669→### 7.2 Build vs Buy Decisions
+  1670→
+  1671→```
+  1672→BUILD vs BUY ANALYSIS
+  1673→══════════════════════
+  1674→
+  1675→FEATURE                  DECISION    RATIONALE
+  1676→──────────────────────────────────────────────────────────────
+  1677→
+  1678→Offline queue            BUILD       Already built. Custom queue
+  1679→                         (keep)      fits event-sourced model perfectly.
+  1680→                                     No off-the-shelf solution handles
+  1681→                                     the ADL-specific priority +
+  1682→                                     bandwidth-aware sync.
+  1683→
+  1684→Photo compression        BUILD       ~50 lines of canvas API code.
+  1685→                                     No library needed. Ship faster.
+  1686→
+  1687→Sync engine              BUILD       Already built. The adaptive
+  1688→                         (enhance)   bandwidth layer is ~200 lines.
+  1689→                                     Libraries like Workbox don't
+  1690→                                     fit the custom sync priority model.
+  1691→
+  1692→Snapshot engine          BUILD       Already built. Core business logic.
+  1693→                         (keep)      No off-the-shelf delta computation
+  1694→                                     exists for this data model.
+  1695→
+  1696→Fraud detection          BUILD       Already built. Domain-specific
+  1697→                         (keep)      (EXIF + haversine + IP).
+  1698→
+  1699→Auth                     BUY         @auth/core is already integrated.
+  1700→                         (keep)      Building auth from scratch is a
+  1701→                                     security risk for no benefit.
+  1702→
+  1703→Maps + tiles             BUY         Leaflet + OSM tiles. Free, proven,
+  1704→                         (keep)      offline-cacheable.
+  1705→
+  1706→Database                 BUY         Neon PostgreSQL. No reason to
+  1707→                         (keep)      self-host for pilot.
+  1708→
+  1709→Hosting                  BUY         Vercel. No reason to manage
+  1710→                         (keep)      infrastructure for pilot.
+  1711→
+  1712→Error monitoring         BUY         Add Sentry free tier. 5 minutes
+  1713→                         (add)       to integrate, massive debugging
+  1714→                                     value for field issues.
+  1715→
+  1716→Push notifications       DEFER       Not needed for pilot. Agents
+  1717→                                     check app manually. Add Firebase
+  1718→                                     Cloud Messaging later if needed.
+  1719→
+  1720→Real-time updates        DEFER       Not needed for pilot. Weekly
+  1721→(WebSocket/SSE)                      snapshots are sufficient. Add
+  1722→                                     Supabase Realtime or Pusher
+  1723→                                     if daily road updates require
+  1724→                                     push to admin dashboard.
+  1725→```
+  1726→
+  1727→### 7.3 Migration Path from Current Stack
+  1728→
+  1729→```
+  1730→MIGRATION ROADMAP
+  1731→══════════════════
+  1732→
+  1733→The current stack requires NO migration for the pilot. All recommendations
+  1734→extend the existing system. Here is the change inventory:
+  1735→
+  1736→PHASE 1: PILOT PREP (Week -2 to Week 0)
+  1737→─────────────────────────────────────────
+  1738→Changes to existing code:
+  1739→
+  1740→1. lib/client/offlineQueue.ts
+  1741→   - Add priority field to QueueItem
+  1742→   - Add photo staging store (new IndexedDB object store)
+  1743→   - Add local_poi_cache store
+  1744→   - Upgrade DB_VERSION from 2 to 3
+  1745→
+  1746→2. lib/client/submissionSync.ts
+  1747→   - Add bandwidth measurement (Navigator.connection + HEAD probe)
+  1748→   - Add priority-based sync filtering
+  1749→   - Add separate text/photo upload paths
+  1750→
+  1751→3. New file: lib/client/poiCache.ts
+  1752→   - Download and cache POIs from GET /api/submissions?offline=true
+  1753→   - LRU eviction
+  1754→   - Max-age 24 hours
+  1755→
+  1756→4. New file: lib/client/syncStatus.ts
+  1757→   - Observable sync state for UI
+  1758→   - Connection quality indicator
+  1759→   - Data usage tracking
+  1760→
+  1761→5. api/submissions/index.ts
+  1762→   - Add offline=true query param handler
+  1763→   - Add content_hash dedup
+  1764→   - Add admin review flag logic
+  1765→
+  1766→6. New files: api/admin/*.ts
+  1767→   - Assignment management endpoints
+  1768→   - Review queue endpoints
+  1769→   - Agent performance endpoints
+  1770→
+  1771→7. New files: api/data/*.ts
+  1772→   - Delta feed endpoint
+  1773→   - Export endpoint (CSV, GeoJSON)
+  1774→   - Client API key auth middleware
+  1775→
+  1776→8. supabase/migrations/
+  1777→   - Add collection_assignments table
+  1778→   - Add api_keys table
+  1779→   - Add content_hash column to point_events
+  1780→   - Add is_baseline column to snapshot_stats
+  1781→   - Add monthly_stats table
+  1782→
+  1783→9. vercel.json
+  1784→   - Add daily cron for transport_road (rainy season)
+  1785→   - Add monthly cron for monthly_stats
+  1786→   - Add cache headers for API routes
+  1787→
+  1788→10. package.json
+  1789→    - Add @sentry/browser (error tracking)
+  1790→    - No other new dependencies needed
+  1791→
+  1792→
+  1793→PHASE 2: PILOT (Weeks 1-6)
+  1794→───────────────────────────
+  1795→No infrastructure changes during pilot. Focus on:
+  1796→  - Monitoring sync success rates
+  1797→  - Adjusting compression quality if photos too large
+  1798→  - Adjusting backoff timers based on Cameroon network reality
+  1799→  - Manual weekly database backups (pg_dump)
+  1800→
+  1801→PHASE 3: POST-PILOT SCALING (if pilot succeeds)
+  1802→─────────────────────────────────────────────────
+  1803→Conditional on pilot results:
+  1804→
+  1805→  IF photo storage > 5 GB:
+  1806→    Migrate to Cloudflare R2 ($0.015/GB/month, free egress)
+  1807→
+  1808→  IF API latency from Cameroon consistently > 2s:
+  1809→    Deploy API to Fly.io EU-West or JNB region
+  1810→    Keep Vercel for frontend CDN
+  1811→
+  1812→  IF database > 0.5 GB:
+  1813→    Upgrade Neon to Launch plan ($19/month)
+  1814→    Enable PITR for disaster recovery
+  1815→
+  1816→  IF > 50 field agents:
+  1817→    Consider native Android app (React Native or Capacitor)
+  1818→    for better camera/GPS/battery control
+  1819→
+  1820→  IF real-time road updates needed:
+  1821→    Add WebSocket layer (Supabase Realtime or Pusher)
+  1822→    for push notifications to admin dashboard
+  1823→```
+  1824→
+  1825→### 7.4 Why Not a Native Mobile App?
+  1826→
+  1827→```
+  1828→PWA vs NATIVE APP DECISION
+  1829→════════════════════════════
+  1830→
+  1831→Decision: Stay with PWA (Progressive Web App) for pilot.
+  1832→
+  1833→FACTOR              PWA (current)                  NATIVE (future)
+  1834→──────────────────────────────────────────────────────────────────
+  1835→Development cost    $0 (already built)             $10,000-30,000
+  1836→Time to market      0 weeks (done)                 8-12 weeks
+  1837→Update deployment   Instant (Vercel deploy)        Play Store review (days)
+  1838→Offline support     IndexedDB (sufficient)         SQLite (more powerful)
+  1839→Camera access       Good (MediaDevices API)        Excellent (full control)
+  1840→GPS accuracy        Good (Geolocation API)         Excellent (raw GNSS)
+  1841→Battery control     Limited                        Full (JobScheduler)
+  1842→Background sync     Service Worker (limited)       WorkManager (robust)
+  1843→File size limit     ~50 MB (IndexedDB)             Unlimited (filesystem)
+  1844→Install friction    "Add to Home Screen" prompt    Play Store install
+  1845→Agent familiarity   Opens in Chrome (familiar)     New app (training)
+  1846→──────────────────────────────────────────────────────────────────
+  1847→
+  1848→Verdict: PWA is sufficient for 500 POIs and 20 agents. The main
+  1849→limitations (background sync, battery control) are manageable
+  1850→with the adaptive sync engine described in Section 4. Switch to
+  1851→native (React Native + Expo) only if pilot reveals:
+  1852→  - Background sync failures > 10% of submissions
+  1853→  - Battery drain complaints from agents
+  1854→  - Photo quality issues requiring raw camera control
+  1855→  - Need for > 50 MB local storage per agent
+  1856→```
+  1857→
+  1858→---
+  1859→
+  1860→## Summary: Architecture Decision Records
+  1861→
+  1862→| ADR | Decision | Status |
+  1863→|---|---|---|
+  1864→| ADR-001 | Keep Vercel as hosting platform | Confirmed |
+  1865→| ADR-002 | Keep Neon PostgreSQL as primary database | Confirmed |
+  1866→| ADR-003 | Keep Vercel Blob for photo storage | Confirmed |
+  1867→| ADR-004 | Enhance IndexedDB offline queue (not replace) | New |
+  1868→| ADR-005 | Add client-side photo compression pipeline | New |
+  1869→| ADR-006 | Add bandwidth-aware sync with priority levels | New |
+  1870→| ADR-007 | Add local POI cache for offline map display | New |
+  1871→| ADR-008 | Add content-hash deduplication on server | New |
+  1872→| ADR-009 | Add API key auth for data consumer endpoints | New |
+  1873→| ADR-010 | Add Sentry for error monitoring | New |
+  1874→| ADR-011 | Stay with PWA (defer native app) | Confirmed |
+  1875→| ADR-012 | Add daily cron for transport_road during rainy season | New |
+  1876→| ADR-013 | Weekly pg_dump backup to Vercel Blob | New |
+  1877→| ADR-014 | Migrate to Cloudflare R2 at > 5 GB photos | Deferred |
+  1878→| ADR-015 | Migrate API to Fly.io at > $300/month Vercel bill | Deferred |
+  1879→
+  1880→**Total new dependencies:** 1 (@sentry/browser)
+  1881→**Total new API routes:** 11
+  1882→**Total new database tables:** 2 (api_keys, monthly_stats) + 2 columns
+  1883→**Total new IndexedDB stores:** 4
+  1884→**Estimated implementation effort:** 3-4 developer-weeks
+  1885→**Monthly infrastructure cost (pilot):** $20-65
+  1886→
+  1887→---
+  1888→
+  1889→## Sources and References
+  1890→
+  1891→- Vercel Pro pricing: https://vercel.com/pricing
+  1892→- Neon PostgreSQL pricing: https://neon.tech/pricing
+  1893→- Cloudflare R2 pricing: https://developers.cloudflare.com/r2/pricing/
+  1894→- Cameroon mobile data pricing: MTN Cameroon and Orange Cameroon rate cards
+  1895→- Navigator.connection API: https://developer.mozilla.org/en-US/docs/Web/API/NetworkInformation
+  1896→- IndexedDB storage limits: https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria
+  1897→- Vercel Blob documentation: https://vercel.com/docs/storage/vercel-blob
+  1898→- Neon PITR documentation: https://neon.tech/docs/introduction/point-in-time-restore
+  1899→- Sentry JavaScript SDK: https://docs.sentry.io/platforms/javascript/
+  1900→- Fly.io regions (including JNB): https://fly.io/docs/reference/regions/
+  1901→

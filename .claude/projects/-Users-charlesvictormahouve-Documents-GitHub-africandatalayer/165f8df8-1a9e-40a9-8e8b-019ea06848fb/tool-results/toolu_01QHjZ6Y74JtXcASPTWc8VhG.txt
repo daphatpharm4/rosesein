@@ -1,0 +1,888 @@
+     1→# ADL Cloud Architecture Document
+     2→
+     3→**Author:** Teammate 1 -- Cloud Architect
+     4→**Date:** 2026-02-27
+     5→**Status:** Living document -- updates with each scaling phase
+     6→**Scope:** Full cloud architecture for African Data Layer (ADL), from current MVP through 100K+ contributors
+     7→
+     8→---
+     9→
+    10→## Table of Contents
+    11→
+    12→1. [Architecture Vision & Principles](#1-architecture-vision--principles)
+    13→2. [Target Cloud Architecture](#2-target-cloud-architecture)
+    14→3. [Environments](#3-environments)
+    15→4. [Networking & Edge Strategy](#4-networking--edge-strategy)
+    16→5. [Data Architecture](#5-data-architecture)
+    17→6. [Governance & Compliance](#6-governance--compliance)
+    18→7. [Cost & Reliability Tradeoffs](#7-cost--reliability-tradeoffs)
+    19→8. [Recommendations & Migration Path](#8-recommendations--migration-path)
+    20→
+    21→---
+    22→
+    23→## 1. Architecture Vision & Principles
+    24→
+    25→### 1.1 Vision Statement
+    26→
+    27→ADL's architecture must serve contributors on low-end Android devices over 2G/3G networks in Douala, Lagos, Nairobi, and eventually every major African city. Every architectural decision is filtered through three lenses: **does it work offline?**, **does it work on a $50 phone with 1 GB RAM?**, and **does it survive 300 ms+ round-trip latency to the nearest PoP?**
+    28→
+    29→### 1.2 Core Principles
+    30→
+    31→| # | Principle | Rationale |
+    32→|---|-----------|-----------|
+    33→| P1 | **Serverless-first** | Zero idle cost, automatic scaling, no ops team required at MVP stage. Current stack (Vercel Functions + Supabase) already follows this. |
+    34→| P2 | **Offline-first is non-negotiable** | Contributors in Bonamoussadi and beyond face intermittent connectivity. The existing `lib/client/offlineQueue.ts` IndexedDB queue with exponential backoff already implements this; architecture must never regress it. |
+    35→| P3 | **Africa-optimized edge delivery** | Vercel's edge network has PoPs in Johannesburg, Nairobi, and Cairo. Static assets and public API reads (`s-maxage=30, stale-while-revalidate=300` as in `api/submissions/index.ts`) must always be served from edge. |
+    36→| P4 | **Append-only event sourcing** | `point_events` table is the source of truth, projected into `ProjectedPoint` views via `lib/server/pointProjection.ts`. Never mutate raw events; always project. This enables audit trails and replay. |
+    37→| P5 | **Minimal egress, maximal caching** | African mobile data is expensive. Compress aggressively, cache at edge, serve delta updates where possible. |
+    38→| P6 | **Cost proportional to usage** | Startup economics: $0/mo at zero traffic, linear scaling. No fixed-cost infrastructure until 10K+ users force it. |
+    39→| P7 | **Data sovereignty by default** | User data stays in the continent. Supabase project in EU (closest available) now; migrate to Africa-region when available. |
+    40→| P8 | **Progressive complexity** | Start with Vercel + Supabase. Add components only when bottlenecks are measured, never speculated. |
+    41→
+    42→### 1.3 Non-Functional Requirements
+    43→
+    44→| Metric | MVP (now) | Phase 2 (10K) | Phase 3 (100K) |
+    45→|--------|-----------|---------------|----------------|
+    46→| API p95 latency (Africa) | < 2s | < 800ms | < 400ms |
+    47→| Offline submission queue max | 50 items | 200 items | 500 items |
+    48→| Photo upload size cap | 8 MB (`MAX_SUBMISSION_IMAGE_BYTES`) | 8 MB | 5 MB (auto-compress) |
+    49→| Uptime SLA | 99% | 99.5% | 99.9% |
+    50→| RTO / RPO | 4h / 24h | 1h / 1h | 15min / 5min |
+    51→
+    52→---
+    53→
+    54→## 2. Target Cloud Architecture
+    55→
+    56→### 2.1 Current Architecture (As-Built)
+    57→
+    58→```
+    59→                          CONTRIBUTORS (Mobile/PWA)
+    60→                                    |
+    61→                        [Offline Queue - IndexedDB]
+    62→                        lib/client/offlineQueue.ts
+    63→                                    |
+    64→                          [Online? Flush queue]
+    65→                        lib/client/submissionSync.ts
+    66→                                    |
+    67→                    +---------- HTTPS ----------+
+    68→                    |                           |
+    69→          +--------v---------+      +-----------v-----------+
+    70→          |  Vercel CDN/Edge |      |  Vercel CDN/Edge      |
+    71→          |  Static Assets   |      |  API Routing           |
+    72→          |  (dist/)         |      |  (vercel.json)         |
+    73→          +------------------+      +-----------+-----------+
+    74→                                                |
+    75→                              +-----------------+-----------------+
+    76→                              |                 |                 |
+    77→                    +---------v---+   +---------v---+   +---------v---+
+    78→                    | /api/auth   |   | /api/sub    |   | /api/leader |
+    79→                    | [...auth]   |   | missions    |   | board       |
+    80→                    | register    |   | index.ts    |   | index.ts    |
+    81→                    | signin      |   | [id].ts     |   |             |
+    82→                    +------+------+   +------+------+   +------+------+
+    83→                           |                |                  |
+    84→                    +------v------+  +------v------+   +------v------+
+    85→                    | Auth.js     |  | Vercel Blob |   |             |
+    86→                    | JWT/Cookie  |  | (Photos)    |   |             |
+    87→                    +-------------+  +-------------+   |             |
+    88→                           |                |          |             |
+    89→                    +------v-----------v-----------v---+             |
+    90→                    |        Supabase PostgreSQL                     |
+    91→                    |        - user_profiles                         |
+    92→                    |        - point_events (append-only)            |
+    93→                    +-----------------------------------------------+
+    94→                                        |
+    95→                              [Edge Config - Legacy Fallback]
+    96→                              lib/server/storage/edgeFallbackStore.ts
+    97→```
+    98→
+    99→### 2.2 Key Current Components Mapped to Files
+   100→
+   101→| Component | File(s) | Role |
+   102→|-----------|---------|------|
+   103→| **Offline queue** | `lib/client/offlineQueue.ts` | IndexedDB-backed queue with idempotency keys, exponential backoff, permanent failure tracking |
+   104→| **Submission sync** | `lib/client/submissionSync.ts` | HTTP POST to `/api/submissions` with `X-Idempotency-Key` header, retryable error classification |
+   105→| **API client** | `lib/client/api.ts` | `apiFetch` wrapper with `credentials: "include"`, configurable `VITE_API_BASE` |
+   106→| **Device profiling** | `lib/client/deviceProfile.ts` | Collects `deviceMemoryGb`, `hardwareConcurrency`, `isLowEnd` for fraud signals |
+   107→| **Auth** | `lib/auth.ts`, `api/auth/` | Auth.js with JWT decode, cookie-based sessions, Google OAuth + credentials |
+   108→| **Storage abstraction** | `lib/server/storage/index.ts` | Driver pattern: `postgres` (primary) with `edge` fallback when `DATA_READ_FALLBACK_EDGE=true` |
+   109→| **Postgres store** | `lib/server/storage/postgresStore.ts` | Direct `pg.Pool` queries, `max=5` connections, 10s query timeout |
+   110→| **DB connection** | `lib/server/db.ts` | Pool management with `StorageUnavailableError` classification, SSL handling |
+   111→| **Fraud detection** | `lib/server/submissionFraud.ts` | EXIF GPS extraction, haversine distance checks (1 km submission, 50 km IP), device fingerprinting |
+   112→| **Geofencing** | `shared/geofence.ts` | Bounding boxes for Bonamoussadi and Cameroon; `isWithinBonamoussadi()`, `isWithinCameroon()` |
+   113→| **Point projection** | `lib/server/pointProjection.ts` | Event sourcing projector: `point_events` -> `ProjectedPoint` with gap analysis |
+   114→| **Photo upload** | `api/submissions/index.ts` | Base64 decode -> `@vercel/blob` PUT, public access, max 8 MB |
+   115→| **AI integration** | `lib/gemini.ts` | Gemini 2.5 Flash for location search with Google Maps grounding, TTS, audio transcription |
+   116→
+   117→### 2.3 Target Architecture (Phase 2-3)
+   118→
+   119→```
+   120→                    CONTRIBUTORS              API CONSUMERS
+   121→                   (Mobile PWA)               (REST/GraphQL)
+   122→                        |                          |
+   123→              [IndexedDB Queue]                    |
+   124→              [Service Worker]                     |
+   125→                        |                          |
+   126→           +------------v--------------------------v-----------+
+   127→           |              Vercel Edge Network                   |
+   128→           |  +------------+  +-------------+  +------------+  |
+   129→           |  | Edge Cache  |  | Edge MW     |  | WAF/Rate   |  |
+   130→           |  | Static+API  |  | Auth check  |  | Limiter    |  |
+   131→           |  | s-maxage=30 |  | Geo-routing |  | Bot detect |  |
+   132→           |  +------+-----+  +------+------+  +------+-----+  |
+   133→           +---------|--------------|-----------------|---------+
+   134→                     |              |                 |
+   135→           +---------v--------------v-----------------v---------+
+   136→           |            Vercel Serverless Functions              |
+   137→           |  +----------+ +----------+ +----------+ +-------+  |
+   138→           |  | /api/auth | | /api/sub | | /api/ldr | | /api/ |  |
+   139→           |  |           | | missions | | board    | | user  |  |
+   140→           |  +-----+-----+ +----+----+ +----+----+ +---+---+  |
+   141→           +--------|------------|------------|----------|-------+
+   142→                    |            |            |          |
+   143→        +-----------v-+  +------v------+     |          |
+   144→        | Auth.js     |  | Vercel Blob |     |          |
+   145→        | Google OAuth|  | (Photos)    |     |          |
+   146→        +-------------+  +------+------+     |          |
+   147→                                |            |          |
+   148→           +--------------------v------------v----------v------+
+   149→           |              Supabase PostgreSQL                   |
+   150→           |   +------------------+  +----------------------+  |
+   151→           |   | user_profiles    |  | point_events         |  |
+   152→           |   | (phone column)   |  | (append-only log)    |  |
+   153→           |   +------------------+  | (partitioned by mo.) |  |
+   154→           |                         +----------------------+  |
+   155→           |   +------------------+  +----------------------+  |
+   156→           |   | point_projections|  | fraud_signals        |  |
+   157→           |   | (materialized)   |  | (async computed)     |  |
+   158→           |   +------------------+  +----------------------+  |
+   159→           |                                                    |
+   160→           |   Supabase Realtime (WebSocket)                   |
+   161→           |   - New submission notifications                   |
+   162→           |   - Leaderboard live updates                       |
+   163→           +----------------------------------------------------+
+   164→                                |
+   165→                    +-----------v-----------+
+   166→                    |   Supabase Edge Funcs  |
+   167→                    |   (Async processing)   |
+   168→                    |   - Photo resize       |
+   169→                    |   - Fraud scoring       |
+   170→                    |   - XP recalculation    |
+   171→                    +------------------------+
+   172→```
+   173→
+   174→### 2.4 Component Decisions
+   175→
+   176→| Component | Current | Phase 2 | Phase 3+ | Rationale |
+   177→|-----------|---------|---------|----------|-----------|
+   178→| CDN | Vercel Edge | Vercel Edge | Vercel Edge + Cloudflare R2 | Vercel edge PoPs in JNB/NBO/CAI cover primary African markets |
+   179→| Compute | Vercel Functions (Node.js) | Same + Edge Middleware | Same + dedicated workers | Fluid compute keeps cold starts low |
+   180→| Database | Supabase PostgreSQL (single) | + Connection pooling (pgBouncer) + read replica | + Partitioning + Citus/Neon branching | Current `max=5` pool is fine for MVP |
+   181→| Blob Storage | Vercel Blob | Same + CDN caching headers | + Image optimization pipeline | Photos already served with public URLs |
+   182→| Auth | Auth.js (JWT cookies) | Same | Same + phone OTP via Africa's Talking | Google OAuth works; phone auth needed for feature phone users |
+   183→| Queue | Client-side IndexedDB only | + Supabase Database Webhooks | + Upstash Redis Queue / QStash | No server-side queue exists today -- needed for async fraud scoring |
+   184→| Cache | HTTP `s-maxage=30` | + Vercel Edge Config for hot data | + Redis (Upstash) for session cache | Current 30s cache is appropriate for MVP data freshness |
+   185→| Real-time | None | Supabase Realtime | Same | Leaderboard and admin review need push updates |
+   186→| AI | Gemini API (client-side key!) | Move to server-side proxy | Same + batch geocoding pipeline | `lib/gemini.ts` exposes API key via `process.env.API_KEY` in Vite define -- security risk |
+   187→| Monitoring | Vercel Analytics + Speed Insights | + Sentry for error tracking | + Custom observability dashboard | `@vercel/analytics` and `@vercel/speed-insights` already in `package.json` |
+   188→
+   189→---
+   190→
+   191→## 3. Environments
+   192→
+   193→### 3.1 Environment Strategy
+   194→
+   195→| Environment | Branch | URL Pattern | Database | Purpose |
+   196→|-------------|--------|-------------|----------|---------|
+   197→| **Production** | `main` | `africandatalayer.vercel.app` | Supabase `prod` project | Live users, real data |
+   198→| **Staging** | `staging` | `staging-africandatalayer.vercel.app` | Supabase `staging` project (separate) | Pre-release validation, seed data |
+   199→| **Development** | `dev` | `dev-africandatalayer.vercel.app` | Supabase `dev` project (separate) | Daily development, synthetic data |
+   200→| **Preview** | PR branches | `<branch>-africandatalayer.vercel.app` | Shared `staging` database (read-only mode) | PR review, visual diffing |
+   201→
+   202→### 3.2 Environment Parity
+   203→
+   204→**Current gap:** There is only one Supabase project. All environments hit the same database.
+   205→
+   206→**Recommended changes:**
+   207→
+   208→1. **Create three Supabase projects:** `adl-prod`, `adl-staging`, `adl-dev`
+   209→2. **Environment variables per Vercel environment:**
+   210→   - `POSTGRES_URL` -> different for each environment
+   211→   - `BLOB_READ_WRITE_TOKEN` -> separate blob stores
+   212→   - `AUTH_SECRET` -> unique per environment
+   213→   - `EDGE_CONFIG` -> separate Edge Config stores
+   214→3. **Migration parity:** Use `supabase/migrations/` directory (already has `20260219_init_adl.sql` and `20260224_phone_identifier.sql`) with Supabase CLI `db push` in CI:
+   215→   ```bash
+   216→   # CI pipeline per environment
+   217→   supabase db push --db-url $POSTGRES_URL
+   218→   ```
+   219→
+   220→### 3.3 Data Isolation
+   221→
+   222→| Rule | Implementation |
+   223→|------|---------------|
+   224→| Production data never in staging | Separate Supabase projects with separate connection strings |
+   225→| Staging uses realistic synthetic data | Seed script `scripts/seed-edge-submissions.mjs` extended with Faker.js |
+   226→| Preview deployments are read-only | `DATA_STORE_DRIVER=postgres` with a read-only Postgres role |
+   227→| Secrets never shared across envs | Vercel Environment Variables scoped to Production/Preview/Development |
+   228→
+   229→### 3.4 Feature Flags
+   230→
+   231→**Current state:** Map scope is gated by `user_profiles.map_scope` column (`bonamoussadi`, `cameroon`, `global`). Admin-only features gated by `is_admin` boolean.
+   232→
+   233→**Recommended approach:**
+   234→
+   235→Use Vercel Edge Config for feature flags (already a dependency: `@vercel/edge-config`):
+   236→
+   237→```json
+   238→{
+   239→  "feature_flags": {
+   240→    "phone_auth_enabled": false,
+   241→    "cameroon_expansion": true,
+   242→    "realtime_leaderboard": false,
+   243→    "gemini_search_enabled": true,
+   244→    "max_submission_image_bytes": 8388608
+   245→  }
+   246→}
+   247→```
+   248→
+   249→This avoids adding another service and leverages what is already installed. Edge Config reads are sub-millisecond at the edge.
+   250→
+   251→---
+   252→
+   253→## 4. Networking & Edge Strategy
+   254→
+   255→### 4.1 CDN Configuration for Africa
+   256→
+   257→**Vercel Edge Network coverage relevant to ADL:**
+   258→
+   259→| PoP Location | Target Market | Latency to Douala |
+   260→|--------------|---------------|-------------------|
+   261→| Johannesburg (JNB) | Southern Africa | ~120ms |
+   262→| Nairobi (NBO) | East Africa | ~100ms |
+   263→| Cairo (CAI) | North Africa | ~150ms |
+   264→| Paris (CDG) | Francophone fallback | ~180ms |
+   265→| London (LHR) | Anglophone fallback | ~170ms |
+   266→
+   267→**Caching strategy for African users:**
+   268→
+   269→```
+   270→Static assets (JS/CSS/images):
+   271→  Cache-Control: public, max-age=31536000, immutable
+   272→  (Vite content-hashed filenames: index-QrY-Hdyj.js)
+   273→
+   274→Public API reads (/api/submissions GET, unauthenticated):
+   275→  Cache-Control: public, s-maxage=30, stale-while-revalidate=300
+   276→  (Already implemented in api/submissions/index.ts)
+   277→
+   278→Authenticated API reads:
+   279→  Cache-Control: private, no-cache
+   280→  (Must revalidate per user)
+   281→
+   282→Photo blobs (Vercel Blob):
+   283→  Cache-Control: public, max-age=86400
+   284→  (Photos are immutable once uploaded)
+   285→```
+   286→
+   287→### 4.2 API Routing and Edge Middleware
+   288→
+   289→**Current:** All API routes go through Vercel Functions (Node.js runtime). No edge middleware.
+   290→
+   291→**Recommended additions:**
+   292→
+   293→1. **Rate limiting middleware** (Edge Middleware at `middleware.ts`):
+   294→   ```
+   295→   /api/submissions POST -> 10 requests/minute per IP
+   296→   /api/auth/register POST -> 5 requests/minute per IP
+   297→   /api/auth/signin POST -> 10 requests/minute per IP
+   298→   ```
+   299→
+   300→2. **Geo-routing middleware:**
+   301→   - Read `request.geo.country` from Vercel Edge
+   302→   - Set `X-ADL-Country` header for downstream functions
+   303→   - Block requests from sanctioned countries
+   304→   - Route to nearest data source when multi-region is implemented
+   305→
+   306→3. **Auth pre-check at edge:**
+   307→   - Validate JWT signature at edge (fast rejection of expired/malformed tokens)
+   308→   - Current `lib/auth.ts` does full JWT decode in the function; move signature check to edge
+   309→
+   310→### 4.3 Real-Time Strategy
+   311→
+   312→**Current:** No real-time. All reads are polling-based.
+   313→
+   314→**Recommended: Supabase Realtime (WebSocket)**
+   315→
+   316→Supabase Realtime uses PostgreSQL's logical replication to push changes over WebSocket:
+   317→
+   318→```
+   319→Use cases:
+   320→1. Admin review queue: New submissions appear instantly
+   321→2. Leaderboard: XP changes propagate in real-time
+   322→3. Contributor notifications: "Your submission was approved"
+   323→
+   324→Channel structure:
+   325→- adl:submissions:{scope} -> New point_events for a map scope
+   326→- adl:leaderboard -> XP changes on user_profiles
+   327→- adl:admin -> Admin-targeted events
+   328→
+   329→Fallback: If WebSocket unavailable (aggressive firewalls in some
+   330→African networks), fall back to 30-second polling (current behavior).
+   331→```
+   332→
+   333→### 4.4 Offline-First Sync Protocol
+   334→
+   335→**Current implementation is solid.** Key components:
+   336→
+   337→```
+   338→1. ENQUEUE: User submits -> lib/client/offlineQueue.ts enqueueSubmission()
+   339→   - Generates idempotency key (crypto.randomUUID)
+   340→   - Stores in IndexedDB 'adl_offline_queue' store
+   341→   - Status: 'pending'
+   342→
+   343→2. FLUSH: Online detected -> App.tsx useEffect triggers flushOfflineQueue()
+   344→   - Uses requestIdleCallback (graceful on low-end devices)
+   345→   - Iterates pending items, respects nextRetryAt (backoff)
+   346→   - Sends via lib/client/submissionSync.ts sendSubmissionPayload()
+   347→   - X-Idempotency-Key header prevents duplicates
+   348→
+   349→3. BACKOFF: Failed sync -> exponential backoff
+   350→   - baseDelay = min(30000, 1000 * 2^retryCount)
+   351→   - jitter = random * 1000
+   352→   - Max 30s between retries
+   353→
+   354→4. PERMANENT FAILURE: Non-retryable errors -> SyncErrorRecord
+   355→   - Stored in 'submission_sync_errors' IndexedDB store
+   356→   - Surfaced to user via getQueueStats()
+   357→```
+   358→
+   359→**Infrastructure-level enhancements needed:**
+   360→
+   361→| Enhancement | Description | Priority |
+   362→|-------------|-------------|----------|
+   363→| **Server-side idempotency** | Check `X-Idempotency-Key` against a Redis/Postgres dedup table before inserting `point_events`. Currently the header is sent but not checked server-side. | HIGH |
+   364→| **Conflict resolution** | When two contributors submit CREATE_EVENT for the same physical location, merge into one `point_id`. Currently creates duplicates. | MEDIUM |
+   365→| **Delta sync** | Return only events since `?since=<timestamp>` instead of full event list. `getPointEvents()` in `postgresStore.ts` fetches ALL events with `order by created_at asc` -- unsustainable at scale. | HIGH |
+   366→| **Background sync service worker** | Register a SW that flushes the queue even when the app tab is closed. Current sync only happens when App component mounts. | MEDIUM |
+   367→
+   368→---
+   369→
+   370→## 5. Data Architecture
+   371→
+   372→### 5.1 PostgreSQL Scaling Path
+   373→
+   374→**Current schema** (from `supabase/migrations/20260219_init_adl.sql`):
+   375→
+   376→```sql
+   377→-- Two tables, both in public schema
+   378→user_profiles (
+   379→  id text PK,
+   380→  email text UNIQUE NOT NULL,
+   381→  phone text,              -- Added in 20260224 migration
+   382→  name text NOT NULL,
+   383→  image text DEFAULT '',
+   384→  occupation text DEFAULT '',
+   385→  xp integer DEFAULT 0 CHECK (xp >= 0),
+   386→  password_hash text,
+   387→  is_admin boolean DEFAULT false,
+   388→  map_scope text DEFAULT 'bonamoussadi',
+   389→  created_at timestamptz,
+   390→  updated_at timestamptz
+   391→)
+   392→
+   393→point_events (
+   394→  id uuid PK,
+   395→  point_id text NOT NULL,
+   396→  event_type text CHECK ('CREATE_EVENT', 'ENRICH_EVENT'),
+   397→  user_id text NOT NULL,
+   398→  category text CHECK ('pharmacy', 'fuel_station', 'mobile_money'),
+   399→  latitude double precision NOT NULL,
+   400→  longitude double precision NOT NULL,
+   401→  details jsonb DEFAULT '{}',
+   402→  photo_url text,
+   403→  created_at timestamptz NOT NULL,
+   404→  source text,
+   405→  external_id text
+   406→)
+   407→
+   408→Indexes:
+   409→  idx_point_events_created_at_desc
+   410→  idx_point_events_point_id_created_at_desc
+   411→  idx_point_events_user_id_created_at_desc
+   412→  idx_point_events_external_id
+   413→```
+   414→
+   415→**Scaling path:**
+   416→
+   417→| Scale | Action | Rationale |
+   418→|-------|--------|-----------|
+   419→| **Now (< 1K events)** | No changes needed | Current `pg.Pool({ max: 5 })` handles MVP load fine |
+   420→| **1K-10K events** | Add `point_projections` materialized view | Stop projecting in application code (`projectPointsFromEvents()` scans ALL events per request) |
+   421→| **10K-50K events** | Partition `point_events` by month (`created_at`) | Queries with time range filters become partition-pruned |
+   422→| **50K+ events** | Supabase read replica for GET requests | Separate read/write pools. `lib/server/db.ts` gets `getReadPool()` |
+   423→| **100K+ events** | PostGIS extension for spatial queries | Replace application-level `isWithinBonamoussadi()` bounding-box checks with `ST_Within()` |
+   424→| **500K+ events** | Connection pooling via Supabase PgBouncer (Transaction mode) | Current `POSTGRES_PRISMA_URL` in `.env.example` suggests this is already anticipated |
+   425→
+   426→**Critical optimization -- materialized projection:**
+   427→
+   428→```sql
+   429→-- Replace in-app projectPointsFromEvents() with a materialized view
+   430→CREATE MATERIALIZED VIEW point_projections AS
+   431→SELECT DISTINCT ON (point_id)
+   432→  point_id,
+   433→  category,
+   434→  latitude,
+   435→  longitude,
+   436→  details,
+   437→  photo_url,
+   438→  created_at,
+   439→  source,
+   440→  external_id
+   441→FROM point_events
+   442→ORDER BY point_id, created_at DESC;
+   443→
+   444→-- Refresh on write (via trigger or Supabase Edge Function)
+   445→CREATE UNIQUE INDEX ON point_projections (point_id);
+   446→```
+   447→
+   448→This eliminates the O(N) full-table scan that `getPointEvents()` + `projectPointsFromEvents()` currently performs on every GET request.
+   449→
+   450→### 5.2 Blob Storage Lifecycle
+   451→
+   452→**Current:** Photos uploaded to Vercel Blob via `@vercel/blob` `put()` in `api/submissions/index.ts`:
+   453→```
+   454→Path pattern: submissions/{eventId}-{timestamp}.{ext}
+   455→Access: public
+   456→Max size: 8 MB (MAX_SUBMISSION_IMAGE_BYTES)
+   457→Formats: JPEG, PNG, WebP, HEIC, HEIF
+   458→```
+   459→
+   460→**Lifecycle policy needed:**
+   461→
+   462→| Age | Action | Storage |
+   463→|-----|--------|---------|
+   464→| 0-30 days | Original quality | Vercel Blob (hot) |
+   465→| 30-180 days | Compressed to WebP 80% quality | Vercel Blob |
+   466→| 180+ days | Thumbnail only (200px), original archived | Vercel Blob (thumbnail) + Cloudflare R2 (archive) |
+   467→| Deleted submissions | Hard delete after 30-day grace | N/A |
+   468→
+   469→**Photo optimization pipeline (Phase 2):**
+   470→
+   471→```
+   472→Upload -> Vercel Blob (original)
+   473→       -> Supabase Edge Function (async trigger)
+   474→          -> Generate 200px thumbnail
+   475→          -> Generate 800px preview
+   476→          -> Extract EXIF (already done in submissionFraud.ts)
+   477→          -> Store variants in Blob
+   478→          -> Update point_events.details with variant URLs
+   479→```
+   480→
+   481→### 5.3 Event Streaming / Message Queue
+   482→
+   483→**Current gap:** No server-side async processing. Everything is synchronous in the request path:
+   484→- Photo upload (Vercel Blob PUT)
+   485→- EXIF extraction (`extractPhotoMetadata()`)
+   486→- IP geolocation (`fetchIpLocation()` calls ipapi.co)
+   487→- Fraud check computation (`buildSubmissionFraudCheck()`)
+   488→- XP update (`upsertUserProfile()`)
+   489→
+   490→This makes POST `/api/submissions` slow and fragile.
+   491→
+   492→**Phase 2 architecture -- async processing via QStash:**
+   493→
+   494→```
+   495→POST /api/submissions (synchronous path):
+   496→  1. Validate input
+   497→  2. Upload photo to Blob
+   498→  3. Insert point_event with status='pending_review'
+   499→  4. Return 201 immediately
+   500→
+   501→QStash message -> /api/internal/process-submission:
+   502→  1. Extract EXIF metadata
+   503→  2. Fetch IP geolocation
+   504→  3. Compute fraud check
+   505→  4. Update point_event.details with fraud data
+   506→  5. Update XP
+   507→  6. Notify admin if fraud score > threshold
+   508→```
+   509→
+   510→**Why QStash over alternatives:**
+   511→- Native Vercel integration (no infrastructure to manage)
+   512→- Built-in retry with exponential backoff
+   513→- HTTP-based (works with existing serverless functions)
+   514→- Free tier covers MVP needs (500 messages/day)
+   515→
+   516→### 5.4 Data Residency and Sovereignty
+   517→
+   518→**African data protection landscape:**
+   519→
+   520→| Country | Law | Key Requirement |
+   521→|---------|-----|-----------------|
+   522→| **Cameroon** | Law No. 2010/012 on Cybersecurity and Cybercrime | Personal data must be processed lawfully; DPA notification required |
+   523→| **Nigeria** | NDPA 2023 | Data controller must register; cross-border transfer requires adequacy |
+   524→| **Kenya** | Data Protection Act 2019 | Consent-based; data transfers need adequate safeguards |
+   525→| **South Africa** | POPIA | Most mature; requires data processing agreements, information officer |
+   526→| **AU-wide** | Malabo Convention (2014, entered into force 2023) | Framework for harmonized data protection across AU member states |
+   527→
+   528→**ADL's data residency strategy:**
+   529→
+   530→1. **Current:** Supabase project in EU region (closest available with full feature set)
+   531→2. **Phase 2:** When Supabase launches Africa regions (anticipated), migrate to Johannesburg or Nairobi
+   532→3. **Phase 3:** If Supabase Africa region unavailable, self-managed PostgreSQL on AWS Africa (Cape Town `af-south-1`) or GCP Johannesburg
+   533→4. **Always:** Store GPS coordinates and photos (which contain location data) under the same residency rules as PII. The `point_events.details` JSONB contains `fraudCheck.ipLocation` which is indirectly PII.
+   534→
+   535→**Cross-border data flow:** ADL collects data in Cameroon but serves it to API consumers potentially worldwide. Solution:
+   536→- Raw PII (email, phone, GPS) stays in primary database region
+   537→- Anonymized/aggregated data (point projections without `user_id`) can be replicated globally
+   538→- `redactEventUserIds()` in `lib/server/submissionAccess.ts` already handles this for unauthenticated reads
+   539→
+   540→---
+   541→
+   542→## 6. Governance & Compliance
+   543→
+   544→### 6.1 IAM and Access Control
+   545→
+   546→**Current model:**
+   547→
+   548→```
+   549→Roles:
+   550→  - Anonymous: Read projected points (cached, user_id redacted)
+   551→  - Authenticated (Reader): Read events with own user_id visible
+   552→  - Authenticated (Contributor): Read + Submit (CREATE/ENRICH)
+   553→  - Admin: Full read + admin_events view + delete events
+   554→
+   555→Implementation:
+   556→  - lib/auth.ts: requireUser() returns { id, token } or null
+   557→  - lib/server/submissionAccess.ts: toSubmissionAuthContext() checks is_admin
+   558→  - api/submissions/index.ts: Checks authContext for admin_events access
+   559→```
+   560→
+   561→**Recommended enhancements:**
+   562→
+   563→| Control | Implementation | Priority |
+   564→|---------|---------------|----------|
+   565→| **API key auth for consumers** | Issue API keys stored in Edge Config, validate in edge middleware | Phase 2 |
+   566→| **Role-based permissions table** | `user_roles` table with `role` enum: reader, contributor, senior_contributor, admin, api_consumer | Phase 2 |
+   567→| **Service accounts** | Dedicated identities for batch import scripts (`scripts/import-bonamoussadi-csv.mjs`) | Phase 1 |
+   568→| **Admin audit log** | Log all admin actions (delete event, approve, change user role) to `admin_audit_log` table | Phase 1 |
+   569→| **MFA for admins** | Require TOTP for `is_admin=true` users | Phase 2 |
+   570→
+   571→### 6.2 Secrets Management
+   572→
+   573→**Current state (.env.example):**
+   574→
+   575→```
+   576→AUTH_SECRET=                    # Session encryption
+   577→GOOGLE_CLIENT_ID=               # OAuth
+   578→GOOGLE_CLIENT_SECRET=           # OAuth
+   579→ADL_POSTGRES_URL=               # Database (contains password)
+   580→BLOB_READ_WRITE_TOKEN=          # Vercel Blob access
+   581→EDGE_CONFIG=                    # Edge Config connection
+   582→VERCEL_API_TOKEN=               # Vercel API (dangerous!)
+   583→ADMIN_EMAIL=                    # Hardcoded admin
+   584→ADMIN_PASSWORD=                 # Hardcoded admin password!
+   585→```
+   586→
+   587→**Security concerns:**
+   588→
+   589→1. **CRITICAL: `ADMIN_PASSWORD` in environment variables.** This is a plaintext admin password. Must be replaced with hashed credentials in the database (already partially done: `user_profiles.password_hash` column exists, `bcryptjs` is a dependency).
+   590→
+   591→2. **HIGH: Gemini API key exposed client-side.** `vite.config.ts` defines `process.env.API_KEY` which is bundled into the client JavaScript. Must be proxied through a server-side API route.
+   592→
+   593→3. **MEDIUM: `VERCEL_API_TOKEN` in env.** This grants full Vercel account access. Should only be in CI/CD, never in runtime functions.
+   594→
+   595→**Recommended secrets architecture:**
+   596→
+   597→| Secret | Storage | Access Pattern |
+   598→|--------|---------|----------------|
+   599→| `AUTH_SECRET` | Vercel Environment Variables (encrypted) | Runtime, per-environment |
+   600→| `POSTGRES_URL` | Vercel Environment Variables (encrypted) | Runtime, per-environment |
+   601→| `BLOB_READ_WRITE_TOKEN` | Vercel Environment Variables (encrypted) | Runtime, per-environment |
+   602→| `GOOGLE_CLIENT_*` | Vercel Environment Variables (encrypted) | Runtime, shared staging+prod |
+   603→| `GEMINI_API_KEY` | Vercel Environment Variables (server only) | Server-side functions only, never in `VITE_` prefix |
+   604→| `VERCEL_API_TOKEN` | GitHub Actions Secrets only | CI/CD only, never runtime |
+   605→| Admin credentials | `user_profiles.password_hash` (bcrypt) | Database only, no env vars |
+   606→
+   607→### 6.3 Audit Logging
+   608→
+   609→**Current:** `console.info("[SUBMISSION_DEVICE]", ...)` in non-production (line 673 of `api/submissions/index.ts`). No structured audit log.
+   610→
+   611→**Recommended audit events:**
+   612→
+   613→```sql
+   614→CREATE TABLE audit_log (
+   615→  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   616→  actor_id text NOT NULL,
+   617→  action text NOT NULL,         -- 'submission.create', 'submission.delete', 'user.login', etc.
+   618→  resource_type text NOT NULL,  -- 'point_event', 'user_profile'
+   619→  resource_id text,
+   620→  details jsonb DEFAULT '{}',
+   621→  ip_address inet,
+   622→  user_agent text,
+   623→  created_at timestamptz NOT NULL DEFAULT now()
+   624→);
+   625→
+   626→CREATE INDEX idx_audit_log_actor ON audit_log (actor_id, created_at DESC);
+   627→CREATE INDEX idx_audit_log_action ON audit_log (action, created_at DESC);
+   628→```
+   629→
+   630→Events to log:
+   631→- `submission.create` / `submission.enrich` / `submission.delete`
+   632→- `user.register` / `user.login` / `user.login_failed`
+   633→- `admin.view_queue` / `admin.delete_event` / `admin.change_role`
+   634→- `api.key_issued` / `api.key_revoked`
+   635→
+   636→### 6.4 Data Retention Policies
+   637→
+   638→| Data Type | Retention | Deletion Method |
+   639→|-----------|-----------|-----------------|
+   640→| `point_events` (non-PII fields) | Indefinite | Never -- this is the core dataset |
+   641→| `point_events.user_id` | 2 years after last activity | Pseudonymize: replace with hash |
+   642→| `user_profiles` (active) | While account active | N/A |
+   643→| `user_profiles` (inactive > 18 months) | Delete after notification | Soft delete, 30-day grace, hard delete |
+   644→| Photos (Vercel Blob) | Follow `point_events` lifecycle | Delete when event is purged |
+   645→| Audit logs | 3 years | Archive to cold storage, then delete |
+   646→| Offline queue (client IndexedDB) | Until synced or 30 days | Auto-purge stale items in `flushOfflineQueue()` |
+   647→| EXIF metadata in `details.fraudCheck` | Same as parent event | Deleted with event |
+   648→
+   649→---
+   650→
+   651→## 7. Cost & Reliability Tradeoffs
+   652→
+   653→### 7.1 Current Cost Profile (Vercel Pro + Supabase Free)
+   654→
+   655→| Service | Tier | Monthly Cost | Usage |
+   656→|---------|------|-------------|-------|
+   657→| Vercel | Pro | $20/mo | Hosting, CDN, serverless functions |
+   658→| Supabase | Free | $0/mo | PostgreSQL (500 MB), Auth (50K MAU) |
+   659→| Vercel Blob | Included in Pro | $0 (up to 1 GB) | Photo storage |
+   660→| Vercel Edge Config | Included in Pro | $0 (limited reads) | Feature flags, legacy fallback |
+   661→| Vercel Analytics | Included in Pro | $0 | Web vitals |
+   662→| ipapi.co | Free tier | $0 | 1K lookups/day for fraud IP checks |
+   663→| Gemini API | Free tier | $0 | Location search, TTS |
+   664→| **Total** | | **~$20/mo** | |
+   665→
+   666→### 7.2 Scaling Cost Projections
+   667→
+   668→| Users | Events/mo | Photos/mo | DB Size | Blob Size | Vercel | Supabase | Other | Total |
+   669→|-------|-----------|-----------|---------|-----------|--------|----------|-------|-------|
+   670→| **100** (now) | 500 | 500 | 50 MB | 2 GB | $20 | $0 | $0 | **$20** |
+   671→| **1K** | 5K | 5K | 500 MB | 20 GB | $20 | $25 (Pro) | $10 | **$55** |
+   672→| **10K** | 50K | 50K | 5 GB | 200 GB | $40 | $25 | $50 | **$115** |
+   673→| **100K** | 500K | 500K | 50 GB | 2 TB | $150+ | $75+ | $200+ | **$425+** |
+   674→
+   675→Key cost drivers at scale:
+   676→- **Vercel Function invocations:** $0.60/million after included quota
+   677→- **Vercel Blob storage:** $0.23/GB/month after 1 GB
+   678→- **Supabase database:** Pro tier at $25/mo includes 8 GB, then $0.125/GB
+   679→- **Bandwidth:** Vercel charges $0.15/GB after 1 TB; African users consume more bandwidth due to retries
+   680→
+   681→### 7.3 When to Consider Moving Off Vercel
+   682→
+   683→| Signal | Threshold | Action |
+   684→|--------|-----------|--------|
+   685→| Function invocations > 3M/month | ~$1,800 Vercel bill | Evaluate AWS Lambda + CloudFront |
+   686→| Blob storage > 500 GB | ~$115/mo just for blob | Move to Cloudflare R2 ($0.015/GB, no egress) |
+   687→| Need for long-running jobs > 60s | Vercel function timeout limit | Add dedicated worker (Railway, Fly.io, or AWS ECS) |
+   688→| Need WebSocket persistent connections | Vercel does not support long-lived WS | Use Supabase Realtime or dedicated WS server on Fly.io |
+   689→| African user latency consistently > 1s | CDN PoP limitations | Add Cloudflare as CDN layer in front of Vercel |
+   690→| Monthly bill > $500 | Startup economics ceiling | Full cost analysis: Vercel vs. self-managed |
+   691→
+   692→**Recommendation:** Vercel remains optimal until ~$300/mo. Below that, the operational simplicity (zero DevOps, automatic deployments, preview URLs) outweighs the cost premium over raw AWS/GCP.
+   693→
+   694→### 7.4 Reliability Targets
+   695→
+   696→| Tier | Uptime | RTO | RPO | Monitoring | Incident Response |
+   697→|------|--------|-----|-----|------------|-------------------|
+   698→| **MVP (now)** | 99% (7.3h downtime/mo) | 4 hours | 24 hours | Vercel dashboard + manual checks | Founder gets paged |
+   699→| **Phase 2 (1K-10K)** | 99.5% (3.6h/mo) | 1 hour | 1 hour | Vercel + Sentry + Supabase alerts | On-call rotation (2 people) |
+   700→| **Phase 3 (10K-100K)** | 99.9% (43min/mo) | 15 min | 5 min | Full observability stack | PagerDuty + runbooks |
+   701→
+   702→**Disaster recovery strategy:**
+   703→
+   704→```
+   705→Current (MVP):
+   706→  - Database: Supabase daily automatic backups (7-day retention on free tier)
+   707→  - Blob: Vercel Blob has built-in redundancy
+   708→  - Code: Git (GitHub) is the recovery source
+   709→  - Recovery: Re-deploy from main branch + restore DB backup
+   710→
+   711→Phase 2:
+   712→  - Database: Supabase Pro PITR (Point-in-Time Recovery)
+   713→  - Cross-region: Manual failover to second Supabase project
+   714→  - Blob: Replicate to Cloudflare R2 daily
+   715→
+   716→Phase 3:
+   717→  - Database: Read replica in second region for automatic failover
+   718→  - Blob: Multi-region replication
+   719→  - DNS: Automated failover via Cloudflare DNS
+   720→```
+   721→
+   722→### 7.5 Multi-Cloud Considerations
+   723→
+   724→**Not recommended until Phase 3.** Reasons:
+   725→- Operational complexity multiplies with each provider
+   726→- Team is too small for multi-cloud ops
+   727→- Vercel + Supabase gives sufficient reliability for current scale
+   728→
+   729→**When multi-cloud becomes necessary:**
+   730→- If Vercel has repeated outages affecting Africa specifically
+   731→- If data sovereignty requires compute in a country without Vercel PoPs
+   732→- If cost exceeds $500/mo and self-managed becomes cheaper
+   733→
+   734→**Likely multi-cloud shape (Phase 3+):**
+   735→```
+   736→Vercel: CDN + Static hosting + Edge Middleware
+   737→Supabase: Database + Auth + Realtime
+   738→Cloudflare: R2 (blob), Workers (edge compute in Africa), DNS
+   739→AWS af-south-1: Long-running workers, batch processing
+   740→```
+   741→
+   742→---
+   743→
+   744→## 8. Recommendations & Migration Path
+   745→
+   746→### Phase 1: Optimize Current Stack (Now -- Month 1-2)
+   747→
+   748→**Goal:** Fix critical issues, establish environment separation, no architecture changes.
+   749→
+   750→| # | Action | Effort | Impact | Files Affected |
+   751→|---|--------|--------|--------|----------------|
+   752→| 1.1 | **Move Gemini API key server-side** | 2h | Security fix | `vite.config.ts` (remove `define`), new `api/ai/search.ts` |
+   753→| 1.2 | **Remove `ADMIN_PASSWORD` from env** | 1h | Security fix | Seed admin via `user_profiles.password_hash` only |
+   754→| 1.3 | **Add server-side idempotency check** | 4h | Data integrity | `api/submissions/index.ts` (check `X-Idempotency-Key` vs recent events) |
+   755→| 1.4 | **Create staging Supabase project** | 2h | Env separation | New project + Vercel env vars for Preview/Staging |
+   756→| 1.5 | **Add `?since=` filter to GET /api/submissions** | 3h | Performance | `postgresStore.ts` (add WHERE clause), `api/submissions/index.ts` |
+   757→| 1.6 | **Add rate limiting edge middleware** | 3h | Security | New `middleware.ts` at project root |
+   758→| 1.7 | **Remove `VERCEL_API_TOKEN` from runtime env** | 30min | Security | `.env.example`, Vercel dashboard |
+   759→| 1.8 | **Add `audit_log` table** | 3h | Compliance | New migration in `supabase/migrations/` |
+   760→| 1.9 | **Enable Supabase PITR** (upgrade to Pro) | 30min | Reliability | Supabase dashboard |
+   761→| 1.10 | **Add Sentry error tracking** | 2h | Observability | `App.tsx`, `api/` error handlers |
+   762→
+   763→### Phase 2: Scale Within Vercel + Supabase (Month 3-9, 0-10K Users)
+   764→
+   765→**Goal:** Handle 10x growth without architecture overhaul.
+   766→
+   767→| # | Action | Effort | Impact |
+   768→|---|--------|--------|--------|
+   769→| 2.1 | **Materialized projection view** | 1 week | Eliminates O(N) full scan on every GET; projected points served from pre-computed view |
+   770→| 2.2 | **Async submission processing via QStash** | 1 week | POST latency drops from ~3s to ~500ms; fraud check + EXIF happen async |
+   771→| 2.3 | **Supabase Realtime for admin queue** | 3 days | Admin sees new submissions instantly without polling |
+   772→| 2.4 | **Photo optimization pipeline** | 1 week | Thumbnails served from edge, original archived; reduces bandwidth 60%+ |
+   773→| 2.5 | **Phone auth (Africa's Talking SMS OTP)** | 1 week | Unlocks feature phone users who have no Google account |
+   774→| 2.6 | **Service Worker for background sync** | 3 days | Offline queue flushes even when app is backgrounded |
+   775→| 2.7 | **PostGIS spatial indexing** | 3 days | `ST_DWithin()` queries replace application-level haversine filtering |
+   776→| 2.8 | **API key auth for data consumers** | 3 days | Monetization-ready: issue API keys, track usage per key |
+   777→| 2.9 | **Partition `point_events` by month** | 2 days | Query performance for time-range scans |
+   778→| 2.10 | **Feature flag system via Edge Config** | 2 days | Gradual rollout of features per country/user segment |
+   779→
+   780→### Phase 3: Hybrid Architecture (Month 10-18, 10K-100K Users)
+   781→
+   782→**Goal:** Add dedicated infrastructure for workloads that outgrow serverless.
+   783→
+   784→```
+   785→New components:
+   786→  - Cloudflare R2: Replace Vercel Blob for cost (zero egress fees)
+   787→  - Upstash Redis: Session cache, rate limiting state, leaderboard cache
+   788→  - Dedicated worker (Fly.io or Railway): Photo processing, batch imports,
+   789→    fraud model scoring (> 60s execution)
+   790→  - Supabase read replica: Separate read/write traffic
+   791→  - Cloudflare DNS: Latency-based routing for Africa
+   792→```
+   793→
+   794→| # | Action | Effort | Impact |
+   795→|---|--------|--------|--------|
+   796→| 3.1 | **Migrate blob storage to Cloudflare R2** | 1 week | Save ~$100/mo on egress at 200 GB+ |
+   797→| 3.2 | **Add Redis caching layer (Upstash)** | 3 days | Cache projected points, leaderboard; p95 latency < 200ms |
+   798→| 3.3 | **Supabase read replica** | 2 days | Read traffic offloaded; write path unaffected |
+   799→| 3.4 | **Dedicated async worker** | 1 week | Fraud ML model, batch geocoding, data quality scoring |
+   800→| 3.5 | **Multi-country geofencing** | 3 days | Extend `shared/geofence.ts` with country-level bounding boxes from config |
+   801→| 3.6 | **Data anonymization pipeline** | 1 week | GDPR/NDPA compliance: pseudonymize inactive user data |
+   802→| 3.7 | **GraphQL API layer** | 2 weeks | API consumers get flexible queries instead of fixed REST endpoints |
+   803→| 3.8 | **Cloudflare CDN in front of Vercel** | 2 days | Additional African PoPs (Lagos, Accra, Dar es Salaam) |
+   804→
+   805→### Phase 4: Full Cloud-Native (Month 18+, 100K+ Users)
+   806→
+   807→**Goal:** Own the infrastructure for cost control and data sovereignty.
+   808→
+   809→**This phase is triggered when:**
+   810→- Monthly Vercel bill exceeds $500
+   811→- Data sovereignty laws require in-country hosting
+   812→- Need for persistent WebSocket connections > Supabase Realtime limits
+   813→- ML/AI workloads need GPU access
+   814→
+   815→**Target architecture:**
+   816→
+   817→```
+   818→AWS af-south-1 (Cape Town) or GCP Johannesburg:
+   819→  - EKS/GKE cluster for API services
+   820→  - RDS PostgreSQL (multi-AZ) or Cloud SQL
+   821→  - S3/GCS for blob storage
+   822→  - SQS/Cloud Tasks for message queue
+   823→  - ElastiCache/Memorystore for Redis
+   824→  - CloudFront/Cloud CDN
+   825→
+   826→Retain from current stack:
+   827→  - Vercel for frontend static hosting (or migrate to S3+CloudFront)
+   828→  - Supabase Auth (or migrate to Auth0/Clerk)
+   829→  - Cloudflare for DNS and DDoS protection
+   830→
+   831→Migration approach:
+   832→  1. Backend API moves first (Vercel Functions -> EKS/GKE)
+   833→  2. Database moves second (Supabase -> managed PostgreSQL)
+   834→  3. Frontend moves last (Vercel -> S3+CloudFront)
+   835→  4. Blue-green deployment with gradual traffic shift
+   836→```
+   837→
+   838→**Cost comparison at 100K users:**
+   839→
+   840→| Component | Vercel+Supabase | AWS Self-Managed | Savings |
+   841→|-----------|----------------|-----------------|---------|
+   842→| Compute | $150/mo | $80/mo (2x t3.medium) | 47% |
+   843→| Database | $75/mo | $50/mo (db.t3.medium) | 33% |
+   844→| Blob storage | $460/mo (2TB) | $46/mo (S3) | 90% |
+   845→| CDN/Bandwidth | $150/mo | $85/mo (CloudFront) | 43% |
+   846→| **Total** | **$835/mo** | **$261/mo** | **69%** |
+   847→
+   848→The tradeoff: self-managed requires 0.5-1 FTE DevOps engineer. At $261/mo savings, this only makes sense if the team has grown to include dedicated infrastructure talent.
+   849→
+   850→---
+   851→
+   852→## Appendix A: Decision Log
+   853→
+   854→| Date | Decision | Rationale | Alternatives Considered |
+   855→|------|----------|-----------|------------------------|
+   856→| 2026-02 | Stay on Vercel + Supabase for Phase 1-2 | Zero ops overhead, fast iteration, adequate for 10K users | AWS Amplify (worse DX), Railway (no edge network), Fly.io (no CDN) |
+   857→| 2026-02 | PostgreSQL as primary store (not Edge Config) | Already migrated (`DATA_STORE_DRIVER=postgres`); Edge Config is read-only and limited | Keep Edge Config primary (hit 1MB limit) |
+   858→| 2026-02 | Offline-first via IndexedDB (not Service Worker Cache API) | Already implemented and battle-tested; Cache API doesn't handle form submissions | Service Worker Background Sync API (limited browser support) |
+   859→| 2026-02 | Append-only event log (not CRUD) | Audit trail, fraud forensics, event replay; `point_events` is immutable | Mutable `points` table with update-in-place |
+   860→| 2026-02 | QStash for async processing (not SQS/Redis Queue) | Native Vercel integration, no infrastructure, HTTP-based | Upstash Redis Queue (more complex), Supabase Edge Functions (limited) |
+   861→
+   862→## Appendix B: Risk Register (Architecture)
+   863→
+   864→| Risk | Likelihood | Impact | Mitigation |
+   865→|------|-----------|--------|------------|
+   866→| Supabase free tier DB hits 500 MB limit | High (6 months) | Service degradation | Monitor usage; upgrade to Pro ($25/mo) proactively |
+   867→| Vercel function cold starts > 5s in Africa | Medium | Poor UX for first request | Use Fluid Compute, keep functions small, edge caching |
+   868→| Gemini API rate limits hit during peak | Medium | Location search fails | Cache search results, implement client-side fallback |
+   869→| ipapi.co free tier (1K/day) exhausted | High (at 1K users) | Fraud checks skip IP location | Switch to MaxMind GeoLite2 database (local, free) |
+   870→| Single Supabase project = single point of failure | High | Total data loss risk | Phase 1.9: Enable PITR; Phase 2: read replica |
+   871→| African connectivity outage | High | Users cannot sync | Offline queue handles this; extend to 500-item capacity |
+   872→| Data sovereignty enforcement in Cameroon | Low (near-term) | Legal risk | Monitor regulatory landscape; plan for in-country hosting |
+   873→
+   874→## Appendix C: Glossary
+   875→
+   876→| Term | Definition |
+   877→|------|-----------|
+   878→| **PoP** | Point of Presence -- CDN edge server location |
+   879→| **PITR** | Point-in-Time Recovery -- database backup with second-level granularity |
+   880→| **RTO** | Recovery Time Objective -- max acceptable downtime after an incident |
+   881→| **RPO** | Recovery Point Objective -- max acceptable data loss window |
+   882→| **QStash** | Vercel's HTTP-based message queue service |
+   883→| **Edge Config** | Vercel's ultra-low-latency key-value store at the edge |
+   884→| **PgBouncer** | PostgreSQL connection pooler used by Supabase |
+   885→| **Materialized View** | Pre-computed query result stored as a table, refreshed periodically |
+   886→| **Event Sourcing** | Pattern where state is derived from an append-only log of events |
+   887→| **PostGIS** | PostgreSQL extension for geographic/spatial queries |
+   888→

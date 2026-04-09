@@ -1,0 +1,77 @@
+- generic [active] [ref=e1]:
+  - link "Aller au contenu" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - link "Retour à l'accueil ROSE-SEIN" [ref=e7] [cursor=pointer]:
+            - /url: /
+            - generic [ref=e8]:
+              - img [ref=e10]
+              - generic [ref=e16]: Rose-Sein
+          - generic [ref=e17]:
+            - paragraph [ref=e18]: Association de lutte contre le cancer du sein
+            - paragraph [ref=e19]: Compte
+        - generic [ref=e20]:
+          - button "Notifications" [ref=e22] [cursor=pointer]:
+            - img [ref=e23]
+          - link "Ouvrir l'aide" [ref=e26] [cursor=pointer]:
+            - /url: /aide
+            - img [ref=e27]
+          - link "Ouvrir le compte" [ref=e34] [cursor=pointer]:
+            - /url: /account
+            - img [ref=e35]
+    - main [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]: Compte et confidentialité
+          - heading "Entrer dans votre espace privé sans friction." [level=1] [ref=e42]
+          - paragraph [ref=e43]: Commencez par l'essentiel. Votre compte vous redonne ensuite accès à la messagerie, au parcours et à vos réglages, sans surcharge inutile.
+        - status [ref=e44]:
+          - paragraph [ref=e45]: État du compte
+          - paragraph [ref=e46]: Connectez-vous pour retrouver votre espace privé et vos échanges en toute sécurité.
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - paragraph [ref=e50]: Recevoir un lien de connexion
+              - paragraph [ref=e51]: Utilisez votre email pour recevoir un lien sécurisé. Le profil patient, aidant ou professionnel sera précisé juste après.
+            - generic [ref=e52]:
+              - text: Adresse email
+              - textbox "Adresse email" [ref=e53]:
+                - /placeholder: claire@example.com
+            - button "Envoyer le lien" [ref=e54] [cursor=pointer]:
+              - text: Envoyer le lien
+              - img [ref=e55]
+          - complementary [ref=e59]:
+            - generic [ref=e60]:
+              - generic [ref=e61]:
+                - img [ref=e62]
+                - paragraph [ref=e65]: Ce que le compte ouvre
+              - list [ref=e66]:
+                - listitem [ref=e67]: Une connexion sans mot de passe, via un lien envoyé par email.
+                - listitem [ref=e68]: Des espaces privés pour les messages, notes, rendez-vous et documents.
+                - listitem [ref=e69]: Les mêmes repères sur mobile, ordinateur ou navigateur partagé.
+            - link "Voir les repères d'aide" [ref=e70] [cursor=pointer]:
+              - /url: /aide
+              - text: Voir les repères d'aide
+              - img [ref=e71]
+    - navigation "Navigation principale" [ref=e73]:
+      - generic [ref=e74]:
+        - link "Accueil" [ref=e75] [cursor=pointer]:
+          - /url: /
+          - img [ref=e76]
+          - generic [ref=e79]: Accueil
+        - link "Communauté" [ref=e80] [cursor=pointer]:
+          - /url: /communaute
+          - img [ref=e81]
+          - generic [ref=e86]: Communauté
+        - link "Messages" [ref=e87] [cursor=pointer]:
+          - /url: /messages
+          - img [ref=e88]
+          - generic [ref=e90]: Messages
+        - link "Parcours" [ref=e91] [cursor=pointer]:
+          - /url: /parcours
+          - img [ref=e92]
+          - generic [ref=e94]: Parcours
+  - alert [ref=e95]

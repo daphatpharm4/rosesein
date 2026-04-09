@@ -1,0 +1,42 @@
+{
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "devCommand": "vite",
+  "outputDirectory": "dist",
+  "crons": [
+    {
+      "path": "/api/analytics?view=cron_dispatch",
+      "schedule": "0 6 * * *"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/submissions",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    },
+    {
+      "source": "/api/analytics",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=300, stale-while-revalidate=600" }
+      ]
+    },
+    {
+      "source": "/api/health",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    }
+  ],
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    { "source": "/api/auth/callback/:path*", "destination": "/api/auth/[...auth]" },
+    { "source": "/api/auth/signin/:path*", "destination": "/api/auth/[...auth]" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}

@@ -1,0 +1,1564 @@
+     1→# ADL Fraud Detection & Prevention Strategy
+     2→
+     3→**Author:** Teammate 5 -- Fraud Specialist
+     4→**Date:** 2026-02-28
+     5→**Status:** Living document -- updates with each fraud landscape change
+     6→**Predecessors:**
+     7→- [01-cloud-architecture.md](./01-cloud-architecture.md) (Cloud Architect)
+     8→- [02-system-design.md](./02-system-design.md) (System Design Expert)
+     9→- [03-cloud-engineering.md](./03-cloud-engineering.md) (Cloud Engineer)
+    10→- [04-cybersecurity.md](./04-cybersecurity.md) (Cybersecurity Expert)
+    11→**Scope:** Fraud scenario modeling, detection rules, risk scoring, response playbooks, false positive mitigation, and monitoring for African Data Layer
+    12→
+    13→---
+    14→
+    15→## Table of Contents
+    16→
+    17→1. [Fraud Scenario Catalog](#1-fraud-scenario-catalog)
+    18→2. [Detection Rules & Signals](#2-detection-rules--signals)
+    19→3. [Risk Scoring Model](#3-risk-scoring-model)
+    20→4. [Response Playbooks](#4-response-playbooks)
+    21→5. [False Positive Minimization](#5-false-positive-minimization)
+    22→6. [Fraud Metrics & Monitoring](#6-fraud-metrics--monitoring)
+    23→
+    24→---
+    25→
+    26→## 1. Fraud Scenario Catalog
+    27→
+    28→### 1.1 Data Fabrication
+    29→
+    30→#### F-FAB-01: Fabricated POI (Phantom Location)
+    31→
+    32→| Field | Detail |
+    33→|---|---|
+    34→| **Description** | Contributor submits a POI (pharmacy, fuel station, mobile money kiosk) that does not physically exist. They fill in plausible details (name, hours, provider list) but the business is fictional. |
+    35→| **Attacker Motivation** | Earn XP (5 points per CREATE_EVENT via `BASE_EVENT_XP` in `api/submissions/index.ts:59`) and climb the leaderboard without doing fieldwork. |
+    36→| **Attack Method** | Take a photo of a random storefront or blank wall. Submit with a valid GPS location inside the Bonamoussadi geofence (`shared/geofence.ts` bounds: 4.0755-4.0999 lat, 9.7185-9.76 lng). Fill required fields: name + isOpenNow (pharmacy), providers (mobile_money), name + hasFuelAvailable (fuel_station) per `CREATE_REQUIRED_FIELDS` in `pointProjection.ts:19-23`. |
+    37→| **Detection Difficulty** | High. The current system only validates that required fields are present and location is within bounds. There is no ground-truth cross-reference or duplicate detection. |
+    38→| **Business Impact** | Critical. Phantom POIs corrupt the dataset. Downstream consumers (fintech apps, logistics platforms, health services) route users to nonexistent locations, destroying platform credibility. |
+    39→
+    40→#### F-FAB-02: Recycled / Copied Photos
+    41→
+    42→| Field | Detail |
+    43→|---|---|
+    44→| **Description** | Contributor reuses the same photo across multiple submissions, or downloads photos from the internet (Google Maps Street View, social media). |
+    45→| **Attacker Motivation** | Avoid fieldwork while farming XP. A single field trip yields photos reused across dozens of fabricated submissions. |
+    46→| **Attack Method** | Take one photo on-site, then submit it as evidence for multiple different POIs by changing the location coordinates slightly. Alternatively, download storefront images from Google Maps. |
+    47→| **Detection Difficulty** | Medium. The current system extracts EXIF metadata (`submissionFraud.ts:95-127`) including GPS, capture timestamp, device make/model. Photos reused across submissions would share identical EXIF data. However, stripped EXIF (common in screenshots/downloads) bypasses this entirely. |
+    48→| **Business Impact** | High. Multiple fake POIs backed by "evidence" that appears legitimate at casual inspection. |
+    49→
+    50→#### F-FAB-03: AI-Generated / Synthetic Data
+    51→
+    52→| Field | Detail |
+    53→|---|---|
+    54→| **Description** | Contributor uses AI image generation to create realistic storefront photos, or uses LLMs to generate plausible business details. |
+    55→| **Attacker Motivation** | Scale fabrication without any physical presence. |
+    56→| **Attack Method** | Generate pharmacy/kiosk storefront images using diffusion models. These images have no EXIF data (GPS, device info all null). Submit with fabricated coordinates within the geofence. |
+    57→| **Detection Difficulty** | High. AI-generated images lack EXIF metadata, but so do many legitimate photos from feature phones. The current `extractPhotoMetadata` function returns all nulls for such images -- identical to a legitimate low-end device submission. |
+    58→| **Business Impact** | Critical. At scale, this could flood the dataset with convincing but entirely fictional POIs. |
+    59→
+    60→### 1.2 XP Gaming
+    61→
+    62→#### F-XP-01: Rapid-Fire Submissions
+    63→
+    64→| Field | Detail |
+    65→|---|---|
+    66→| **Description** | Contributor submits dozens of submissions in rapid succession to accumulate XP quickly. |
+    67→| **Attacker Motivation** | Climb leaderboard (`api/leaderboard/index.ts` ranks by XP then contribution count). Top positions may unlock real rewards via the rewards catalog. |
+    68→| **Attack Method** | Use the offline queue (`lib/client/offlineQueue.ts`) to batch-prepare submissions while "offline," then flush all at once via `flushOfflineQueue`. The queue has no rate limiting -- it simply iterates all pending items sequentially. Server-side, XP is awarded immediately on insertion: `profile.XP = (profile.XP ?? 0) + BASE_EVENT_XP` (`api/submissions/index.ts:679`). |
+    69→| **Detection Difficulty** | Low. Temporal clustering is easily detectable -- many submissions from the same userId within a short window. |
+    70→| **Business Impact** | Medium. Leaderboard pollution discourages legitimate contributors. XP inflation devalues the reward economy. |
+    71→
+    72→#### F-XP-02: Self-Enrichment Loop
+    73→
+    74→| Field | Detail |
+    75→|---|---|
+    76→| **Description** | Contributor creates a POI (CREATE_EVENT, +5 XP), then enriches the same POI repeatedly (ENRICH_EVENT, +5 XP each) by filling in each gap field individually across separate submissions. |
+    77→| **Attacker Motivation** | Multiply XP from a single physical location. A pharmacy has 3 enrichable fields (openingHours, isOpenNow, isOnDuty per `ENRICHABLE_FIELDS`); a fuel station has 6 fields. One visit could yield 7 submissions = 35 XP. |
+    78→| **Attack Method** | Submit CREATE_EVENT with minimal required fields. Then submit separate ENRICH_EVENTs for each gap. The system validates that each enrichment fills "at least one currently missing field" (`api/submissions/index.ts:558`) but does not penalize drip-feeding. |
+    79→| **Detection Difficulty** | Low. Pattern is visible: same userId, same pointId, multiple ENRICH_EVENTs in a short period. |
+    80→| **Business Impact** | Medium. Inflates contribution counts and XP. May or may not produce bad data (the enrichment data itself could be legitimate). |
+    81→
+    82→#### F-XP-03: Collusion Rings
+    83→
+    84→| Field | Detail |
+    85→|---|---|
+    86→| **Description** | A group of contributors coordinate to validate each other's fake submissions, or systematically enrich each other's POIs with fabricated data. |
+    87→| **Attacker Motivation** | Collectively inflate XP to dominate leaderboard and claim rewards. |
+    88→| **Attack Method** | User A creates a POI. User B enriches it. User C enriches it further. Reverse roles for the next POI. Submissions are timed to avoid velocity flags. |
+    89→| **Detection Difficulty** | High. Individual submission patterns look normal. Detection requires graph analysis of user-to-user and user-to-point relationships. |
+    90→| **Business Impact** | High. Coordinated fraud at scale corrupts both data quality and the incentive structure. |
+    91→
+    92→#### F-XP-04: Alt Account Farming
+    93→
+    94→| Field | Detail |
+    95→|---|---|
+    96→| **Description** | Single person registers multiple accounts and submits from all of them. |
+    97→| **Attacker Motivation** | Multiply XP earnings, dominate multiple leaderboard slots, or circumvent per-account limits (if implemented). |
+    98→| **Attack Method** | Register with different email addresses. The current auth system (`lib/auth.ts` -> Supabase auth) has no device-binding or phone verification. The `deviceId` from `lib/client/deviceProfile.ts` is stored in localStorage (`adl_device_id` key) and sent as `clientDevice.deviceId` in submissions, but is not validated server-side for uniqueness across accounts. |
+    99→| **Detection Difficulty** | Medium. Same deviceId appearing across multiple userIds is a strong signal. Same IP, same device fingerprint (memory, CPU cores, user agent) across accounts also signals alt farming. |
+   100→| **Business Impact** | High. Undermines the one-person-one-account assumption. Corrupts leaderboard integrity. |
+   101→
+   102→### 1.3 Location Spoofing
+   103→
+   104→#### F-LOC-01: GPS Spoofing App
+   105→
+   106→| Field | Detail |
+   107→|---|---|
+   108→| **Description** | Contributor uses a GPS spoofing app (Fake GPS, Mock Locations on Android) to submit from a fabricated location without being physically present. |
+   109→| **Attacker Motivation** | Submit POIs in areas they have never visited. Claim to have surveyed distant neighborhoods. |
+   110→| **Attack Method** | Enable mock locations on Android. Set GPS to coordinates within Bonamoussadi bounds. Submit a photo (possibly taken elsewhere). The `navigator.geolocation` API returns the spoofed coordinates. The current system compares submission GPS to photo EXIF GPS (`submissionFraud.ts:157-172`), but if the photo lacks EXIF GPS (common on feature phones), this check produces null. |
+   111→| **Detection Difficulty** | Medium. Cross-referencing with IP geolocation helps -- the current system fetches IP location via `ipapi.co` (`api/submissions/index.ts:223-240`). A 50km IP-to-photo threshold (`IP_PHOTO_MATCH_KM = 50`) catches coarse mismatches. However, a VPN user in the same city defeats this. |
+   112→| **Business Impact** | High. Allows remote fabrication of an entire neighborhood's data without physical presence. |
+   113→
+   114→#### F-LOC-02: VPN / Proxy IP Masking
+   115→
+   116→| Field | Detail |
+   117→|---|---|
+   118→| **Description** | Contributor uses a VPN with an exit node in Cameroon to mask their real IP location. |
+   119→| **Attacker Motivation** | Submit from a different country while appearing to be in Douala. |
+   120→| **Attack Method** | Connect to a Cameroon-based VPN server. The `x-vercel-forwarded-for` or `x-forwarded-for` header now shows a Cameroonian IP. The `fetchIpLocation` function resolves it to a Douala-area coordinate, passing the 50km IP match threshold. |
+   121→| **Detection Difficulty** | Medium. VPN exit IPs are often in known ranges (data center ASNs). The current system does not check ASN type. |
+   122→| **Business Impact** | Medium. Enables remote fraud but requires combining with other techniques (photo fraud, GPS spoofing) to create a complete fake submission. |
+   123→
+   124→#### F-LOC-03: EXIF Stripping / Manipulation
+   125→
+   126→| Field | Detail |
+   127→|---|---|
+   128→| **Description** | Contributor strips or modifies EXIF metadata from photos before submission. |
+   129→| **Attacker Motivation** | Remove evidence of the photo being taken elsewhere, or inject false GPS coordinates into EXIF. |
+   130→| **Attack Method** | Use exiftool or similar to strip all metadata (GPS, timestamp, device info all become null). Or inject Bonamoussadi GPS coordinates into a photo taken in another city. The current `extractPhotoMetadata` (`submissionFraud.ts:95-127`) trusts EXIF data at face value -- there is no tampering detection. |
+   131→| **Detection Difficulty** | Hard (stripping), Medium (injection -- injected EXIF often has telltale inconsistencies like impossible capture dates or mismatched software tags). |
+   132→| **Business Impact** | High. Defeats the primary photo-location cross-validation mechanism. |
+   133→
+   134→### 1.4 Photo Fraud
+   135→
+   136→#### F-PHO-01: Stock Photos / Internet Images
+   137→
+   138→| Field | Detail |
+   139→|---|---|
+   140→| **Description** | Contributor submits stock photos or images downloaded from the internet as evidence of a POI visit. |
+   141→| **Attacker Motivation** | Create fake submissions without visiting any location. |
+   142→| **Attack Method** | Download a pharmacy storefront image from Google Images. Convert to base64, submit as `imageBase64`. The image will have no EXIF data (stripped by web platforms). The current system uploads to Vercel Blob via `put()` (`api/submissions/index.ts:186-193`) without content analysis. |
+   143→| **Detection Difficulty** | Medium with tooling (reverse image search, perceptual hashing), High without. Currently there is zero image content analysis. |
+   144→| **Business Impact** | Critical. Completely fabricated evidence backing fabricated POIs. |
+   145→
+   146→#### F-PHO-02: Screenshot Submissions
+   147→
+   148→| Field | Detail |
+   149→|---|---|
+   150→| **Description** | Contributor takes a screenshot of Google Maps, another mapping app, or a previous ADL submission and submits it as their photo evidence. |
+   151→| **Attacker Motivation** | "Prove" they visited a location using someone else's data. |
+   152→| **Attack Method** | Screenshot a Google Maps storefront photo. The screenshot has the device's EXIF (capture time = now, GPS = current location if enabled) but shows a different location's content. The current system checks GPS match but not image content. |
+   153→| **Detection Difficulty** | Medium. Screenshots have distinctive characteristics: exact screen resolution dimensions, UI overlays, navigation bars. Image dimension analysis could flag these. |
+   154→| **Business Impact** | High. Creates plausible-looking but derivative evidence. |
+   155→
+   156→#### F-PHO-03: Same Photo Across Multiple Submissions
+   157→
+   158→| Field | Detail |
+   159→|---|---|
+   160→| **Description** | Contributor uses the exact same photo file for multiple different POI submissions. |
+   161→| **Attacker Motivation** | Minimize effort while maximizing XP from fabricated POIs. |
+   162→| **Attack Method** | Submit identical base64 image data for multiple CREATE_EVENTs at different coordinates. The current system uploads each to Vercel Blob with a unique path (`submissions/${eventId}-${Date.now()}.${ext}`) but never compares image content across submissions. |
+   163→| **Detection Difficulty** | Low (exact match via hash), Medium (near-duplicate with minor edits). Currently not implemented. |
+   164→| **Business Impact** | High. Clear indicator of fabrication -- a unique storefront photo should correspond to a unique physical location. |
+   165→
+   166→### 1.5 Account Abuse
+   167→
+   168→#### F-ACC-01: Multi-Account Farming
+   169→
+   170→| Field | Detail |
+   171→|---|---|
+   172→| **Description** | Same person operates multiple accounts, distributing submissions across them to avoid per-account velocity detection. |
+   173→| **Attacker Motivation** | Evade rate limits, dominate leaderboard with multiple entries, hedge against account bans. |
+   174→| **Attack Method** | Register N accounts with different emails. Alternate submissions across accounts. The `deviceId` in `lib/client/deviceProfile.ts:94-116` is stored per-browser in localStorage -- clearing storage or using incognito generates a new ID. |
+   175→| **Detection Difficulty** | Medium. Device fingerprint correlation (same `deviceMemoryGb`, `hardwareConcurrency`, `platform`, `userAgent` pattern) across accounts is a signal. Same IP submissions across different userIds is another. |
+   176→| **Business Impact** | High. Multiplies fraud capacity per attacker. |
+   177→
+   178→#### F-ACC-02: Automated Bot Submissions
+   179→
+   180→| Field | Detail |
+   181→|---|---|
+   182→| **Description** | Attacker scripts the submission API directly, bypassing the web UI entirely. |
+   183→| **Attacker Motivation** | Submit at massive scale. Hundreds of fabricated POIs per hour. |
+   184→| **Attack Method** | Obtain auth token (the current system uses Supabase auth). Script POST requests to `/api/submissions/` with fabricated payloads. The `imageBase64` field accepts any valid base64-encoded image. No CAPTCHA, no proof-of-work, no browser fingerprint verification on the server side. The offline queue's `idempotencyKey` is client-generated (`crypto.randomUUID()`) and not validated server-side for format. |
+   185→| **Detection Difficulty** | Low to Medium. Bots often have: no `clientDevice` data, consistent user agent strings, impossibly fast submission rates, programmatic patterns in field values. |
+   186→| **Business Impact** | Critical. Can flood the database with thousands of fake POIs in minutes. |
+   187→
+   188→#### F-ACC-03: Credential Sharing
+   189→
+   190→| Field | Detail |
+   191→|---|---|
+   192→| **Description** | Multiple people share a single account to accumulate XP faster or to let unskilled users submit on behalf of a "leader." |
+   193→| **Attacker Motivation** | Pool effort into a single leaderboard position for maximum reward. |
+   194→| **Attack Method** | Share login credentials. Multiple devices submit under one userId. Different `deviceId` values, different IP addresses, different device fingerprints -- all for one account. |
+   195→| **Detection Difficulty** | Medium. Multiple distinct device profiles for one userId, geographically dispersed simultaneous submissions. |
+   196→| **Business Impact** | Medium. Data quality may be acceptable if all sharers are legitimate field agents, but it violates platform terms and inflates individual rankings. |
+   197→
+   198→### 1.6 Data Poisoning
+   199→
+   200→#### F-POI-01: Intentionally Wrong Data
+   201→
+   202→| Field | Detail |
+   203→|---|---|
+   204→| **Description** | Contributor submits real POIs but with deliberately incorrect details: wrong prices, wrong hours, wrong availability status. |
+   205→| **Attacker Motivation** | Vandalism, competitor sabotage (marking a competitor's station as "no fuel available"), or simply carelessness incentivized by XP-per-submission rather than XP-per-accuracy. |
+   206→| **Attack Method** | Visit a real fuel station. Submit a legitimate photo. But report `hasFuelAvailable: false` when fuel is available, or set `pricesByFuel.super` to a wildly incorrect value. The current system validates field presence (`listCreateMissingFields`) but not field plausibility. |
+   207→| **Detection Difficulty** | Very High for subtle errors (off-by-10% price), Medium for extreme values (fuel price of 1 XAF or 100,000 XAF). |
+   208→| **Business Impact** | Critical. Correct-looking submissions with wrong data are the hardest fraud type to detect and the most damaging to data consumers. |
+   209→
+   210→#### F-POI-02: Competitor Sabotage
+   211→
+   212→| Field | Detail |
+   213→|---|---|
+   214→| **Description** | A competitor registers as a contributor and systematically marks rival businesses as closed, out of stock, or unavailable. |
+   215→| **Attacker Motivation** | Redirect customers away from competitors. |
+   216→| **Attack Method** | Enrich rival POIs with `isOpenNow: false`, `hasFuelAvailable: false`, `hasMin50000XafAvailable: false`. Provide a legitimate-looking photo of the closed sign or simply a storefront image. |
+   217→| **Detection Difficulty** | High. Requires detecting that a specific user disproportionately submits negative availability data for a subset of POIs. |
+   218→| **Business Impact** | Critical. Directly harms businesses and platform trust. |
+   219→
+   220→---
+   221→
+   222→## 2. Detection Rules & Signals
+   223→
+   224→### 2.1 Current Implementation Analysis
+   225→
+   226→The current fraud detection system in `lib/server/submissionFraud.ts` provides:
+   227→
+   228→**What it catches today:**
+   229→
+   230→1. **Photo-to-submission GPS mismatch**: Compares EXIF GPS coordinates from the photo against the submission's declared GPS location. Threshold: 1km (`DEFAULT_SUBMISSION_GPS_MATCH_THRESHOLD_KM`). If the photo was taken >1km from the declared location, the submission is rejected with HTTP 400 (`api/submissions/index.ts:504`).
+   231→
+   232→2. **Photo-to-IP GPS mismatch**: Compares EXIF GPS against IP-geolocated coordinates. Threshold: 50km (`IP_PHOTO_MATCH_KM`). Rejects if the photo location does not match IP location.
+   233→
+   234→3. **Metadata preservation**: Extracts and stores device make, model, capture timestamp, GPS coordinates from EXIF. This is stored in `details.fraudCheck` on each event for later forensic review.
+   235→
+   236→4. **Geofence enforcement**: Non-admin submissions must fall within Bonamoussadi bounds (`shared/geofence.ts`). Rejects submissions outside the bounding box.
+   237→
+   238→5. **Admin forensics dashboard**: The `view=admin_events` endpoint (`api/submissions/index.ts:418-424`) builds `AdminSubmissionEvent` objects that include fraud check data, user profiles, and photo metadata for manual review.
+   239→
+   240→**What it misses:**
+   241→
+   242→| Gap | Severity | Description |
+   243→|---|---|---|
+   244→| No velocity / rate limiting | Critical | A user can submit 100 events per minute. No per-user, per-device, or per-IP rate limiting exists. |
+   245→| No photo deduplication | Critical | Same image can be submitted for multiple POIs. No perceptual hash or exact hash comparison. |
+   246→| No user trust scoring | High | All users are treated equally regardless of history. A new account and a 6-month veteran get identical treatment. |
+   247→| No temporal analysis | High | No check for impossible travel (submissions 50km apart within 5 minutes). |
+   248→| No duplicate POI detection | High | Two CREATE_EVENTs at the same GPS coordinates for the same category are both accepted. |
+   249→| No EXIF-absent penalty | Medium | Photos without EXIF metadata (stripped, screenshots, AI-generated) receive the same treatment as photos with full metadata. The `submissionGpsMatch` is simply `null`. |
+   250→| No device fingerprint cross-referencing | Medium | The `clientDevice.deviceId` is stored but never queried across submissions or users. |
+   251→| No image content analysis | Medium | No screenshot detection, no reverse image search, no AI-generated image detection. |
+   252→| No enrichment pattern analysis | Medium | Self-enrichment loops (same user, same point, multiple enrichments) are unchecked. |
+   253→| No IP reputation checking | Medium | No ASN/datacenter detection for VPN/proxy identification. |
+   254→| No field plausibility validation | High | Fuel price of 0 XAF or 1,000,000 XAF passes validation. |
+   255→| No cross-user graph analysis | High | Collusion rings are invisible. |
+   256→| XP awarded before validation | Critical | XP is added to profile immediately on submission (`api/submissions/index.ts:678-681`). There is no pending/review state. |
+   257→
+   258→### 2.2 Detection Rules by Scenario
+   259→
+   260→#### Rule R-VEL-01: Submission Velocity (addresses F-XP-01, F-ACC-02)
+   261→
+   262→**Signals:**
+   263→- Count of submissions per userId in the last N minutes
+   264→- Count of submissions per deviceId in the last N minutes
+   265→- Count of submissions per IP address in the last N minutes
+   266→
+   267→**Detection Logic:**
+   268→
+   269→```sql
+   270→-- Per-user velocity check (run before accepting submission)
+   271→SELECT COUNT(*) AS recent_count
+   272→FROM point_events
+   273→WHERE user_id = :userId
+   274→  AND created_at > NOW() - INTERVAL '15 minutes';
+   275→
+   276→-- Flag if > 5 submissions in 15 min
+   277→-- Auto-block if > 15 submissions in 15 min
+   278→```
+   279→
+   280→```typescript
+   281→// Server-side rate limiter (add to api/submissions/index.ts POST handler)
+   282→const VELOCITY_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+   283→const VELOCITY_FLAG_THRESHOLD = 5;
+   284→const VELOCITY_BLOCK_THRESHOLD = 15;
+   285→
+   286→async function checkVelocity(userId: string): Promise<'ok' | 'flag' | 'block'> {
+   287→  const recentEvents = await getRecentEventsByUser(userId, VELOCITY_WINDOW_MS);
+   288→  if (recentEvents.length >= VELOCITY_BLOCK_THRESHOLD) return 'block';
+   289→  if (recentEvents.length >= VELOCITY_FLAG_THRESHOLD) return 'flag';
+   290→  return 'ok';
+   291→}
+   292→```
+   293→
+   294→**Thresholds:**
+   295→- 5 submissions / 15 min -> flag for review, allow submission
+   296→- 15 submissions / 15 min -> auto-block, return HTTP 429
+   297→- 50 submissions / hour -> auto-suspend account
+   298→
+   299→**Confidence:** 90% for bot detection at block threshold. 60% at flag threshold (legitimate field agents doing a sweep could hit 5/15min).
+   300→
+   301→#### Rule R-DUP-01: Photo Deduplication (addresses F-PHO-03, F-FAB-02)
+   302→
+   303→**Signals:**
+   304→- SHA-256 hash of the uploaded image buffer
+   305→- Perceptual hash (pHash) of the image for near-duplicate detection
+   306→
+   307→**Detection Logic:**
+   308→
+   309→```typescript
+   310→import { createHash } from 'crypto';
+   311→
+   312→function computeImageHash(imageBuffer: Buffer): string {
+   313→  return createHash('sha256').update(imageBuffer).digest('hex');
+   314→}
+   315→
+   316→// At submission time:
+   317→const imageHash = computeImageHash(parsedPhoto.imageBuffer);
+   318→const existingWithSameHash = await findSubmissionsByImageHash(imageHash);
+   319→
+   320→if (existingWithSameHash.length > 0) {
+   321→  // Exact duplicate photo
+   322→  const isSamePoint = existingWithSameHash.some(e => e.pointId === pointId);
+   323→  if (!isSamePoint) {
+   324→    // Same photo used for DIFFERENT points = strong fraud signal
+   325→    return errorResponse("This photo has already been used for another submission", 400);
+   326→  }
+   327→}
+   328→```
+   329→
+   330→**Thresholds:**
+   331→- Exact hash match for different pointId -> auto-reject
+   332→- Exact hash match for same pointId (re-enrichment) -> allow with flag
+   333→- Perceptual hash similarity >95% for different pointId -> flag for review
+   334→
+   335→**Confidence:** 99% for exact duplicates. 80% for perceptual near-duplicates.
+   336→
+   337→#### Rule R-GEO-01: Impossible Travel (addresses F-LOC-01, F-ACC-03)
+   338→
+   339→**Signals:**
+   340→- Sequential submissions from the same userId with GPS coordinates and timestamps
+   341→- Calculated speed between consecutive submissions
+   342→
+   343→**Detection Logic:**
+   344→
+   345→```typescript
+   346→async function checkImpossibleTravel(
+   347→  userId: string,
+   348→  currentLocation: SubmissionLocation,
+   349→  currentTime: Date
+   350→): Promise<'ok' | 'flag' | 'block'> {
+   351→  const lastSubmission = await getLastSubmissionByUser(userId);
+   352→  if (!lastSubmission) return 'ok';
+   353→
+   354→  const distanceKm = haversineKm(lastSubmission.location, currentLocation);
+   355→  const timeHours = (currentTime.getTime() - new Date(lastSubmission.createdAt).getTime()) / 3600000;
+   356→
+   357→  if (timeHours <= 0) return 'block'; // Same timestamp, different location
+   358→
+   359→  const speedKmh = distanceKm / timeHours;
+   360→
+   361→  // In Douala: walking ~5km/h, moto-taxi ~30km/h, car ~60km/h
+   362→  // Max reasonable: 80km/h in urban Cameroon
+   363→  if (speedKmh > 200) return 'block';  // Physically impossible
+   364→  if (speedKmh > 80) return 'flag';     // Suspicious
+   365→  return 'ok';
+   366→}
+   367→```
+   368→
+   369→**Thresholds:**
+   370→- Speed > 80 km/h between consecutive submissions -> flag
+   371→- Speed > 200 km/h -> auto-block (physically impossible in Douala traffic)
+   372→- Two submissions > 5km apart within 2 minutes -> auto-block
+   373→
+   374→**Confidence:** 95% at block threshold (200 km/h is not achievable on Douala roads). 70% at flag threshold (a moto-taxi on the highway could plausibly reach 80 km/h).
+   375→
+   376→#### Rule R-EXIF-01: Missing EXIF Metadata Penalty (addresses F-FAB-03, F-LOC-03, F-PHO-01)
+   377→
+   378→**Signals:**
+   379→- Whether `extractPhotoMetadata` returns null for GPS, capturedAt, deviceMake, deviceModel
+   380→- `clientDevice.isLowEnd` from device profile (mitigates false positives for feature phones)
+   381→
+   382→**Detection Logic:**
+   383→
+   384→```typescript
+   385→function computeExifTrustScore(
+   386→  extracted: ExtractedPhotoMetadata,
+   387→  clientDevice: ClientDeviceInfo | null
+   388→): number {
+   389→  let score = 100;
+   390→
+   391→  if (!extracted.gps) score -= 30;
+   392→  if (!extracted.capturedAt) score -= 20;
+   393→  if (!extracted.deviceMake) score -= 15;
+   394→  if (!extracted.deviceModel) score -= 15;
+   395→
+   396→  // Mitigate for known low-end devices that legitimately strip EXIF
+   397→  if (clientDevice?.isLowEnd && score < 50) {
+   398→    score = Math.min(score + 20, 50); // Partial recovery, but still flagged
+   399→  }
+   400→
+   401→  return Math.max(0, score);
+   402→}
+   403→```
+   404→
+   405→**Thresholds:**
+   406→- EXIF trust score >= 70 -> no action
+   407→- EXIF trust score 40-69 -> flag, increase review priority
+   408→- EXIF trust score < 40 -> flag + require secondary verification (second photo, manual review)
+   409→
+   410→**Confidence:** 50%. Many legitimate African-market phones produce images with minimal EXIF. This signal must always be combined with others.
+   411→
+   412→#### Rule R-PROX-01: Duplicate POI Detection (addresses F-FAB-01)
+   413→
+   414→**Signals:**
+   415→- Haversine distance between new submission and existing points of the same category
+   416→- Name similarity (Levenshtein distance or fuzzy match)
+   417→
+   418→**Detection Logic:**
+   419→
+   420→```typescript
+   421→async function checkDuplicatePoi(
+   422→  category: SubmissionCategory,
+   423→  location: SubmissionLocation,
+   424→  name: string,
+   425→  existingPoints: ProjectedPoint[]
+   426→): Promise<'ok' | 'flag' | 'block'> {
+   427→  const sameCategory = existingPoints.filter(p => p.category === category);
+   428→
+   429→  for (const point of sameCategory) {
+   430→    const distanceKm = haversineKm(location, point.location);
+   431→
+   432→    // Two pharmacies within 20 meters is almost certainly a duplicate
+   433→    if (distanceKm < 0.02) return 'block';
+   434→
+   435→    // Within 50 meters with similar name -> flag
+   436→    if (distanceKm < 0.05) {
+   437→      const existingName = point.details?.name ?? '';
+   438→      if (fuzzyNameMatch(name, existingName) > 0.7) return 'block';
+   439→      return 'flag';
+   440→    }
+   441→
+   442→    // Within 100 meters -> flag
+   443→    if (distanceKm < 0.1) return 'flag';
+   444→  }
+   445→
+   446→  return 'ok';
+   447→}
+   448→```
+   449→
+   450→**Thresholds:**
+   451→- Same category within 20m -> auto-reject (suggest enrichment instead)
+   452→- Same category within 50m with similar name -> auto-reject
+   453→- Same category within 100m -> flag for review
+   454→- Same category within 200m -> add to submission risk score
+   455→
+   456→**Confidence:** 85% at 20m/same-category. 70% at 50m. In dense urban Douala, multiple mobile money kiosks within 100m is legitimate, so the 100m threshold is a flag, not a block.
+   457→
+   458→#### Rule R-DEV-01: Device Fingerprint Cross-Reference (addresses F-ACC-01, F-XP-04)
+   459→
+   460→**Signals:**
+   461→- `clientDevice.deviceId` from `lib/client/deviceProfile.ts`
+   462→- `clientDevice.userAgent`, `deviceMemoryGb`, `hardwareConcurrency`, `platform`
+   463→- EXIF `deviceMake`, `deviceModel` from photo metadata
+   464→
+   465→**Detection Logic:**
+   466→
+   467→```typescript
+   468→async function checkDeviceCrossReference(
+   469→  userId: string,
+   470→  deviceId: string,
+   471→  deviceFingerprint: string // hash of userAgent + memory + cpu + platform
+   472→): Promise<'ok' | 'flag'> {
+   473→  // Check if this deviceId has been used by other userIds
+   474→  const userIdsForDevice = await getUserIdsByDeviceId(deviceId);
+   475→  const otherUsers = userIdsForDevice.filter(id => id !== userId);
+   476→
+   477→  if (otherUsers.length > 0) return 'flag'; // Multiple accounts on same device
+   478→
+   479→  // Check if this device fingerprint matches other accounts
+   480→  const userIdsForFingerprint = await getUserIdsByFingerprint(deviceFingerprint);
+   481→  const fpOtherUsers = userIdsForFingerprint.filter(id => id !== userId);
+   482→
+   483→  if (fpOtherUsers.length >= 2) return 'flag'; // 3+ accounts with same fingerprint
+   484→
+   485→  return 'ok';
+   486→}
+   487→```
+   488→
+   489→**Thresholds:**
+   490→- Same deviceId used by 2+ userIds -> flag both accounts
+   491→- Same deviceId used by 3+ userIds -> auto-suspend newest accounts
+   492→- Same device fingerprint across 3+ userIds -> flag for alt-account investigation
+   493→
+   494→**Confidence:** 75%. Shared devices are common in Africa (family members, cybercafe computers). The flag-not-block approach is intentional.
+   495→
+   496→#### Rule R-ENR-01: Self-Enrichment Pattern (addresses F-XP-02)
+   497→
+   498→**Signals:**
+   499→- Count of ENRICH_EVENTs by the same userId on the same pointId
+   500→- Time gap between CREATE_EVENT and ENRICH_EVENTs
+   501→- Whether the creating user is also the enriching user
+   502→
+   503→**Detection Logic:**
+   504→
+   505→```typescript
+   506→async function checkSelfEnrichment(
+   507→  userId: string,
+   508→  pointId: string,
+   509→  existingEvents: PointEvent[]
+   510→): Promise<{ score: number; isSelfEnrich: boolean }> {
+   511→  const pointEvents = existingEvents.filter(e => e.pointId === pointId);
+   512→  const createEvent = pointEvents.find(e => e.eventType === 'CREATE_EVENT');
+   513→  const userEnrichments = pointEvents.filter(
+   514→    e => e.eventType === 'ENRICH_EVENT' && e.userId.toLowerCase() === userId.toLowerCase()
+   515→  );
+   516→
+   517→  const isSelfEnrich = createEvent?.userId.toLowerCase() === userId.toLowerCase();
+   518→  let score = 0;
+   519→
+   520→  if (isSelfEnrich && userEnrichments.length >= 2) score += 30;
+   521→  if (userEnrichments.length >= 3) score += 40;
+   522→
+   523→  // Check temporal clustering
+   524→  if (createEvent && userEnrichments.length > 0) {
+   525→    const createTime = new Date(createEvent.createdAt).getTime();
+   526→    const enrichTimes = userEnrichments.map(e => new Date(e.createdAt).getTime());
+   527→    const minGap = Math.min(...enrichTimes.map(t => Math.abs(t - createTime)));
+   528→
+   529→    if (minGap < 60000) score += 20; // Enriching within 1 minute of creation
+   530→  }
+   531→
+   532→  return { score, isSelfEnrich };
+   533→}
+   534→```
+   535→
+   536→**Thresholds:**
+   537→- Self-enrichment score >= 50 -> flag, cap XP for additional enrichments
+   538→- Self-enrichment score >= 70 -> flag + require different user to enrich
+   539→- Single user making 3+ enrichments on same point -> block further enrichments from this user on this point
+   540→
+   541→**Confidence:** 80%. Self-enrichment may be legitimate (revisiting a location), but the pattern is suspicious at scale.
+   542→
+   543→#### Rule R-VAL-01: Field Plausibility (addresses F-POI-01, F-POI-02)
+   544→
+   545→**Signals:**
+   546→- Fuel prices vs. known market range
+   547→- Opening hours format validity
+   548→- Provider names against known provider list
+   549→
+   550→**Detection Logic:**
+   551→
+   552→```typescript
+   553→const CAMEROON_FUEL_PRICE_RANGE_XAF = {
+   554→  super: { min: 500, max: 1000 },    // ~630 XAF/L in 2026
+   555→  gasoil: { min: 450, max: 900 },
+   556→  kerosene: { min: 400, max: 800 },
+   557→};
+   558→
+   559→const KNOWN_MOBILE_MONEY_PROVIDERS = [
+   560→  'MTN Mobile Money', 'Orange Money', 'Express Union Mobile',
+   561→  'YUP', 'Afriland First Bank', 'UBA'
+   562→];
+   563→
+   564→function validateFuelPrice(fuelType: string, priceXaf: number): 'ok' | 'flag' | 'block' {
+   565→  const range = CAMEROON_FUEL_PRICE_RANGE_XAF[fuelType];
+   566→  if (!range) return 'ok';
+   567→
+   568→  if (priceXaf <= 0 || priceXaf > 10000) return 'block';  // Impossible
+   569→  if (priceXaf < range.min * 0.5 || priceXaf > range.max * 2) return 'flag';  // Implausible
+   570→  return 'ok';
+   571→}
+   572→```
+   573→
+   574→**Thresholds:**
+   575→- Price <= 0 or > 10,000 XAF -> auto-reject
+   576→- Price outside 50%-200% of known market range -> flag
+   577→- Unknown mobile money provider not in known list -> flag (but allow, could be new entrant)
+   578→- Availability status changed >3 times in 24h for same POI -> flag
+   579→
+   580→**Confidence:** 70% for price validation. Market prices shift, so ranges must be updated periodically.
+   581→
+   582→#### Rule R-IP-01: IP Reputation (addresses F-LOC-02, F-ACC-02)
+   583→
+   584→**Signals:**
+   585→- IP address ASN type (residential, datacenter, VPN, Tor)
+   586→- Multiple userIds submitting from same IP within short window
+   587→
+   588→**Detection Logic:**
+   589→
+   590→```typescript
+   591→// Enhance the existing fetchIpLocation in api/submissions/index.ts
+   592→interface EnhancedIpInfo {
+   593→  location: SubmissionLocation | null;
+   594→  asn: string | null;
+   595→  org: string | null;
+   596→  isDatacenter: boolean;
+   597→  isVpn: boolean;
+   598→  isTor: boolean;
+   599→}
+   600→
+   601→async function fetchEnhancedIpInfo(ip: string): Promise<EnhancedIpInfo> {
+   602→  // Use ipapi.co (already in use) or similar service
+   603→  const res = await fetch(`https://ipapi.co/${ip}/json/`);
+   604→  const data = await res.json();
+   605→
+   606→  const org = (data.org ?? '').toLowerCase();
+   607→  const isDatacenter = org.includes('hosting') || org.includes('cloud') ||
+   608→    org.includes('digitalocean') || org.includes('aws') || org.includes('azure');
+   609→  const isVpn = org.includes('vpn') || org.includes('private internet') ||
+   610→    org.includes('nordvpn') || org.includes('express');
+   611→
+   612→  return {
+   613→    location: parseLocation(data),
+   614→    asn: data.asn ?? null,
+   615→    org: data.org ?? null,
+   616→    isDatacenter,
+   617→    isVpn,
+   618→    isTor: data.is_tor === true,
+   619→  };
+   620→}
+   621→```
+   622→
+   623→**Thresholds:**
+   624→- Tor exit node -> auto-block submission
+   625→- Known VPN/datacenter ASN -> flag, increase risk score by 25
+   626→- 3+ different userIds from same IP in 1 hour -> flag all as potential alt accounts
+   627→
+   628→**Confidence:** 85% for Tor/datacenter. 60% for VPN (many legitimate users in Africa use VPNs for connectivity reasons).
+   629→
+   630→#### Rule R-GRA-01: Collusion Graph Analysis (addresses F-XP-03)
+   631→
+   632→**Signals:**
+   633→- User-to-point bipartite graph: which users interact with which points
+   634→- Reciprocal enrichment patterns: A enriches B's points AND B enriches A's points
+   635→- Temporal coordination: submissions from different users on same points within narrow windows
+   636→
+   637→**Detection Logic:**
+   638→
+   639→```sql
+   640→-- Find reciprocal enrichment pairs
+   641→WITH enrichments AS (
+   642→  SELECT
+   643→    e.user_id AS enricher,
+   644→    c.user_id AS creator,
+   645→    e.point_id
+   646→  FROM point_events e
+   647→  JOIN point_events c ON e.point_id = c.point_id
+   648→    AND c.event_type = 'CREATE_EVENT'
+   649→  WHERE e.event_type = 'ENRICH_EVENT'
+   650→    AND e.user_id != c.user_id
+   651→),
+   652→pairs AS (
+   653→  SELECT
+   654→    enricher AS user_a,
+   655→    creator AS user_b,
+   656→    COUNT(*) AS a_enriches_b
+   657→  FROM enrichments
+   658→  GROUP BY enricher, creator
+   659→)
+   660→SELECT
+   661→  p1.user_a,
+   662→  p1.user_b,
+   663→  p1.a_enriches_b,
+   664→  COALESCE(p2.a_enriches_b, 0) AS b_enriches_a
+   665→FROM pairs p1
+   666→LEFT JOIN pairs p2
+   667→  ON p1.user_a = p2.user_b AND p1.user_b = p2.user_a
+   668→WHERE p1.a_enriches_b >= 3
+   669→  AND COALESCE(p2.a_enriches_b, 0) >= 3
+   670→ORDER BY (p1.a_enriches_b + COALESCE(p2.a_enriches_b, 0)) DESC;
+   671→```
+   672→
+   673→**Thresholds:**
+   674→- Reciprocal enrichment between two users >= 3 times each -> flag both accounts
+   675→- 3+ users all enriching each other's points >= 2 times -> escalate as collusion ring
+   676→- Cluster of users with >80% of their enrichments going to other cluster members -> auto-flag all
+   677→
+   678→**Confidence:** 75%. Legitimate community behavior (neighbors validating each other's submissions) can look like collusion. Requires manual review.
+   679→
+   680→---
+   681→
+   682→## 3. Risk Scoring Model
+   683→
+   684→### 3.1 Submission Risk Score (0-100)
+   685→
+   686→Every submission receives a composite risk score computed from five trust dimensions. Higher score = higher risk = more likely fraudulent.
+   687→
+   688→```
+   689→SubmissionRiskScore = w_loc * LocationRisk
+   690→                    + w_pho * PhotoRisk
+   691→                    + w_tmp * TemporalRisk
+   692→                    + w_usr * UserRisk
+   693→                    + w_bhv * BehavioralRisk
+   694→```
+   695→
+   696→#### Component Weights (Initial Calibration)
+   697→
+   698→| Component | Weight | Rationale |
+   699→|---|---|---|
+   700→| Location Trust (LocationRisk) | 0.25 | GPS/IP/EXIF triangulation is the strongest objective signal |
+   701→| Photo Trust (PhotoRisk) | 0.25 | Photo evidence is the primary proof of physical presence |
+   702→| Temporal Trust (TemporalRisk) | 0.15 | Velocity and timing patterns |
+   703→| User Trust (UserRisk) | 0.20 | Account age, history, prior fraud flags |
+   704→| Behavioral Trust (BehavioralRisk) | 0.15 | Submission patterns, enrichment behavior |
+   705→
+   706→#### 3.1.1 Location Risk (0-100)
+   707→
+   708→```typescript
+   709→function computeLocationRisk(params: {
+   710→  submissionLocation: SubmissionLocation | null;
+   711→  photoExifGps: SubmissionLocation | null;
+   712→  ipLocation: SubmissionLocation | null;
+   713→  effectiveLocation: SubmissionLocation;
+   714→}): number {
+   715→  let risk = 0;
+   716→
+   717→  // No submission GPS provided (using fallback)
+   718→  if (!params.submissionLocation) risk += 15;
+   719→
+   720→  // No EXIF GPS in photo
+   721→  if (!params.photoExifGps) risk += 20;
+   722→
+   723→  // No IP location resolved
+   724→  if (!params.ipLocation) risk += 10;
+   725→
+   726→  // Submission-to-photo GPS mismatch (if both present)
+   727→  if (params.submissionLocation && params.photoExifGps) {
+   728→    const dist = haversineKm(params.submissionLocation, params.photoExifGps);
+   729→    if (dist > 1) risk += 40;       // Beyond 1km threshold
+   730→    else if (dist > 0.5) risk += 15; // Marginal
+   731→  }
+   732→
+   733→  // IP-to-effective location mismatch
+   734→  if (params.ipLocation) {
+   735→    const dist = haversineKm(params.ipLocation, params.effectiveLocation);
+   736→    if (dist > 50) risk += 30;
+   737→    else if (dist > 20) risk += 10;
+   738→  }
+   739→
+   740→  return Math.min(100, risk);
+   741→}
+   742→```
+   743→
+   744→#### 3.1.2 Photo Risk (0-100)
+   745→
+   746→```typescript
+   747→function computePhotoRisk(params: {
+   748→  hasExifGps: boolean;
+   749→  hasExifTimestamp: boolean;
+   750→  hasDeviceInfo: boolean;
+   751→  imageHash: string;
+   752→  existingHashes: Set<string>;
+   753→  imageDimensions: { width: number; height: number };
+   754→  isLowEndDevice: boolean;
+   755→}): number {
+   756→  let risk = 0;
+   757→
+   758→  // Photo hash already exists for different point
+   759→  if (params.existingHashes.has(params.imageHash)) risk += 80;
+   760→
+   761→  // Missing EXIF metadata
+   762→  if (!params.hasExifGps) risk += 15;
+   763→  if (!params.hasExifTimestamp) risk += 10;
+   764→  if (!params.hasDeviceInfo) risk += 10;
+   765→
+   766→  // Screenshot dimensions (common phone screen resolutions)
+   767→  const { width, height } = params.imageDimensions;
+   768→  const isScreenshotRatio = (
+   769→    (width === 1080 && height === 2400) || // Common Android screenshot
+   770→    (width === 1170 && height === 2532) || // iPhone 12/13 screenshot
+   771→    (width === 1284 && height === 2778)    // iPhone 12/13 Pro Max screenshot
+   772→  );
+   773→  if (isScreenshotRatio) risk += 15;
+   774→
+   775→  // Mitigate for low-end devices
+   776→  if (params.isLowEndDevice && risk > 0 && risk <= 35) {
+   777→    risk = Math.max(0, risk - 10);
+   778→  }
+   779→
+   780→  return Math.min(100, risk);
+   781→}
+   782→```
+   783→
+   784→#### 3.1.3 Temporal Risk (0-100)
+   785→
+   786→```typescript
+   787→function computeTemporalRisk(params: {
+   788→  recentSubmissionCount15min: number;
+   789→  recentSubmissionCount1hr: number;
+   790→  lastSubmissionLocation: SubmissionLocation | null;
+   791→  lastSubmissionTime: Date | null;
+   792→  currentLocation: SubmissionLocation;
+   793→  currentTime: Date;
+   794→}): number {
+   795→  let risk = 0;
+   796→
+   797→  // Velocity
+   798→  if (params.recentSubmissionCount15min > 10) risk += 50;
+   799→  else if (params.recentSubmissionCount15min > 5) risk += 25;
+   800→  else if (params.recentSubmissionCount15min > 3) risk += 10;
+   801→
+   802→  // Impossible travel
+   803→  if (params.lastSubmissionLocation && params.lastSubmissionTime) {
+   804→    const distKm = haversineKm(params.lastSubmissionLocation, params.currentLocation);
+   805→    const hoursElapsed = (params.currentTime.getTime() - params.lastSubmissionTime.getTime()) / 3600000;
+   806→    if (hoursElapsed > 0) {
+   807→      const speedKmh = distKm / hoursElapsed;
+   808→      if (speedKmh > 200) risk += 50;
+   809→      else if (speedKmh > 80) risk += 25;
+   810→    }
+   811→  }
+   812→
+   813→  // Late-night submissions (less likely to be legitimate fieldwork)
+   814→  const hour = params.currentTime.getUTCHours() + 1; // UTC+1 for Cameroon
+   815→  if (hour >= 23 || hour < 5) risk += 10;
+   816→
+   817→  return Math.min(100, risk);
+   818→}
+   819→```
+   820→
+   821→#### 3.1.4 User Risk (0-100)
+   822→
+   823→```typescript
+   824→function computeUserRisk(params: {
+   825→  accountAgeDays: number;
+   826→  totalSubmissions: number;
+   827→  priorFraudFlags: number;
+   828→  priorRejections: number;
+   829→  userTrustScore: number; // 0-100, see section 3.2
+   830→}): number {
+   831→  let risk = 0;
+   832→
+   833→  // New account penalty
+   834→  if (params.accountAgeDays < 1) risk += 25;
+   835→  else if (params.accountAgeDays < 7) risk += 15;
+   836→  else if (params.accountAgeDays < 30) risk += 5;
+   837→
+   838→  // No submission history
+   839→  if (params.totalSubmissions === 0) risk += 15;
+   840→
+   841→  // Prior fraud history
+   842→  risk += Math.min(40, params.priorFraudFlags * 10);
+   843→  risk += Math.min(20, params.priorRejections * 5);
+   844→
+   845→  // Inverse of user trust score
+   846→  risk += Math.round((100 - params.userTrustScore) * 0.2);
+   847→
+   848→  return Math.min(100, risk);
+   849→}
+   850→```
+   851→
+   852→#### 3.1.5 Behavioral Risk (0-100)
+   853→
+   854→```typescript
+   855→function computeBehavioralRisk(params: {
+   856→  selfEnrichmentCount: number;
+   857→  samePointEnrichments: number;
+   858→  categoryDistribution: Map<string, number>; // how many of each category
+   859→  totalSubmissions: number;
+   860→  deviceIdSharedWithOtherUsers: boolean;
+   861→  ipSharedWithOtherUsers: boolean;
+   862→}): number {
+   863→  let risk = 0;
+   864→
+   865→  // Self-enrichment pattern
+   866→  if (params.selfEnrichmentCount > 5) risk += 30;
+   867→  else if (params.selfEnrichmentCount > 2) risk += 15;
+   868→
+   869→  // Excessive enrichments on single point
+   870→  if (params.samePointEnrichments > 3) risk += 25;
+   871→
+   872→  // Monoculture (only submitting one category could indicate targeted farming)
+   873→  if (params.totalSubmissions > 10) {
+   874→    const maxCategoryPct = Math.max(...params.categoryDistribution.values()) / params.totalSubmissions;
+   875→    if (maxCategoryPct > 0.95) risk += 10;
+   876→  }
+   877→
+   878→  // Device/IP sharing signals
+   879→  if (params.deviceIdSharedWithOtherUsers) risk += 15;
+   880→  if (params.ipSharedWithOtherUsers) risk += 10;
+   881→
+   882→  return Math.min(100, risk);
+   883→}
+   884→```
+   885→
+   886→### 3.2 User Trust Score (0-100)
+   887→
+   888→A long-term reputation score that builds with legitimate contributions and decays with fraud signals.
+   889→
+   890→```typescript
+   891→interface UserTrustProfile {
+   892→  userId: string;
+   893→  trustScore: number;           // 0-100, starts at 50
+   894→  totalApproved: number;        // Submissions that passed review
+   895→  totalFlagged: number;         // Submissions that were flagged
+   896→  totalRejected: number;        // Submissions rejected for fraud
+   897→  consecutiveClean: number;     // Streak of unflagged submissions
+   898→  lastFraudFlag: string | null; // ISO date
+   899→  tier: 'new' | 'standard' | 'trusted' | 'elite' | 'suspended';
+   900→}
+   901→
+   902→function updateTrustScore(profile: UserTrustProfile, event: 'approved' | 'flagged' | 'rejected'): void {
+   903→  switch (event) {
+   904→    case 'approved':
+   905→      profile.totalApproved++;
+   906→      profile.consecutiveClean++;
+   907→      // Gradual increase: +1 per clean submission, +2 if on a streak
+   908→      const bonus = profile.consecutiveClean > 10 ? 2 : 1;
+   909→      profile.trustScore = Math.min(100, profile.trustScore + bonus);
+   910→      break;
+   911→
+   912→    case 'flagged':
+   913→      profile.totalFlagged++;
+   914→      profile.consecutiveClean = 0;
+   915→      // Moderate decrease
+   916→      profile.trustScore = Math.max(0, profile.trustScore - 5);
+   917→      profile.lastFraudFlag = new Date().toISOString();
+   918→      break;
+   919→
+   920→    case 'rejected':
+   921→      profile.totalRejected++;
+   922→      profile.consecutiveClean = 0;
+   923→      // Significant decrease
+   924→      profile.trustScore = Math.max(0, profile.trustScore - 15);
+   925→      profile.lastFraudFlag = new Date().toISOString();
+   926→      break;
+   927→  }
+   928→
+   929→  // Update tier
+   930→  if (profile.trustScore >= 85 && profile.totalApproved >= 50) profile.tier = 'elite';
+   931→  else if (profile.trustScore >= 70 && profile.totalApproved >= 20) profile.tier = 'trusted';
+   932→  else if (profile.trustScore >= 30) profile.tier = 'standard';
+   933→  else if (profile.trustScore >= 10) profile.tier = 'new';
+   934→  else profile.tier = 'suspended';
+   935→}
+   936→```
+   937→
+   938→**Trust Tiers:**
+   939→
+   940→| Tier | Trust Score | Requirements | Privileges |
+   941→|---|---|---|---|
+   942→| New | 30-49 | Default for new accounts | All submissions reviewed. Max 10/day. |
+   943→| Standard | 50-69 | 10+ approved submissions | Normal rate limits. Flagged only by rules. |
+   944→| Trusted | 70-84 | 20+ approved, score >= 70 | Relaxed thresholds. Some submissions auto-approved. |
+   945→| Elite | 85-100 | 50+ approved, score >= 85 | Can validate others' submissions. Highest auto-approve rate. |
+   946→| Suspended | 0-9 | Triggered by fraud | All submissions blocked. Appeal required. |
+   947→
+   948→**Decay:** Trust score decays by 1 point per 30 days of inactivity to prevent dormant accounts from retaining high trust indefinitely.
+   949→
+   950→### 3.3 Score Thresholds and Actions
+   951→
+   952→| Composite Risk Score | Action | XP Treatment |
+   953→|---|---|---|
+   954→| 0-25 | **Auto-approve**. Submission accepted, XP awarded immediately. | Full XP (+5) |
+   955→| 26-50 | **Soft review**. Submission accepted, XP awarded, added to review queue. Admin reviews within 48h. | Full XP, reversible |
+   956→| 51-75 | **Hard review**. Submission accepted but XP held in escrow. Requires admin approval within 72h. | XP escrowed |
+   957→| 76-100 | **Auto-reject**. Submission rejected with reason. User notified. | No XP |
+   958→
+   959→**Critical change from current behavior:** Currently XP is awarded immediately and unconditionally (`profile.XP = (profile.XP ?? 0) + BASE_EVENT_XP`). The proposed model introduces XP escrow for medium-high risk submissions.
+   960→
+   961→### 3.4 Weight Calibration Strategy
+   962→
+   963→Phase 1 (Weeks 1-4): Deploy scoring in **shadow mode**. Compute risk scores for all submissions but do not act on them. Log scores alongside submission data.
+   964→
+   965→Phase 2 (Weeks 5-8): Analyze shadow scores against manually labeled data. Admin team reviews a random sample of 100 submissions and labels each as legitimate/suspicious/fraudulent. Use labels to:
+   966→- Identify which signals correlate most strongly with actual fraud
+   967→- Adjust weights using logistic regression or simple gradient descent
+   968→- Set thresholds that produce acceptable false positive rates (<5%)
+   969→
+   970→Phase 3 (Weeks 9-12): Enable enforcement mode with conservative thresholds (auto-reject only at 90+). Gradually lower thresholds as confidence grows.
+   971→
+   972→Phase 4 (Ongoing): Monthly recalibration using the previous month's manual review labels. Track precision/recall for each component.
+   973→
+   974→---
+   975→
+   976→## 4. Response Playbooks
+   977→
+   978→### 4.1 Playbook P-FAB: Data Fabrication Response
+   979→
+   980→**Trigger:** Submission risk score > 75 with LocationRisk > 60 or PhotoRisk > 70.
+   981→
+   982→**Immediate Automated Response:**
+   983→1. Reject the submission (HTTP 400 with fraud reason code)
+   984→2. Do not award XP
+   985→3. Log the rejection with full fraud check payload to `fraud_audit_log` table
+   986→4. Increment user's `priorRejections` counter
+   987→5. If user has 3+ rejections in 24 hours, auto-suspend account
+   988→
+   989→**Escalation Criteria:**
+   990→- User has > 5 lifetime rejections -> escalate to admin queue
+   991→- Rejection involves a POI that was previously approved (conflicting data) -> immediate admin review
+   992→- Pattern of fabrication detected across multiple related submissions -> escalate as organized fraud
+   993→
+   994→**Investigation Steps:**
+   995→1. Pull all submissions from the flagged userId (query `point_events` where `user_id = :flaggedId`)
+   996→2. Cross-reference device fingerprints: check if `clientDevice.deviceId` appears under other userIds
+   997→3. Review photo evidence: open each photo URL in admin dashboard, compare to Google Maps Street View for the GPS coordinates
+   998→4. Check IP history: was this user submitting from consistent IPs (suggesting a real location) or varied datacenter IPs?
+   999→5. Interview the user (if contactable): request they resubmit with a video or live photo
+  1000→
+  1001→**Resolution Options:**
+  1002→
+  1003→| Action | Criteria | Reversible? |
+  1004→|---|---|---|
+  1005→| Warning | First offense, low confidence in fraud determination | Yes |
+  1006→| XP clawback | Confirmed fabrication, remove XP for fraudulent submissions | Yes via appeal |
+  1007→| Submission deletion | Confirmed fabrication, admin calls DELETE on event ID | No (soft delete with audit trail) |
+  1008→| Account suspension (7 days) | 3+ confirmed fabrications | Yes via appeal |
+  1009→| Permanent ban | Repeated confirmed fabrication after suspension | Via appeal to senior admin |
+  1010→
+  1011→**Appeal Process:**
+  1012→1. User submits appeal via in-app form or email
+  1013→2. Appeal reviewed by different admin than the one who flagged
+  1014→3. If evidence is ambiguous, user is asked to provide additional proof (return to location, take timestamped video)
+  1015→4. Appeal decision rendered within 5 business days
+  1016→5. If overturned, XP restored and trust score partially recovered (+10)
+  1017→
+  1018→**Evidence Preservation:**
+  1019→- All photo URLs are retained in Vercel Blob (do not delete blob storage even if submission event is deleted)
+  1020→- Fraud check payload preserved in `details.fraudCheck` on the event
+  1021→- Admin actions logged with admin userId, timestamp, and reason in `fraud_audit_log`
+  1022→- IP addresses and device fingerprints retained for 90 days for forensic analysis
+  1023→
+  1024→### 4.2 Playbook P-XPG: XP Gaming Response
+  1025→
+  1026→**Trigger:** TemporalRisk > 50 or BehavioralRisk > 50, or self-enrichment pattern detected.
+  1027→
+  1028→**Immediate Automated Response:**
+  1029→1. For velocity violations: rate-limit the user (HTTP 429, "You're submitting too quickly. Please wait 15 minutes.")
+  1030→2. For self-enrichment: allow the submission but cap XP at 0 for the 4th+ enrichment on the same point by the same user
+  1031→3. Escrow XP for all flagged submissions pending review
+  1032→
+  1033→**Escalation Criteria:**
+  1034→- User hits velocity block threshold (15/15min) -> immediate admin notification
+  1035→- User has > 20 self-enrichments across all points -> escalate as systematic gaming
+  1036→- Leaderboard anomaly: user jumps >10 ranks in 24 hours -> manual review
+  1037→
+  1038→**Investigation Steps:**
+  1039→1. Analyze temporal distribution of user's submissions (histogram by hour/day)
+  1040→2. Map enrichment patterns: which points, what fields, what order
+  1041→3. Compare user's submission rate to median rate for their cohort
+  1042→4. Check if the enrichment data is actually correct (spot-check against ground truth)
+  1043→
+  1044→**Resolution Options:**
+  1045→
+  1046→| Action | Criteria |
+  1047→|---|---|
+  1048→| Rate limit enforcement | Velocity violation, resets after cool-off period |
+  1049→| XP cap per point | Self-enrichment detected, max 2 enrichments earn XP per user per point |
+  1050→| XP recalculation | Confirmed gaming, recalculate user's XP excluding fraudulent submissions |
+  1051→| Leaderboard demotion | Confirmed gaming, manually adjust ranking |
+  1052→
+  1053→### 4.3 Playbook P-LOC: Location Spoofing Response
+  1054→
+  1055→**Trigger:** LocationRisk > 60 with specific signals: impossible travel, IP mismatch, EXIF GPS mismatch.
+  1056→
+  1057→**Immediate Automated Response:**
+  1058→1. For impossible travel (>200 km/h): auto-reject with "Location verification failed"
+  1059→2. For IP mismatch (datacenter/VPN): flag for review, allow submission but escrow XP
+  1060→3. For EXIF-submission GPS mismatch: already handled by current code (HTTP 400 rejection at `api/submissions/index.ts:504`)
+  1061→
+  1062→**Investigation Steps:**
+  1063→1. Plot the user's submission locations on a map with timestamps to visualize travel patterns
+  1064→2. Check if the user's device reports mock location capability (Android: `Settings.Secure.ALLOW_MOCK_LOCATION`)
+  1065→3. Compare IP ASN history -- consistent residential ASN vs. rotating datacenter ASNs
+  1066→4. For EXIF manipulation: check for EXIF software tag inconsistencies (e.g., "Adobe Photoshop" or "exiftool" as the software field)
+  1067→
+  1068→**Resolution Options:**
+  1069→
+  1070→| Action | Criteria |
+  1071→|---|---|
+  1072→| Reject submission | Clear GPS spoofing (impossible travel, >200 km/h) |
+  1073→| Flag + escrow | VPN/proxy detected but data may be legitimate |
+  1074→| Account review | 3+ location spoofing flags on same account |
+  1075→| Ban | Confirmed systematic GPS spoofing (developer tools / mock location) |
+  1076→
+  1077→### 4.4 Playbook P-PHO: Photo Fraud Response
+  1078→
+  1079→**Trigger:** PhotoRisk > 60, or photo hash duplicate detected.
+  1080→
+  1081→**Immediate Automated Response:**
+  1082→1. Exact hash duplicate for different point: auto-reject ("This photo has already been used")
+  1083→2. Missing all EXIF metadata + not low-end device: flag for review
+  1084→3. Screenshot dimensions detected: flag for review with "screenshot_suspected" tag
+  1085→
+  1086→**Investigation Steps:**
+  1087→1. Reverse image search the photo URL (manual step using Google Images or TinEye)
+  1088→2. Check image metadata for telltale signs: consistent dimensions across all user submissions (screenshot bot), impossibly high resolution for claimed device, JPEG quality artifacts inconsistent with phone camera
+  1089→3. Compare photo content to Google Maps Street View for the declared GPS location
+  1090→
+  1091→**Resolution Options:**
+  1092→
+  1093→| Action | Criteria |
+  1094→|---|---|
+  1095→| Reject | Exact duplicate photo across different POIs |
+  1096→| Reject | Confirmed stock photo / internet image (reverse image search hit) |
+  1097→| Flag | Screenshot suspected but content plausible |
+  1098→| Allow | Low-end device with missing EXIF (Africa-specific accommodation) |
+  1099→
+  1100→### 4.5 Playbook P-ACC: Account Abuse Response
+  1101→
+  1102→**Trigger:** Device cross-reference flag (same deviceId on multiple userIds), or bot behavior detected.
+  1103→
+  1104→**Immediate Automated Response:**
+  1105→1. Bot detection (no clientDevice, scripted patterns): block with CAPTCHA challenge
+  1106→2. Multi-account detection: flag all linked accounts, suspend newest accounts
+  1107→3. Credential sharing: flag account, send security notification to account email
+  1108→
+  1109→**Investigation Steps:**
+  1110→1. Build an account linkage graph: deviceId -> userIds, IP -> userIds, fingerprint -> userIds
+  1111→2. For each cluster of linked accounts, determine the "primary" account (oldest, most submissions)
+  1112→3. Check if linked accounts are submitting in the same geographic area (shared device at home) or different areas (coordinated fraud)
+  1113→4. Review submission quality across all linked accounts
+  1114→
+  1115→**Resolution Options:**
+  1116→
+  1117→| Action | Criteria |
+  1118→|---|---|
+  1119→| Merge accounts | Shared device, appears to be family/legitimate sharing |
+  1120→| Suspend alt accounts | Confirmed alt-farming, preserve primary account |
+  1121→| Ban all accounts | Coordinated bot operation |
+  1122→| CAPTCHA enforcement | Bot suspicion, require human verification |
+  1123→
+  1124→### 4.6 Playbook P-POI: Data Poisoning Response
+  1125→
+  1126→**Trigger:** Field plausibility check fails, or conflicting data from multiple sources on same POI.
+  1127→
+  1128→**Immediate Automated Response:**
+  1129→1. Impossible field values (price <= 0, price > 10000 XAF): auto-reject
+  1130→2. Conflicting availability data (3+ status flips in 24h): flag all recent updates for review
+  1131→3. Implausible values (price outside market range): accept but escrow, flag for review
+  1132→
+  1133→**Investigation Steps:**
+  1134→1. Compare the submitted data against other recent submissions for the same POI (consensus analysis)
+  1135→2. Check if the submitter has a pattern of negative availability reports for specific businesses
+  1136→3. Cross-reference with external data sources (Google Maps, OpenStreetMap) where available
+  1137→4. For price data: compare against historical price trends for the same POI
+  1138→
+  1139→**Resolution Options:**
+  1140→
+  1141→| Action | Criteria |
+  1142→|---|---|
+  1143→| Reject field value | Impossible value (price <= 0) |
+  1144→| Revert to previous value | Confirmed poisoning, restore last known good data |
+  1145→| Flag user | Pattern of intentionally wrong data |
+  1146→| Competitor sabotage investigation | User consistently marks specific businesses as closed |
+  1147→
+  1148→---
+  1149→
+  1150→## 5. False Positive Minimization
+  1151→
+  1152→### 5.1 Legitimate Scenarios That Resemble Fraud
+  1153→
+  1154→The African mobile context produces many false positive signals that would be definitive fraud indicators in Western markets. Each must be handled carefully.
+  1155→
+  1156→#### FP-01: New Users Look Like Fraudsters
+  1157→
+  1158→**The problem:** A brand-new contributor has no submission history, no trust score, a fresh deviceId, and may submit several POIs on their first field trip. Every risk signal fires: UserRisk is high (new account), TemporalRisk is elevated (multiple submissions in quick succession), BehavioralRisk is elevated (no prior pattern).
+  1159→
+  1160→**Mitigation:**
+  1161→- New User Grace Period: First 3 submissions from a new account receive a 15-point risk score reduction (equivalent to the new-account penalty being waived for the very first submissions)
+  1162→- Onboarding flow: guide new users through their first submission with explicit instructions, producing a "tutorial" submission that seeds their trust profile
+  1163→- Allow up to 5 submissions in the first hour without velocity flags (one-time allowance)
+  1164→
+  1165→#### FP-02: Poor GPS Accuracy on Feature Phones
+  1166→
+  1167→**The problem:** Low-end Android phones (Itel, Infinix Smart, Tecno Pop) common in Cameroon have GPS accuracy of 50-100 meters rather than 5-10 meters. This means the GPS-to-EXIF distance could exceed the 1km threshold even for a legitimate submission if the phone provides coordinates from cell tower triangulation rather than true GPS.
+  1168→
+  1169→**Mitigation:**
+  1170→- The current `detectLowEndFromHints` function in `lib/client/deviceProfile.ts:74-88` already identifies these devices (itel, android go, go edition, infinix smart, memory <= 2GB)
+  1171→- When `clientDevice.isLowEnd === true`, increase the submission-to-EXIF GPS match threshold from 1km to 2km
+  1172→- Weight the LocationRisk score component by 0.7x for low-end devices (reduce its contribution to the composite score)
+  1173→- Never auto-reject based solely on GPS mismatch for low-end devices; always flag for review instead
+  1174→
+  1175→#### FP-03: Shared Devices
+  1176→
+  1177→**The problem:** In many African households, a single smartphone is shared among family members. Multiple people may use the same device to contribute to ADL. This triggers the multi-account detection rule (same deviceId, different userIds).
+  1178→
+  1179→**Mitigation:**
+  1180→- Flag but do not auto-suspend when 2 accounts share a deviceId
+  1181→- Only escalate to suspension at 3+ accounts per device
+  1182→- Allow users to declare "shared device" in their profile settings, which adjusts the deviceId-based rules
+  1183→- When shared device is declared, apply per-user rate limits instead of per-device limits
+  1184→- Track submission patterns: shared device users typically submit at different times of day (different people), while alt-account farmers submit at all hours
+  1185→
+  1186→#### FP-04: Intermittent Connectivity and Offline Queue Batching
+  1187→
+  1188→**The problem:** The offline queue in `lib/client/offlineQueue.ts` is designed for intermittent connectivity. A contributor might collect 8 submissions over a 2-hour field trip while offline, then flush them all at once when they find a Wi-Fi hotspot. This looks identical to a rapid-fire bot: 8 submissions arriving within seconds.
+  1189→
+  1190→**Mitigation:**
+  1191→- Track the `createdAt` timestamp from the offline queue item (client-side creation time) separately from the server-side `createdAt`
+  1192→- If the submission payload includes a `queuedAt` timestamp (added by the offline queue), use the time gap between `queuedAt` values for velocity analysis instead of server arrival time
+  1193→- Require the offline queue to include a sequence number and the total batch size. A batch of 8 that arrives with sequential timestamps spread over 2 hours is treated differently from 8 simultaneous creations
+  1194→- Add `offlineBatch: boolean` flag to the submission payload. When true, apply relaxed velocity thresholds (15/batch instead of 5/15min)
+  1195→
+  1196→```typescript
+  1197→// Proposed addition to SubmissionInput type
+  1198→interface SubmissionInput {
+  1199→  // ... existing fields
+  1200→  queuedAt?: string;         // ISO timestamp from offline queue creation
+  1201→  offlineBatchId?: string;   // Identifies submissions from the same offline session
+  1202→  offlineBatchSize?: number; // Total items in this batch
+  1203→}
+  1204→```
+  1205→
+  1206→#### FP-05: Legitimate Dense POI Areas
+  1207→
+  1208→**The problem:** In Douala's commercial areas (Marche Bonamoussadi, Carrefour Ange Raphael), multiple mobile money kiosks can be within 10 meters of each other. The duplicate POI detection rule (R-PROX-01) would incorrectly flag these as duplicates.
+  1209→
+  1210→**Mitigation:**
+  1211→- Category-specific proximity thresholds:
+  1212→  - `mobile_money`: 10m duplicate threshold (kiosks cluster densely)
+  1213→  - `pharmacy`: 50m duplicate threshold (rarely adjacent)
+  1214→  - `fuel_station`: 100m duplicate threshold (large footprint, never adjacent)
+  1215→- Require name differentiation for close-proximity same-category POIs: two mobile money kiosks within 20m must have different provider names
+  1216→- Use photo comparison: if two nearby POIs have visually distinct photos, they are likely genuinely different businesses
+  1217→
+  1218→#### FP-06: Timestamp Anomalies from Incorrect Phone Clocks
+  1219→
+  1220→**The problem:** Many feature phones in Africa have incorrect system clocks (never set, battery removed and reset, timezone misconfigured). EXIF timestamps may be hours or years off from reality.
+  1221→
+  1222→**Mitigation:**
+  1223→- Do not use EXIF timestamp alone as a fraud signal
+  1224→- Compare EXIF timestamp against server receipt time. If the EXIF timestamp is in the future or more than 24 hours in the past, treat it as "unreliable" rather than "fraudulent"
+  1225→- For low-end devices, weight the temporal component of the EXIF trust score at 0.5x
+  1226→
+  1227→### 5.2 Calibration Using Labeled Data
+  1228→
+  1229→**Data Collection Process:**
+  1230→
+  1231→1. Random sampling: each week, an admin reviews 50 randomly selected submissions
+  1232→2. For each submission, the admin labels it: `legitimate`, `suspicious`, `confirmed_fraud`
+  1233→3. Labels are stored in a `submission_labels` table linked to `event_id`
+  1234→4. After 4 weeks (200 labeled samples), run the first calibration analysis
+  1235→
+  1236→**Calibration Metrics:**
+  1237→
+  1238→```
+  1239→Precision = TruePositives / (TruePositives + FalsePositives)
+  1240→Recall    = TruePositives / (TruePositives + FalseNegatives)
+  1241→F1        = 2 * Precision * Recall / (Precision + Recall)
+  1242→```
+  1243→
+  1244→**Target:** Precision >= 0.90, Recall >= 0.70. We strongly prefer not falsely accusing legitimate contributors (high precision) even at the cost of missing some fraud (lower recall).
+  1245→
+  1246→### 5.3 User Friction Tradeoffs
+  1247→
+  1248→| Friction Level | Mechanism | When Applied | Impact on Conversion |
+  1249→|---|---|---|---|
+  1250→| Zero | No additional checks beyond current validation | Risk score 0-25, trusted/elite users | None |
+  1251→| Low | Flag for async review, user not aware | Risk score 26-50, standard users | None |
+  1252→| Medium | "Verifying submission..." delay (2-3 seconds) | Risk score 51-75 | Minimal (perceived as upload time) |
+  1253→| High | Request second photo or additional details | Risk score 76+, or specific rule triggers | 10-20% drop-off estimated |
+  1254→| Maximum | CAPTCHA + identity verification | Bot detection, suspended accounts | 50%+ drop-off (intentional for bots) |
+  1255→
+  1256→**Principle:** For legitimate contributors on low-end devices with poor connectivity, every additional second of friction risks losing the submission entirely (timeout, page refresh, battery death). Fraud detection must be as invisible as possible for the bottom 80% of submissions.
+  1257→
+  1258→### 5.4 Whitelist / Trust Mechanisms
+  1259→
+  1260→**Organizational Whitelists:**
+  1261→- Partner organizations (NGOs, health authorities) that deploy field agents can register their agents for elevated trust. These agents start at trust tier "trusted" instead of "new."
+  1262→- Whitelist is managed by admin via a `trusted_organizations` table with a list of pre-approved email domains.
+  1263→
+  1264→**Geographic Trust Zones:**
+  1265→- Areas where ADL has ground-truth data (e.g., locations personally verified by the founding team in Bonamoussadi) receive lighter scrutiny for enrichments.
+  1266→- Seed data from `shared/bonamoussadiSeedEvents.ts` (OSM imports) establishes ground-truth anchors. Submissions that enrich these known-good points get a 10-point risk reduction.
+  1267→
+  1268→**Graduated Trust:**
+  1269→- Users earn "verified field agent" badge after 50 approved submissions with trust score >= 80
+  1270→- Verified agents can attest to other users' submissions (peer review mechanism)
+  1271→- Top 10 leaderboard users receive quarterly manual review of a random sample of their submissions to ensure ongoing quality
+  1272→
+  1273→---
+  1274→
+  1275→## 6. Fraud Metrics & Monitoring
+  1276→
+  1277→### 6.1 Key Performance Indicators
+  1278→
+  1279→| KPI | Definition | Target | Measurement Frequency |
+  1280→|---|---|---|---|
+  1281→| **Fraud Rate** | (Confirmed fraudulent submissions / Total submissions) * 100 | < 2% | Weekly |
+  1282→| **Detection Rate (Recall)** | (Detected fraud / Total actual fraud) * 100 | > 70% | Monthly (requires labeled data) |
+  1283→| **False Positive Rate** | (Legitimate submissions incorrectly flagged / Total flagged) * 100 | < 10% | Weekly |
+  1284→| **Time to Detection** | Median time between submission and fraud flag | < 1 hour (automated) < 48 hours (manual) | Weekly |
+  1285→| **Resolution Time** | Median time between flag and admin resolution | < 72 hours | Weekly |
+  1286→| **XP Clawback Rate** | (XP removed due to fraud / Total XP awarded) * 100 | < 1% | Monthly |
+  1287→| **Appeal Overturn Rate** | (Appeals overturned / Total appeals) * 100 | < 20% (indicates calibration is working) | Monthly |
+  1288→| **Contributor Churn from False Flags** | Contributors who stop submitting within 7 days of receiving a fraud flag | < 5% | Monthly |
+  1289→
+  1290→### 6.2 Dashboard Panels
+  1291→
+  1292→The fraud monitoring dashboard should be accessible to admin users via the existing admin panel architecture.
+  1293→
+  1294→**Panel 1: Real-Time Fraud Feed**
+  1295→
+  1296→```
+  1297→+------------------------------------------------------------------+
+  1298→| FRAUD FEED (last 24 hours)                    [Auto-refresh: 30s] |
+  1299→+------------------------------------------------------------------+
+  1300→| Time     | User          | Type      | Risk | Status   | Action  |
+  1301→|----------|---------------|-----------|------|----------|---------|
+  1302→| 14:32    | user_abc123   | F-FAB-01  |  82  | Rejected | [View]  |
+  1303→| 14:15    | user_def456   | F-XP-01   |  64  | Escrowed | [View]  |
+  1304→| 13:58    | user_ghi789   | F-PHO-03  |  91  | Rejected | [View]  |
+  1305→| 13:42    | user_jkl012   | F-LOC-01  |  78  | Flagged  | [View]  |
+  1306→+------------------------------------------------------------------+
+  1307→| Today: 12 flagged | 4 rejected | 2 escrowed | 156 clean          |
+  1308→+------------------------------------------------------------------+
+  1309→```
+  1310→
+  1311→**Panel 2: Risk Score Distribution**
+  1312→
+  1313→Histogram showing the distribution of risk scores across all submissions for the selected time period. Healthy distribution: >80% of submissions score 0-25, <5% score 76+.
+  1314→
+  1315→```
+  1316→Risk Score Distribution (Last 7 Days, n=342)
+  1317→  0-25:  ████████████████████████████████████  278 (81.3%)
+  1318→ 26-50:  ██████                                 42 (12.3%)
+  1319→ 51-75:  ██                                     14  (4.1%)
+  1320→ 76-100: █                                       8  (2.3%)
+  1321→```
+  1322→
+  1323→**Panel 3: User Risk Leaderboard (Inverse)**
+  1324→
+  1325→Top 10 users by cumulative risk score. These are the users most likely to be committing fraud.
+  1326→
+  1327→```
+  1328→+--------------------------------------------------+
+  1329→| HIGHEST RISK USERS                                |
+  1330→+--------------------------------------------------+
+  1331→| Rank | User          | Avg Risk | Flags | Trust  |
+  1332→|------|---------------|----------|-------|--------|
+  1333→|  1   | user_xxx001   |    72    |   8   |   12   |
+  1334→|  2   | user_xxx002   |    68    |   6   |   18   |
+  1335→|  3   | user_xxx003   |    61    |   5   |   25   |
+  1336→+--------------------------------------------------+
+  1337→```
+  1338→
+  1339→**Panel 4: Fraud Type Breakdown**
+  1340→
+  1341→Pie chart or bar chart showing distribution of fraud types detected over the last 30 days.
+  1342→
+  1343→**Panel 5: Geographic Hotspot Map**
+  1344→
+  1345→Heatmap overlay on the existing map component showing where flagged submissions cluster geographically. High-density fraud areas may indicate organized operations.
+  1346→
+  1347→**Panel 6: Collusion Network Graph**
+  1348→
+  1349→Interactive graph visualization showing user-to-user connections via shared points, shared devices, and reciprocal enrichments. Clusters of tightly connected users warrant investigation.
+  1350→
+  1351→### 6.3 Alert Thresholds
+  1352→
+  1353→| Alert | Condition | Channel | Severity |
+  1354→|---|---|---|---|
+  1355→| Fraud spike | Fraud rate > 5% in any 4-hour window | Admin email + dashboard banner | Critical |
+  1356→| Bot attack | > 50 submissions from single IP in 1 hour | Admin email + auto-block IP | Critical |
+  1357→| Account compromise | User submitting from new device + new IP + unusual hours | User email + admin notification | High |
+  1358→| Leaderboard manipulation | Any user gains > 50 XP in 1 hour | Admin dashboard alert | High |
+  1359→| New collusion ring detected | 3+ users with reciprocal enrichment score > threshold | Admin dashboard + email | Medium |
+  1360→| Trust score mass decay | > 10 users drop below "standard" tier in 24 hours | Admin dashboard | Medium |
+  1361→| False positive spike | Appeal overturn rate > 30% in any week | Admin email | High (indicates broken rules) |
+  1362→
+  1363→### 6.4 Weekly Fraud Review Process
+  1364→
+  1365→**Schedule:** Every Monday, 10:00 WAT (West Africa Time).
+  1366→
+  1367→**Attendees:** Admin team (minimum 1 admin, ideally 2 for cross-validation).
+  1368→
+  1369→**Agenda:**
+  1370→
+  1371→1. **Metrics Review (10 min)**
+  1372→   - Review all KPIs from section 6.1
+  1373→   - Compare to previous week and trailing 4-week average
+  1374→   - Flag any metric that has moved > 20% from baseline
+  1375→
+  1376→2. **Flagged Submission Review (20 min)**
+  1377→   - Review all submissions currently in the review queue (risk score 26-75)
+  1378→   - For each: approve, reject, or escalate
+  1379→   - Target: clear 100% of the queue by end of session
+  1380→
+  1381→3. **Rejected Submission Audit (10 min)**
+  1382→   - Randomly sample 5 auto-rejected submissions (risk score 76+)
+  1383→   - Verify that rejections were correct
+  1384→   - If any rejection was a false positive, adjust the triggering rule
+  1385→
+  1386→4. **User Account Actions (10 min)**
+  1387→   - Review any accounts pending suspension/ban
+  1388→   - Process any pending appeals
+  1389→   - Review the "highest risk users" panel
+  1390→
+  1391→5. **Rule Tuning (10 min)**
+  1392→   - Based on the week's data, are any rules too aggressive (too many false positives) or too lenient (missed fraud)?
+  1393→   - Propose threshold adjustments
+  1394→   - Document changes in a `fraud_rule_changelog`
+  1395→
+  1396→**Output:** Weekly fraud report saved to shared document. Threshold changes applied to production by end of week.
+  1397→
+  1398→---
+  1399→
+  1400→## Appendix A: Implementation Priority
+  1401→
+  1402→The following table ranks each detection mechanism by implementation effort and impact, to guide the engineering team on what to build first.
+  1403→
+  1404→| Priority | Rule / Mechanism | Effort | Impact | Addresses |
+  1405→|---|---|---|---|---|
+  1406→| P0 (Immediate) | Submission velocity rate limiter (R-VEL-01) | Low | Critical | F-XP-01, F-ACC-02 |
+  1407→| P0 (Immediate) | Photo hash deduplication (R-DUP-01) | Low | Critical | F-PHO-03, F-FAB-02 |
+  1408→| P0 (Immediate) | Field plausibility validation (R-VAL-01) | Low | High | F-POI-01 |
+  1409→| P1 (Week 2-3) | XP escrow for medium-risk submissions | Medium | Critical | All scenarios |
+  1410→| P1 (Week 2-3) | Impossible travel detection (R-GEO-01) | Medium | High | F-LOC-01 |
+  1411→| P1 (Week 2-3) | Duplicate POI detection (R-PROX-01) | Medium | High | F-FAB-01 |
+  1412→| P1 (Week 2-3) | Device fingerprint cross-reference (R-DEV-01) | Medium | High | F-ACC-01, F-XP-04 |
+  1413→| P2 (Week 4-6) | User trust scoring system | High | Critical | All scenarios |
+  1414→| P2 (Week 4-6) | Self-enrichment pattern detection (R-ENR-01) | Medium | Medium | F-XP-02 |
+  1415→| P2 (Week 4-6) | IP reputation checking (R-IP-01) | Medium | Medium | F-LOC-02, F-ACC-02 |
+  1416→| P2 (Week 4-6) | Composite risk scoring model | High | Critical | All scenarios |
+  1417→| P3 (Week 7-12) | Collusion graph analysis (R-GRA-01) | High | High | F-XP-03 |
+  1418→| P3 (Week 7-12) | Perceptual image hashing | High | Medium | F-PHO-03, F-FAB-02 |
+  1419→| P3 (Week 7-12) | Fraud monitoring dashboard | High | Medium | Monitoring |
+  1420→| P4 (Quarter 2) | AI-generated image detection | Very High | Medium | F-FAB-03 |
+  1421→| P4 (Quarter 2) | Reverse image search integration | Very High | Medium | F-PHO-01 |
+  1422→| P4 (Quarter 2) | Offline queue attestation (signed timestamps) | High | Medium | F-XP-01 |
+  1423→
+  1424→## Appendix B: Proposed Schema Additions
+  1425→
+  1426→```sql
+  1427→-- Submission image hashes for deduplication
+  1428→CREATE TABLE submission_image_hashes (
+  1429→  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  1430→  event_id TEXT NOT NULL REFERENCES point_events(id),
+  1431→  point_id TEXT NOT NULL,
+  1432→  user_id TEXT NOT NULL,
+  1433→  sha256_hash TEXT NOT NULL,
+  1434→  perceptual_hash TEXT,
+  1435→  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  1436→);
+  1437→CREATE INDEX idx_image_hashes_sha256 ON submission_image_hashes(sha256_hash);
+  1438→CREATE INDEX idx_image_hashes_user ON submission_image_hashes(user_id);
+  1439→
+  1440→-- User trust profiles
+  1441→CREATE TABLE user_trust_profiles (
+  1442→  user_id TEXT PRIMARY KEY,
+  1443→  trust_score INTEGER NOT NULL DEFAULT 50,
+  1444→  tier TEXT NOT NULL DEFAULT 'new',
+  1445→  total_approved INTEGER NOT NULL DEFAULT 0,
+  1446→  total_flagged INTEGER NOT NULL DEFAULT 0,
+  1447→  total_rejected INTEGER NOT NULL DEFAULT 0,
+  1448→  consecutive_clean INTEGER NOT NULL DEFAULT 0,
+  1449→  last_fraud_flag TIMESTAMPTZ,
+  1450→  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  1451→);
+  1452→
+  1453→-- Fraud audit log
+  1454→CREATE TABLE fraud_audit_log (
+  1455→  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  1456→  event_id TEXT,
+  1457→  user_id TEXT NOT NULL,
+  1458→  action TEXT NOT NULL, -- 'flag', 'reject', 'approve', 'suspend', 'ban', 'appeal_granted'
+  1459→  risk_score INTEGER,
+  1460→  risk_components JSONB,
+  1461→  rule_triggered TEXT, -- e.g., 'R-VEL-01', 'R-DUP-01'
+  1462→  admin_user_id TEXT,
+  1463→  notes TEXT,
+  1464→  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  1465→);
+  1466→CREATE INDEX idx_fraud_audit_user ON fraud_audit_log(user_id);
+  1467→CREATE INDEX idx_fraud_audit_event ON fraud_audit_log(event_id);
+  1468→
+  1469→-- Device-to-user mapping for cross-reference
+  1470→CREATE TABLE device_user_map (
+  1471→  device_id TEXT NOT NULL,
+  1472→  user_id TEXT NOT NULL,
+  1473→  first_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
+  1474→  last_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
+  1475→  submission_count INTEGER NOT NULL DEFAULT 1,
+  1476→  PRIMARY KEY (device_id, user_id)
+  1477→);
+  1478→CREATE INDEX idx_device_user_device ON device_user_map(device_id);
+  1479→
+  1480→-- Submission labels for calibration
+  1481→CREATE TABLE submission_labels (
+  1482→  event_id TEXT PRIMARY KEY,
+  1483→  label TEXT NOT NULL, -- 'legitimate', 'suspicious', 'confirmed_fraud'
+  1484→  labeled_by TEXT NOT NULL,
+  1485→  labeled_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  1486→  notes TEXT
+  1487→);
+  1488→
+  1489→-- XP escrow for medium-risk submissions
+  1490→CREATE TABLE xp_escrow (
+  1491→  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  1492→  event_id TEXT NOT NULL,
+  1493→  user_id TEXT NOT NULL,
+  1494→  xp_amount INTEGER NOT NULL,
+  1495→  status TEXT NOT NULL DEFAULT 'held', -- 'held', 'released', 'clawed_back'
+  1496→  resolved_by TEXT,
+  1497→  resolved_at TIMESTAMPTZ,
+  1498→  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  1499→);
+  1500→CREATE INDEX idx_xp_escrow_user ON xp_escrow(user_id);
+  1501→CREATE INDEX idx_xp_escrow_status ON xp_escrow(status);
+  1502→```
+  1503→
+  1504→## Appendix C: Key Code Changes Required
+  1505→
+  1506→### C.1 Modify `api/submissions/index.ts` POST Handler
+  1507→
+  1508→The POST handler at line 453 must be augmented with fraud checks before the submission is accepted. The proposed insertion point is after photo upload (line 585) and before event insertion (line 656):
+  1509→
+  1510→```typescript
+  1511→// After line 635 (buildSubmissionFraudCheck), before line 641 (insertPointEvent)
+  1512→// Insert fraud scoring
+  1513→const riskScore = await computeSubmissionRiskScore({
+  1514→  locationParams: { submissionLocation: location, photoExifGps: photoLocation, ipLocation, effectiveLocation: finalLocation },
+  1515→  photoParams: { imageHash: computeImageHash(parsedPhoto.imageBuffer), hasExifGps: !!photoLocation, /* ... */ },
+  1516→  temporalParams: { userId: auth.id, currentLocation: finalLocation, currentTime: new Date() },
+  1517→  userParams: { userId: auth.id },
+  1518→  behavioralParams: { userId: auth.id, pointId, eventType },
+  1519→});
+  1520→
+  1521→if (riskScore.total >= 76) {
+  1522→  return errorResponse("Submission flagged for quality review", 400, { code: "fraud_risk_high" });
+  1523→}
+  1524→
+  1525→// Modify XP logic based on risk score
+  1526→const xpToAward = riskScore.total <= 25 ? BASE_EVENT_XP : 0; // Escrow for 26+
+  1527→```
+  1528→
+  1529→### C.2 Add Image Hash Computation to Photo Upload Flow
+  1530→
+  1531→Add SHA-256 hashing immediately after `parseImagePayload`:
+  1532→
+  1533→```typescript
+  1534→import { createHash } from 'crypto';
+  1535→
+  1536→// After line 488 (parseImagePayload validation)
+  1537→const imageHash = createHash('sha256').update(parsedPhoto.imageBuffer).digest('hex');
+  1538→const duplicateCheck = await findSubmissionsByImageHash(imageHash);
+  1539→if (duplicateCheck.some(e => e.pointId !== pointId)) {
+  1540→  return errorResponse("This photo has already been used for another location", 400);
+  1541→}
+  1542→```
+  1543→
+  1544→### C.3 Enhance Offline Queue with Attestation Metadata
+  1545→
+  1546→Modify `lib/client/offlineQueue.ts` `enqueueSubmission` to include batch metadata:
+  1547→
+  1548→```typescript
+  1549→export async function enqueueSubmission(payload: SubmissionInput): Promise<QueueItem> {
+  1550→  const now = new Date().toISOString();
+  1551→  // Add queuedAt to the payload so the server can distinguish offline-queued from live submissions
+  1552→  const enrichedPayload = {
+  1553→    ...payload,
+  1554→    queuedAt: now,
+  1555→    offlineBatchId: getOrCreateCurrentBatchId(),
+  1556→  };
+  1557→  // ... rest of function
+  1558→}
+  1559→```
+  1560→
+  1561→---
+  1562→
+  1563→*This document should be reviewed and updated whenever a new fraud pattern is observed, a detection rule is tuned, or the platform expands to new geographies beyond Bonamoussadi/Douala.*
+  1564→

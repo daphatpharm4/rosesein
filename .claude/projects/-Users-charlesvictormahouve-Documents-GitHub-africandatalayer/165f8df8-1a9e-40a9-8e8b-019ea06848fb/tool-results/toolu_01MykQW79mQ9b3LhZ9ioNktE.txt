@@ -1,0 +1,1239 @@
+     1→# ADL Cybersecurity Assessment
+     2→
+     3→**Author:** Teammate 4 -- Cybersecurity Expert
+     4→**Date:** 2026-02-28
+     5→**Status:** Living document -- updates with each threat landscape change
+     6→**Predecessors:**
+     7→- [01-cloud-architecture.md](./01-cloud-architecture.md) (Cloud Architect)
+     8→- [02-system-design.md](./02-system-design.md) (System Design Expert)
+     9→- [03-cloud-engineering.md](./03-cloud-engineering.md) (Cloud Engineer)
+    10→**Scope:** Threat modeling, vulnerability assessment, security controls, incident response, and hardening for African Data Layer
+    11→
+    12→---
+    13→
+    14→## Table of Contents
+    15→
+    16→1. [Threat Model (STRIDE)](#1-threat-model-stride)
+    17→2. [Vulnerability Assessment](#2-vulnerability-assessment)
+    18→3. [Security Controls Matrix](#3-security-controls-matrix)
+    19→4. [Incident Response Plan](#4-incident-response-plan)
+    20→5. [Security Hardening Checklist](#5-security-hardening-checklist)
+    21→
+    22→---
+    23→
+    24→## 1. Threat Model (STRIDE)
+    25→
+    26→### 1.1 System Overview for Threat Modeling
+    27→
+    28→**Trust boundaries identified in the ADL codebase:**
+    29→
+    30→```
+    31→+-------------------------------------------------------------------+
+    32→|  TRUST BOUNDARY 1: Client Device (untrusted)                      |
+    33→|  - React SPA in browser                                           |
+    34→|  - IndexedDB offline queue (lib/client/offlineQueue.ts)           |
+    35→|  - Gemini API key embedded in client bundle (vite.config.ts:20)   |
+    36→|  - Photo capture + EXIF metadata                                  |
+    37→|  - GPS coordinates from navigator.geolocation                     |
+    38→+-------------------------------------------------------------------+
+    39→          |  HTTPS (TLS 1.2+)
+    40→          v
+    41→+-------------------------------------------------------------------+
+    42→|  TRUST BOUNDARY 2: Vercel Edge / CDN                              |
+    43→|  - Static asset serving                                           |
+    44→|  - Request routing to serverless functions                        |
+    45→|  - No WAF or rate limiting configured                             |
+    46→+-------------------------------------------------------------------+
+    47→          |
+    48→          v
+    49→+-------------------------------------------------------------------+
+    50→|  TRUST BOUNDARY 3: Vercel Serverless Functions (semi-trusted)     |
+    51→|  - api/auth/auth.ts -- Auth.js handler                            |
+    52→|  - api/auth/register.ts -- User registration                     |
+    53→|  - api/submissions/index.ts -- GET/POST submissions              |
+    54→|  - api/submissions/[id].ts -- GET/PUT/DELETE by ID               |
+    55→|  - api/user/index.ts -- Profile management                       |
+    56→|  - api/leaderboard/index.ts -- Public leaderboard                |
+    57→|  - api/health/index.ts -- Health check                           |
+    58→+-------------------------------------------------------------------+
+    59→          |  TLS (pooled connection)
+    60→          v
+    61→+-------------------------------------------------------------------+
+    62→|  TRUST BOUNDARY 4: Data Stores (trusted)                          |
+    63→|  - Supabase PostgreSQL (append-only event log + user profiles)    |
+    64→|  - Vercel Blob (submission photos, public access)                 |
+    65→|  - Vercel Edge Config (read-only fallback)                        |
+    66→+-------------------------------------------------------------------+
+    67→```
+    68→
+    69→**Key assets to protect:**
+    70→- User credentials (password hashes, OAuth tokens)
+    71→- User PII (emails, phone numbers, names, GPS tracks)
+    72→- Submission data integrity (the core product value)
+    73→- Admin access controls
+    74→- API keys and service credentials
+    75→- Platform availability
+    76→
+    77→### 1.2 Spoofing
+    78→
+    79→#### S-1: Credential Stuffing on Registration and Login
+    80→
+    81→**Risk:** HIGH
+    82→
+    83→The registration endpoint (`api/auth/register.ts`) and credential login (`api/auth/auth.ts`) have zero rate limiting. An attacker can enumerate valid accounts by observing 409 (user exists) vs 201 (created) responses on the registration endpoint, then launch credential stuffing against the login endpoint.
+    84→
+    85→**Current state:**
+    86→- Registration: No CAPTCHA, no rate limit, leaks user existence via 409 status (`api/auth/register.ts:39`)
+    87→- Login: Auth.js credential flow with no lockout, no rate limit (`api/auth/auth.ts:23-58`)
+    88→- Password policy: Only minimum 8 characters (`api/auth/register.ts:31`), no complexity requirements
+    89→
+    90→**Attack scenario:**
+    91→1. Attacker scripts POST requests to `/api/auth/register` with common email addresses
+    92→2. 409 responses reveal which emails are registered
+    93→3. Attacker targets confirmed emails with credential stuffing against `/api/auth/callback/credentials`
+    94→4. Weak 8-character minimum means many passwords are guessable
+    95→
+    96→#### S-2: Admin Account Hardcoded Pattern
+    97→
+    98→**Risk:** CRITICAL
+    99→
+   100→Admin authentication uses a single shared `ADMIN_EMAIL` + `ADMIN_PASSWORD` environment variable pair (`api/auth/auth.ts:36-48`). The code explicitly supports plaintext passwords as a fallback:
+   101→
+   102→```typescript
+   103→// api/auth/auth.ts:42-44
+   104→if (adminPassword.startsWith("$2")) {
+   105→  adminMatch = await bcrypt.compare(password, adminPassword);
+   106→} else {
+   107→  // Fallback for plain-text password (legacy)
+   108→  adminMatch = password === adminPassword;
+   109→}
+   110→```
+   111→
+   112→The `.env` file committed to the repository contains `ADMIN_PASSWORD=test1234` in plaintext. Even in production, a single admin credential shared across all admin sessions creates a single point of compromise.
+   113→
+   114→#### S-3: Session Token Security
+   115→
+   116→**Risk:** MEDIUM
+   117→
+   118→Session management uses Auth.js JWT strategy (`api/auth/auth.ts:103`) with appropriate cookie settings:
+   119→- `httpOnly: true` (prevents XSS-based cookie theft)
+   120→- `sameSite: "lax"` (partial CSRF protection)
+   121→- `secure: true` in production (enforced by `isSecureRequest()` in `lib/auth.ts:8-12`)
+   122→
+   123→However, JWT tokens have no explicit expiration configuration. Auth.js defaults to 30-day session tokens. Combined with no token rotation and no server-side session revocation capability, a stolen JWT remains valid for the full 30-day window.
+   124→
+   125→#### S-4: Bearer Token Acceptance Without Scope Validation
+   126→
+   127→**Risk:** MEDIUM
+   128→
+   129→The `getAuthToken` function (`lib/auth.ts:24-31`) accepts both cookie-based and Bearer token authentication. The Bearer path decodes the JWT directly without validating audience, issuer, or scope claims. Any valid JWT signed with `AUTH_SECRET` grants full access regardless of its original intended use.
+   130→
+   131→### 1.3 Tampering
+   132→
+   133→#### T-1: Offline Queue Client-Side Tampering
+   134→
+   135→**Risk:** HIGH
+   136→
+   137→The offline queue (`lib/client/offlineQueue.ts`) stores submission payloads in IndexedDB. Users with DevTools access can:
+   138→1. Modify GPS coordinates in queued submissions
+   139→2. Alter category or details fields
+   140→3. Replace photo data with stock images
+   141→4. Change the `idempotencyKey` to replay submissions
+   142→
+   143→The idempotency key is generated client-side (`offlineQueue.ts:110`) and sent as an option to the sync function (`offlineQueue.ts:233`), but **the server never checks it**. The POST handler in `api/submissions/index.ts` has no idempotency logic whatsoever.
+   144→
+   145→#### T-2: Photo Metadata Spoofing
+   146→
+   147→**Risk:** HIGH
+   148→
+   149→While the fraud detection system (`lib/server/submissionFraud.ts`) extracts and validates EXIF GPS data, EXIF metadata is trivially spoofable. An attacker can:
+   150→1. Use tools like `exiftool` to set arbitrary GPS coordinates in a photo
+   151→2. Set `DateTimeOriginal` to fake the capture time
+   152→3. Set `Make`/`Model` to impersonate a different device
+   153→
+   154→The system does compare photo GPS with submission GPS and IP-based geolocation, but if the attacker controls all three (spoofed EXIF, spoofed browser geolocation, VPN for IP), all checks pass.
+   155→
+   156→#### T-3: PUT Endpoint Bypasses Photo Requirement
+   157→
+   158→**Risk:** HIGH
+   159→
+   160→The `PUT` handler in `api/submissions/[id].ts:68-113` creates an `ENRICH_EVENT` without requiring a photo upload:
+   161→
+   162→```typescript
+   163→// api/submissions/[id].ts:100
+   164→photoUrl: typeof body?.photoUrl === "string" ? body.photoUrl : undefined,
+   165→```
+   166→
+   167→This accepts an arbitrary URL as the photo without validation, download, or storage. An attacker can:
+   168→1. Point `photoUrl` to any external URL
+   169→2. Submit enrichment events without photographic proof
+   170→3. Inject URLs that could be used for tracking (e.g., unique URLs per victim to detect when admins view submissions)
+   171→
+   172→#### T-4: XP Manipulation via Rapid Submissions
+   173→
+   174→**Risk:** MEDIUM
+   175→
+   176→The XP award logic (`api/submissions/index.ts:677-681`) unconditionally adds 5 XP per submission with no duplicate check, no rate limit, and no cap:
+   177→
+   178→```typescript
+   179→profile.XP = (profile.XP ?? 0) + BASE_EVENT_XP;
+   180→await upsertUserProfile(auth.id, profile);
+   181→```
+   182→
+   183→An attacker can script hundreds of submissions to farm XP for the rewards catalog and leaderboard.
+   184→
+   185→### 1.4 Repudiation
+   186→
+   187→#### R-1: Insufficient Audit Trail for Administrative Actions
+   188→
+   189→**Risk:** MEDIUM
+   190→
+   191→Admin operations (delete events via `api/submissions/[id].ts:115-144`, viewing admin_events) are not logged to any audit trail. The only log statement in the submission flow (`api/submissions/index.ts:673-675`) is gated behind `NODE_ENV !== "production"`, meaning production submissions produce no server-side log.
+   192→
+   193→Admin actions that should be logged but are not:
+   194→- Event deletion
+   195→- Admin event view access
+   196→- User profile modifications
+   197→- Map scope changes
+   198→
+   199→#### R-2: No Contributor Attribution Integrity
+   200→
+   201→**Risk:** MEDIUM
+   202→
+   203→The `userId` field on events comes from the JWT token (`api/submissions/index.ts:646`). While the JWT is server-signed, there is no mechanism to prove that the *physical person* who submitted data is the token holder. For compliance and data quality, this means:
+   204→- No digital signature on individual submissions
+   205→- No device attestation
+   206→- No biometric verification
+   207→
+   208→### 1.5 Information Disclosure
+   209→
+   210→#### I-1: `.env` File Committed to Git with Production Secrets
+   211→
+   212→**Risk:** CRITICAL -- IMMEDIATE ACTION REQUIRED
+   213→
+   214→The file `.env` is tracked in git and contains live credentials:
+   215→
+   216→```
+   217→AUTH_SECRET=XdY8VIr66Q077SVFIZmXqpTySovBixl8wFHxxAFeJtQp
+   218→GOOGLE_CLIENT_ID=73914770275-2likrarh0k9l05ug5u8ut66vte15tb40.apps.googleusercontent.com
+   219→GOOGLE_CLIENT_SECRET=yGOCSPX-TL7OV_iMZs-8oK6zpVybyB78jnsY
+   220→VERCEL_API_TOKEN=x3oYJk7MoutMESNe91C0Fv1s
+   221→POSTGRES_URL=postgres://postgres.rhslszcwchyzkaooxzht:ApcWC6XbmfKBbp6S@aws-1-us-east-1.pooler.supabase.com:6543/postgres
+   222→EDGE_CONFIG=https://edge-config.vercel.com/ecfg_dihwwvwrdqg25ajeeoyrmeohawzv?token=07dab6e5-8ade-44bd-9c8d-73b04107b547
+   223→ADMIN_PASSWORD=test1234
+   224→VERCEL_OIDC_TOKEN=eyJhbGciOiJSUzI1NiIs...
+   225→```
+   226→
+   227→The `.gitignore` only excludes `.env*.local` (line 3), NOT `.env` itself. Every secret listed above must be considered compromised.
+   228→
+   229→#### I-2: Gemini API Key Baked into Client Bundle
+   230→
+   231→**Risk:** HIGH
+   232→
+   233→`vite.config.ts:20-21` injects the Gemini API key into the client-side JavaScript bundle:
+   234→
+   235→```typescript
+   236→define: {
+   237→  'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+   238→  'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+   239→},
+   240→```
+   241→
+   242→This means anyone viewing the production JavaScript source can extract the API key. The key is then used directly in `lib/gemini.ts:4`:
+   243→
+   244→```typescript
+   245→const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+   246→```
+   247→
+   248→Impact: An attacker can use the API key for their own Gemini API calls, incurring costs on ADL's Google Cloud billing account.
+   249→
+   250→#### I-3: Leaderboard Exposes User Identifiers
+   251→
+   252→**Risk:** MEDIUM
+   253→
+   254→The leaderboard endpoint (`api/leaderboard/index.ts:88-99`) returns `userId` for every top contributor. The `userId` is typically an email address (since email is the primary identifier). This is returned on a public, unauthenticated endpoint with cache headers set to public (`LEADERBOARD_CACHE_CONTROL = "public, s-maxage=30, stale-while-revalidate=300"`).
+   255→
+   256→Combined with the registration endpoint user enumeration (S-1), this gives attackers a ready-made target list.
+   257→
+   258→#### I-4: Password Hashes Returned in User Profile
+   259→
+   260→**Risk:** HIGH
+   261→
+   262→The `rowToUserProfile` function (`lib/server/storage/postgresStore.ts:71-86`) includes `passwordHash` in the returned `UserProfile` object:
+   263→
+   264→```typescript
+   265→passwordHash: typeof row.password_hash === "string" ? row.password_hash : undefined,
+   266→```
+   267→
+   268→The `GET /api/user` endpoint (`api/user/index.ts:21`) returns the full profile object:
+   269→
+   270→```typescript
+   271→return jsonResponse(profile, { status: 200 });
+   272→```
+   273→
+   274→This means the bcrypt hash is sent to the client in the user profile response. While bcrypt hashes are computationally expensive to crack, they should never leave the server.
+   275→
+   276→#### I-5: Unhandled Errors Propagate Stack Traces
+   277→
+   278→**Risk:** MEDIUM
+   279→
+   280→Several API handlers use `throw error` as the final fallback (`api/submissions/index.ts:449`, `api/submissions/[id].ts:48`, etc.). When `isStorageUnavailableError` returns false, the raw error is thrown and Vercel's default error handler may expose stack traces, internal paths, and implementation details in the response.
+   281→
+   282→#### I-6: Health Endpoint Exposes Database Connectivity
+   283→
+   284→**Risk:** LOW
+   285→
+   286→The health endpoint (`api/health/index.ts`) reveals whether the database is reachable. While useful for monitoring, it gives attackers reconnaissance information about infrastructure state and can be used to detect when database attacks are effective.
+   287→
+   288→### 1.6 Denial of Service
+   289→
+   290→#### D-1: No Rate Limiting on Any Endpoint
+   291→
+   292→**Risk:** HIGH
+   293→
+   294→There is zero rate limiting across the entire API surface. No middleware, no Vercel configuration, no application-level throttling. Every endpoint is vulnerable to abuse:
+   295→
+   296→- `POST /api/auth/register` -- mass account creation
+   297→- `POST /api/auth/callback/credentials` -- brute force login
+   298→- `POST /api/submissions` -- resource exhaustion (each submission triggers photo upload to Vercel Blob, EXIF parsing, IP geolocation lookup, and database write)
+   299→- `GET /api/submissions` -- database query amplification (loads ALL events on every request)
+   300→- `GET /api/leaderboard` -- same full-table scan pattern
+   301→
+   302→#### D-2: Unbounded Full-Table Scans
+   303→
+   304→**Risk:** HIGH
+   305→
+   306→The `getPointEvents` function (`lib/server/storage/postgresStore.ts:289-298`) loads every row from the `point_events` table on every GET request:
+   307→
+   308→```sql
+   309→select id, point_id, event_type, user_id, category, latitude, longitude,
+   310→       details, photo_url, created_at, source, external_id
+   311→from point_events
+   312→order by created_at asc
+   313→```
+   314→
+   315→At scale (10K+ events with JSONB `details` containing fraud metadata, photo URLs, and client device info), this will:
+   316→1. Exhaust the 256MB/512MB serverless function memory
+   317→2. Saturate the database connection pool (max 5 connections, `lib/server/db.ts:121`)
+   318→3. Timeout (10-second query timeout, `lib/server/db.ts:19`)
+   319→
+   320→#### D-3: Photo Upload Resource Exhaustion
+   321→
+   322→**Risk:** MEDIUM
+   323→
+   324→The submission endpoint accepts up to 8MB base64-encoded images (`MAX_IMAGE_BYTES`, `api/submissions/index.ts:56`). Since base64 encoding increases payload size by ~33%, the actual HTTP request can be ~11MB. The endpoint processes two photos per submission (primary + secondary), each requiring:
+   325→1. Base64 decode to Buffer
+   326→2. EXIF parsing via `exifr`
+   327→3. Upload to Vercel Blob
+   328→
+   329→With no rate limit, an attacker can send hundreds of 11MB requests simultaneously, exhausting Vercel's concurrent execution limits and Blob storage quota.
+   330→
+   331→#### D-4: External IP Geolocation Dependency
+   332→
+   333→**Risk:** LOW
+   334→
+   335→The `fetchIpLocation` function (`api/submissions/index.ts:223-239`) calls `ipapi.co` for every submission. The 3-second timeout means that if ipapi.co is slow or unavailable, submissions are delayed. If ipapi.co rate-limits the server IP, all geolocation lookups fail silently (returning `null`), potentially allowing submissions without proper location validation.
+   336→
+   337→### 1.7 Elevation of Privilege
+   338→
+   339→#### E-1: Admin Role Determination via Environment Variable Email Match
+   340→
+   341→**Risk:** HIGH
+   342→
+   343→Admin status is determined solely by matching the user's email against `ADMIN_EMAIL` (`api/auth/auth.ts:36-48`, `api/auth/auth.ts:122`, `api/auth/auth.ts:180-186`). The admin flag is embedded in the JWT token:
+   344→
+   345→```typescript
+   346→// api/auth/auth.ts:182-184
+   347→if (adminEmail && email && adminEmail === email) {
+   348→  (token as { isAdmin?: boolean }).isAdmin = true;
+   349→}
+   350→```
+   351→
+   352→**Problem 1:** Only one admin email is supported. There is no role hierarchy, no group-based access, no way to have multiple admins without sharing the single `ADMIN_EMAIL` credential.
+   353→
+   354→**Problem 2:** The JWT `isAdmin` claim is trusted by all endpoints without re-verification against the database. If `ADMIN_EMAIL` is changed (e.g., to revoke admin), existing JWTs with `isAdmin: true` remain valid until they expire (up to 30 days).
+   355→
+   356→#### E-2: User Profile Self-Escalation Blocked but Fragile
+   357→
+   358→**Risk:** MEDIUM
+   359→
+   360→The `PUT /api/user` endpoint (`api/user/index.ts:66-73`) does check that non-admin users cannot set `mapScope` beyond `bonamoussadi`:
+   361→
+   362→```typescript
+   363→if (!profile.isAdmin && nextScope !== "bonamoussadi") {
+   364→  return errorResponse("Only admin users can unlock map scope", 403);
+   365→}
+   366→```
+   367→
+   368→However, the `profile.isAdmin` check reads from the database, while admin status is determined by the JWT `isAdmin` claim and synced to the database in the `GET /api/user` handler (`api/user/index.ts:24-27`). If there is any race condition or inconsistency between the JWT claim and database state, escalation could occur.
+   369→
+   370→#### E-3: IDOR in Submission Detail View
+   371→
+   372→**Risk:** MEDIUM
+   373→
+   374→The `GET /api/submissions/[id]` endpoint (`api/submissions/[id].ts:58-63`) allows any authenticated user to view projected point data for any `pointId`:
+   375→
+   376→```typescript
+   377→const point = points.find((item) => item.pointId === id || item.id === id);
+   378→if (point) return jsonResponse(point, { status: 200 });
+   379→```
+   380→
+   381→Only the `view=event` path checks ownership (`canViewEventDetail`). The default path returns any projected point to any authenticated user, potentially including details from other users' enrichment events aggregated into the projection.
+   382→
+   383→#### E-4: PUT Endpoint Missing Admin/Owner Check for Enrichment
+   384→
+   385→**Risk:** MEDIUM
+   386→
+   387→The `PUT /api/submissions/[id]` handler (`api/submissions/[id].ts:68-113`) requires authentication but does not verify that the user owns the target submission or has admin privileges. Any authenticated user can create an `ENRICH_EVENT` for any existing point, potentially overwriting legitimate data.
+   388→
+   389→---
+   390→
+   391→## 2. Vulnerability Assessment
+   392→
+   393→### 2.1 Critical Severity
+   394→
+   395→#### VULN-001: Live Secrets Committed to Git Repository
+   396→
+   397→| Field | Value |
+   398→|-------|-------|
+   399→| **Severity** | CRITICAL |
+   400→| **File** | `.env` (entire file) |
+   401→| **CVSS** | 9.8 (Network/Low/None/Changed/High/High/High) |
+   402→| **Priority** | FIX NOW -- before any further deployment |
+   403→
+   404→**Description:** The `.env` file containing production database credentials, API tokens, OAuth secrets, and the admin password is committed to the git repository. The `.gitignore` file only excludes `.env*.local`, not `.env` itself.
+   405→
+   406→**Exposed secrets:**
+   407→1. `AUTH_SECRET` -- JWT signing key. Compromise allows forging any user session including admin.
+   408→2. `POSTGRES_URL` -- Full database connection string with password. Allows direct database access.
+   409→3. `GOOGLE_CLIENT_SECRET` -- OAuth client secret. Allows impersonating the application in Google OAuth flows.
+   410→4. `VERCEL_API_TOKEN` -- Allows deploying code, modifying environment variables, and accessing all project data.
+   411→5. `ADMIN_PASSWORD=test1234` -- Admin password in plaintext.
+   412→6. `EDGE_CONFIG` token -- Access to Edge Config data.
+   413→7. `VERCEL_OIDC_TOKEN` -- Vercel OIDC token for project access.
+   414→
+   415→**Proof of concept:**
+   416→```bash
+   417→# Anyone with repo access can read the file
+   418→cat .env
+   419→# Use POSTGRES_URL to connect directly
+   420→psql "postgres://postgres.rhslszcwchyzkaooxzht:ApcWC6XbmfKBbp6S@aws-1-us-east-1.pooler.supabase.com:6543/postgres"
+   421→# Forge an admin JWT using AUTH_SECRET
+   422→```
+   423→
+   424→**Remediation:**
+   425→1. Immediately rotate ALL secrets listed above
+   426→2. Add `.env` to `.gitignore`
+   427→3. Remove `.env` from git history using `git filter-branch` or BFG Repo Cleaner
+   428→4. Revoke and regenerate: Supabase database password, Google OAuth credentials, Vercel API token, AUTH_SECRET
+   429→5. Change Supabase database password from Supabase dashboard
+   430→6. Set all secrets exclusively via Vercel Environment Variables dashboard
+   431→7. Audit git log for any forks or clones that may have captured the secrets
+   432→
+   433→#### VULN-002: Gemini API Key Exposed in Client Bundle
+   434→
+   435→| Field | Value |
+   436→|-------|-------|
+   437→| **Severity** | CRITICAL |
+   438→| **File** | `vite.config.ts:20-21`, `lib/gemini.ts:4` |
+   439→| **CVSS** | 8.6 |
+   440→| **Priority** | FIX NOW |
+   441→
+   442→**Description:** The Vite build configuration injects `GEMINI_API_KEY` as a compile-time constant into the client-side JavaScript bundle. This key is visible to anyone who opens browser DevTools on the production site.
+   443→
+   444→**Proof of concept:**
+   445→```javascript
+   446→// In browser console on the production site:
+   447→// Search the bundled JS for the API key string
+   448→// Or inspect the Network tab for requests to generativelanguage.googleapis.com
+   449→```
+   450→
+   451→**Remediation:**
+   452→```typescript
+   453→// vite.config.ts -- REMOVE these lines:
+   454→define: {
+   455→  'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+   456→  'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+   457→},
+   458→
+   459→// Instead, create a server-side proxy:
+   460→// api/ai/search.ts
+   461→export async function POST(request: Request): Promise<Response> {
+   462→  const auth = await requireUser(request);
+   463→  if (!auth) return errorResponse("Unauthorized", 401);
+   464→  const { query, lat, lng } = await request.json();
+   465→  // Call Gemini with server-side key
+   466→  const result = await searchLocations(query, lat, lng);
+   467→  return jsonResponse(result);
+   468→}
+   469→```
+   470→
+   471→#### VULN-003: Plaintext Admin Password Support
+   472→
+   473→| Field | Value |
+   474→|-------|-------|
+   475→| **Severity** | CRITICAL |
+   476→| **File** | `api/auth/auth.ts:42-46` |
+   477→| **CVSS** | 8.1 |
+   478→| **Priority** | FIX NOW |
+   479→
+   480→**Description:** The admin authentication code has a fallback path that compares passwords in plaintext when `ADMIN_PASSWORD` does not start with `$2` (bcrypt prefix). The current `.env` contains `ADMIN_PASSWORD=test1234`, which triggers this plaintext path.
+   481→
+   482→**Proof of concept:**
+   483→```bash
+   484→curl -X POST https://adl.vercel.app/api/auth/callback/credentials \
+   485→  -d "identifier=test@example.com&password=test1234&csrfToken=..."
+   486→```
+   487→
+   488→**Remediation:**
+   489→```bash
+   490→# Generate bcrypt hash
+   491→node -e "const bcrypt = require('bcryptjs'); console.log(bcrypt.hashSync('NEW_STRONG_PASSWORD_HERE', 12));"
+   492→# Set in Vercel env vars (NOT in .env file)
+   493→# ADMIN_PASSWORD=$2a$12$... (the bcrypt hash output)
+   494→```
+   495→
+   496→Remove the plaintext fallback:
+   497→```typescript
+   498→// api/auth/auth.ts -- Remove the else branch entirely:
+   499→if (adminPassword.startsWith("$2")) {
+   500→  adminMatch = await bcrypt.compare(password, adminPassword);
+   501→} else {
+   502→  // DELETE THIS BRANCH
+   503→  adminMatch = password === adminPassword;
+   504→}
+   505→// Replace with:
+   506→if (!adminPassword.startsWith("$2")) {
+   507→  console.error("[auth] ADMIN_PASSWORD must be a bcrypt hash. Rejecting login.");
+   508→  return null;
+   509→}
+   510→adminMatch = await bcrypt.compare(password, adminPassword);
+   511→```
+   512→
+   513→### 2.2 High Severity
+   514→
+   515→#### VULN-004: Password Hash Leaked in API Response
+   516→
+   517→| Field | Value |
+   518→|-------|-------|
+   519→| **Severity** | HIGH |
+   520→| **File** | `api/user/index.ts:22`, `lib/server/storage/postgresStore.ts:82` |
+   521→| **CVSS** | 7.5 |
+   522→| **Priority** | Fix within 7 days |
+   523→
+   524→**Description:** The `GET /api/user` endpoint returns the full `UserProfile` object including the `passwordHash` field. While bcrypt hashes are designed to be computationally expensive, exposing them provides attackers with offline cracking material.
+   525→
+   526→**Proof of concept:**
+   527→```bash
+   528→curl -H "Cookie: __Secure-authjs.session-token=VALID_TOKEN" \
+   529→  https://adl.vercel.app/api/user
+   530→# Response includes: { "passwordHash": "$2a$10$...", ... }
+   531→```
+   532→
+   533→**Remediation:**
+   534→```typescript
+   535→// api/user/index.ts -- Strip passwordHash before response:
+   536→const { passwordHash, ...safeProfile } = profile;
+   537→return jsonResponse(safeProfile, { status: 200 });
+   538→```
+   539→
+   540→#### VULN-005: No Server-Side Idempotency Check
+   541→
+   542→| Field | Value |
+   543→|-------|-------|
+   544→| **Severity** | HIGH |
+   545→| **File** | `api/submissions/index.ts:453-689` (entire POST handler) |
+   546→| **CVSS** | 7.1 |
+   547→| **Priority** | Fix within 7 days |
+   548→
+   549→**Description:** The client generates an `idempotencyKey` in the offline queue (`lib/client/offlineQueue.ts:110`), but the server POST handler never reads or validates it. The `insertPointEvent` function uses `ON CONFLICT (id) DO UPDATE` on the event `id`, but the `id` is generated server-side via `crypto.randomUUID()` (`api/submissions/index.ts:576`), making the upsert effectively a no-op for deduplication.
+   550→
+   551→This means:
+   552→- Offline queue retries create duplicate submissions
+   553→- Network retries (e.g., browser retry on timeout) create duplicates
+   554→- An attacker can replay the same submission thousands of times
+   555→
+   556→**Remediation:**
+   557→```typescript
+   558→// api/submissions/index.ts -- Accept and validate idempotency key:
+   559→const idempotencyKey = typeof body?.idempotencyKey === "string"
+   560→  ? body.idempotencyKey.trim()
+   561→  : null;
+   562→
+   563→if (idempotencyKey) {
+   564→  // Check if this idempotency key was already processed
+   565→  const existing = await query(
+   566→    "SELECT id FROM point_events WHERE details->>'idempotencyKey' = $1 AND user_id = $2",
+   567→    [idempotencyKey, auth.id]
+   568→  );
+   569→  if (existing.rows.length > 0) {
+   570→    // Return the existing event instead of creating a duplicate
+   571→    return jsonResponse({ id: existing.rows[0].id, deduplicated: true }, { status: 200 });
+   572→  }
+   573→}
+   574→// Store idempotencyKey in details
+   575→details.idempotencyKey = idempotencyKey;
+   576→```
+   577→
+   578→#### VULN-006: PUT Endpoint Accepts Arbitrary Photo URLs
+   579→
+   580→| Field | Value |
+   581→|-------|-------|
+   582→| **Severity** | HIGH |
+   583→| **File** | `api/submissions/[id].ts:100` |
+   584→| **CVSS** | 6.8 |
+   585→| **Priority** | Fix within 14 days |
+   586→
+   587→**Description:** The PUT endpoint accepts any string as `photoUrl` without validation. This bypasses the photo requirement enforced in the POST handler.
+   588→
+   589→**Proof of concept:**
+   590→```bash
+   591→curl -X PUT https://adl.vercel.app/api/submissions/SOME_POINT_ID \
+   592→  -H "Cookie: ..." \
+   593→  -H "Content-Type: application/json" \
+   594→  -d '{"details":{"siteName":"Fake"},"photoUrl":"https://attacker.com/tracking-pixel.jpg"}'
+   595→```
+   596→
+   597→**Remediation:**
+   598→- Remove `photoUrl` acceptance from PUT endpoint, or
+   599→- Validate that the URL points to the `*.public.blob.vercel-storage.com` domain
+   600→- Require photo upload through the same flow as POST
+   601→
+   602→#### VULN-007: No Rate Limiting on Authentication Endpoints
+   603→
+   604→| Field | Value |
+   605→|-------|-------|
+   606→| **Severity** | HIGH |
+   607→| **File** | `api/auth/auth.ts`, `api/auth/register.ts` |
+   608→| **CVSS** | 7.3 |
+   609→| **Priority** | Fix within 14 days |
+   610→
+   611→**Description:** Neither the login nor registration endpoints implement rate limiting, account lockout, or CAPTCHA. This enables brute-force attacks against user accounts and mass account creation.
+   612→
+   613→**Remediation (immediate -- Vercel WAF):**
+   614→```json
+   615→// vercel.json -- Add Vercel Firewall rules:
+   616→{
+   617→  "headers": [
+   618→    {
+   619→      "source": "/api/auth/(.*)",
+   620→      "headers": [
+   621→        { "key": "X-RateLimit-Policy", "value": "auth" }
+   622→      ]
+   623→    }
+   624→  ]
+   625→}
+   626→```
+   627→
+   628→**Remediation (application-level):**
+   629→```typescript
+   630→// lib/server/rateLimit.ts
+   631→import { query } from "./db.js";
+   632→
+   633→export async function checkRateLimit(
+   634→  key: string,
+   635→  windowMs: number,
+   636→  maxAttempts: number
+   637→): Promise<{ allowed: boolean; remaining: number }> {
+   638→  const windowStart = new Date(Date.now() - windowMs).toISOString();
+   639→  const result = await query<{ count: string }>(
+   640→    "SELECT COUNT(*) as count FROM rate_limit_events WHERE key = $1 AND created_at > $2",
+   641→    [key, windowStart]
+   642→  );
+   643→  const count = parseInt(result.rows[0]?.count ?? "0", 10);
+   644→  if (count >= maxAttempts) return { allowed: false, remaining: 0 };
+   645→
+   646→  await query(
+   647→    "INSERT INTO rate_limit_events (key, created_at) VALUES ($1, NOW())",
+   648→    [key]
+   649→  );
+   650→  return { allowed: true, remaining: maxAttempts - count - 1 };
+   651→}
+   652→```
+   653→
+   654→Apply limits:
+   655→- Login: 5 attempts per email per 15 minutes
+   656→- Registration: 3 accounts per IP per hour
+   657→- Submissions: 10 per user per hour
+   658→
+   659→### 2.3 Medium Severity
+   660→
+   661→#### VULN-008: User Enumeration via Registration Endpoint
+   662→
+   663→| Field | Value |
+   664→|-------|-------|
+   665→| **Severity** | MEDIUM |
+   666→| **File** | `api/auth/register.ts:38-39` |
+   667→| **CVSS** | 5.3 |
+   668→| **Priority** | Fix within 30 days |
+   669→
+   670→**Description:** The registration endpoint returns a distinct 409 status code when a user already exists, allowing attackers to enumerate valid accounts.
+   671→
+   672→**Remediation:** Return the same response for both "user exists" and "user created" scenarios, then send a confirmation email to the address. Only the legitimate email owner would know whether the account was newly created.
+   673→
+   674→```typescript
+   675→// For MVP, at minimum normalize the response:
+   676→if (existing) {
+   677→  // Return 201 anyway to prevent enumeration
+   678→  return jsonResponse({ ok: true }, { status: 201 });
+   679→}
+   680→```
+   681→
+   682→#### VULN-009: Missing CORS Configuration
+   683→
+   684→| Field | Value |
+   685→|-------|-------|
+   686→| **Severity** | MEDIUM |
+   687→| **File** | `vercel.json`, all API handlers |
+   688→| **CVSS** | 5.8 |
+   689→| **Priority** | Fix within 30 days |
+   690→
+   691→**Description:** No CORS headers are configured anywhere in the application. Vercel's default behavior allows same-origin requests, but there is no explicit `Access-Control-Allow-Origin` policy. This means:
+   692→- No protection against CORS misconfiguration if headers are added incorrectly later
+   693→- No preflight handling for complex requests
+   694→- Cross-origin API consumption is undefined
+   695→
+   696→**Remediation:**
+   697→```json
+   698→// vercel.json
+   699→{
+   700→  "headers": [
+   701→    {
+   702→      "source": "/api/(.*)",
+   703→      "headers": [
+   704→        { "key": "Access-Control-Allow-Origin", "value": "https://africandatalayer.vercel.app" },
+   705→        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
+   706→        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" },
+   707→        { "key": "Access-Control-Allow-Credentials", "value": "true" }
+   708→      ]
+   709→    }
+   710→  ]
+   711→}
+   712→```
+   713→
+   714→#### VULN-010: Missing Security Headers
+   715→
+   716→| Field | Value |
+   717→|-------|-------|
+   718→| **Severity** | MEDIUM |
+   719→| **File** | `vercel.json` |
+   720→| **CVSS** | 5.0 |
+   721→| **Priority** | Fix within 30 days |
+   722→
+   723→**Description:** No security headers are configured. Missing headers include:
+   724→- `Content-Security-Policy` -- No CSP to prevent XSS
+   725→- `X-Content-Type-Options` -- No MIME sniffing prevention
+   726→- `X-Frame-Options` -- No clickjacking protection
+   727→- `Strict-Transport-Security` -- No HSTS
+   728→- `Referrer-Policy` -- No referrer leakage control
+   729→- `Permissions-Policy` -- No feature policy
+   730→
+   731→**Remediation:**
+   732→```json
+   733→// vercel.json
+   734→{
+   735→  "headers": [
+   736→    {
+   737→      "source": "/(.*)",
+   738→      "headers": [
+   739→        { "key": "X-Content-Type-Options", "value": "nosniff" },
+   740→        { "key": "X-Frame-Options", "value": "DENY" },
+   741→        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+   742→        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+   743→        { "key": "Permissions-Policy", "value": "camera=(self), geolocation=(self), microphone=(self)" },
+   744→        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: *.public.blob.vercel-storage.com; connect-src 'self' https://ipapi.co https://generativelanguage.googleapis.com; frame-ancestors 'none';" }
+   745→      ]
+   746→    }
+   747→  ]
+   748→}
+   749→```
+   750→
+   751→#### VULN-011: Leaderboard Exposes User Email Addresses
+   752→
+   753→| Field | Value |
+   754→|-------|-------|
+   755→| **Severity** | MEDIUM |
+   756→| **File** | `api/leaderboard/index.ts:88-98` |
+   757→| **CVSS** | 5.3 |
+   758→| **Priority** | Fix within 30 days |
+   759→
+   760→**Description:** The leaderboard endpoint returns `userId` (typically the user's email) for every leaderboard entry. This is on a public, unauthenticated, cached endpoint.
+   761→
+   762→**Remediation:**
+   763→```typescript
+   764→// api/leaderboard/index.ts -- Redact userId:
+   765→const leaderboard = topRows.map((row, index) => {
+   766→  const profile = profileMap.get(row.userId);
+   767→  return {
+   768→    rank: index + 1,
+   769→    // userId: row.userId,  // REMOVE THIS
+   770→    name: getDisplayName(row.userId, profile?.name, profile?.email, profile?.phone),
+   771→    xp: row.xp,
+   772→    contributions: row.contributions,
+   773→    lastContributionAt: row.lastContributionAt,
+   774→    lastLocation: row.lastLocation,
+   775→  };
+   776→});
+   777→```
+   778→
+   779→#### VULN-012: Synchronous bcrypt in Login Path
+   780→
+   781→| Field | Value |
+   782→|-------|-------|
+   783→| **Severity** | MEDIUM |
+   784→| **File** | `api/auth/auth.ts:53` |
+   785→| **CVSS** | 4.3 |
+   786→| **Priority** | Fix within 30 days |
+   787→
+   788→**Description:** The credential login path uses `bcrypt.compareSync` (synchronous) for non-admin users:
+   789→
+   790→```typescript
+   791→const valid = bcrypt.compareSync(password, profile.passwordHash);
+   792→```
+   793→
+   794→Meanwhile, the admin path correctly uses `await bcrypt.compare` (asynchronous). The synchronous call blocks the Node.js event loop for 50-200ms per comparison, making the serverless function unresponsive during password verification and amplifying DoS impact.
+   795→
+   796→**Remediation:**
+   797→```typescript
+   798→// api/auth/auth.ts:53 -- Change to async:
+   799→const valid = await bcrypt.compare(password, profile.passwordHash);
+   800→```
+   801→
+   802→#### VULN-013: Database SSL Verification Bypass
+   803→
+   804→| Field | Value |
+   805→|-------|-------|
+   806→| **Severity** | MEDIUM |
+   807→| **File** | `lib/server/db.ts:50-51` |
+   808→| **CVSS** | 5.9 |
+   809→| **Priority** | Fix within 30 days |
+   810→
+   811→**Description:** The database connection supports `POSTGRES_SSL_NO_VERIFY=true` which sets `rejectUnauthorized: false`, disabling TLS certificate validation. This opens the connection to man-in-the-middle attacks. The `.env.example` explicitly documents this option.
+   812→
+   813→**Remediation:** Remove the `POSTGRES_SSL_NO_VERIFY` option entirely. If Supabase's certificate chain causes issues, pin the specific CA certificate rather than disabling verification.
+   814→
+   815→### 2.4 Low Severity
+   816→
+   817→#### VULN-014: No Password Complexity Requirements
+   818→
+   819→| Field | Value |
+   820→|-------|-------|
+   821→| **Severity** | LOW |
+   822→| **File** | `api/auth/register.ts:31-33` |
+   823→| **CVSS** | 3.7 |
+   824→| **Priority** | Fix within 90 days |
+   825→
+   826→**Description:** The only password requirement is a minimum length of 8 characters. No uppercase, lowercase, digit, or special character requirements. Passwords like `aaaaaaaa` or `12345678` are accepted.
+   827→
+   828→**Remediation:**
+   829→```typescript
+   830→function validatePasswordStrength(password: string): string | null {
+   831→  if (password.length < 10) return "Password must be at least 10 characters";
+   832→  if (!/[A-Z]/.test(password)) return "Password must contain an uppercase letter";
+   833→  if (!/[a-z]/.test(password)) return "Password must contain a lowercase letter";
+   834→  if (!/[0-9]/.test(password)) return "Password must contain a digit";
+   835→  return null;
+   836→}
+   837→```
+   838→
+   839→#### VULN-015: Blob Storage Photos Publicly Accessible
+   840→
+   841→| Field | Value |
+   842→|-------|-------|
+   843→| **Severity** | LOW |
+   844→| **File** | `api/submissions/index.ts:186-187` |
+   845→| **CVSS** | 3.1 |
+   846→| **Priority** | Fix within 90 days |
+   847→
+   848→**Description:** All uploaded photos use `access: "public"` on Vercel Blob. Anyone who obtains or guesses a photo URL can access the image without authentication. Photo URLs follow a predictable pattern: `submissions/{eventId}-{timestamp}.{ext}`.
+   849→
+   850→**Remediation:** For Phase 2, implement signed URLs with time-limited access. For now, the UUIDs in the path provide some obscurity.
+   851→
+   852→#### VULN-016: `trustHost: true` in Auth.js Configuration
+   853→
+   854→| Field | Value |
+   855→|-------|-------|
+   856→| **Severity** | LOW |
+   857→| **File** | `api/auth/auth.ts:104` |
+   858→| **CVSS** | 3.7 |
+   859→| **Priority** | Fix within 90 days |
+   860→
+   861→**Description:** `trustHost: true` tells Auth.js to trust the `Host` header from the request. In a Vercel deployment this is safe because Vercel controls the reverse proxy, but if the application is ever deployed behind a different reverse proxy or directly, this could allow host header injection attacks (password reset link poisoning, cache poisoning).
+   862→
+   863→**Remediation:** Set `AUTH_URL` explicitly in Vercel environment variables rather than relying on `trustHost`.
+   864→
+   865→---
+   866→
+   867→## 3. Security Controls Matrix
+   868→
+   869→### 3.1 Authentication Controls
+   870→
+   871→| Control | Current State | Gap | Target | Priority |
+   872→|---------|--------------|-----|--------|----------|
+   873→| Password hashing | bcrypt with cost factor 10 (`register.ts:50`) | Cost factor should be 12+ for modern hardware | bcrypt cost 12 | Medium |
+   874→| Password complexity | Min 8 chars only | No complexity rules | Min 10 chars + uppercase + lowercase + digit | Low |
+   875→| Account lockout | None | Unlimited login attempts | Lock after 5 failures for 15 min | High |
+   876→| MFA | Not implemented | No second factor available | TOTP or SMS OTP for admin accounts | Phase 2 |
+   877→| Session duration | Auth.js default (30 days) | Too long for sensitive app | 7 days with sliding window; 24h for admin | High |
+   878→| Session revocation | Not possible (stateless JWT) | Cannot invalidate compromised sessions | Server-side session store or token blocklist | Phase 2 |
+   879→| Token rotation | None | Same JWT for entire session lifetime | Rotate JWT on each request or every 15 min | Medium |
+   880→| Admin authentication | Single env var email match | No MFA, shared credential, no audit | Per-user admin roles in database + MFA | High |
+   881→| OAuth security | Standard Google OAuth via Auth.js | No PKCE enforcement visible | Verify PKCE in Auth.js config | Low |
+   882→| CSRF protection | Auth.js built-in CSRF token | Adequate for auth flows | Extend to all state-changing API endpoints | Medium |
+   883→
+   884→### 3.2 Authorization Controls
+   885→
+   886→| Control | Current State | Gap | Target | Priority |
+   887→|---------|--------------|-----|--------|----------|
+   888→| RBAC | Binary admin/non-admin via JWT claim | No roles, no groups, single admin | Database-backed role table with reviewer/admin/superadmin | Phase 2 |
+   889→| API authorization | `requireUser` checks JWT presence | No per-endpoint role checks beyond admin | Middleware-based RBAC on every endpoint | High |
+   890→| Resource ownership | Partial -- event detail view checks ownership | PUT endpoint has no owner check | Enforce ownership on all mutations | High |
+   891→| Map scope enforcement | Server-side geofence check (`isWithinBonamoussadi`) | Admin bypass is all-or-nothing | Granular scope-based access per region | Phase 2 |
+   892→| API key scoping | Gemini key has full access | Client-side key, no usage limits | Server-side proxy with per-user quotas | Critical |
+   893→
+   894→### 3.3 Input Validation Controls
+   895→
+   896→| Control | Current State | Gap | Target | Priority |
+   897→|---------|--------------|-----|--------|----------|
+   898→| SQL injection | Parameterized queries throughout (`$1`, `$2`, etc.) | None -- well implemented | Maintain current approach | Adequate |
+   899→| XSS | No `dangerouslySetInnerHTML` usage found in React components | No CSP header, user data rendered via React's auto-escaping | Add CSP header | Medium |
+   900→| JSON schema validation | Manual field-by-field validation | No schema library, easy to miss edge cases | Add `zod` or `ajv` for request body validation | Medium |
+   901→| File upload validation | MIME type whitelist, size limit, EXIF parsing | No magic byte validation (only checks data URI prefix) | Validate file magic bytes, not just MIME string | Medium |
+   902→| GPS coordinate validation | `Number.isFinite()` checks | No bounding box validation on raw coordinates | Reject coordinates outside Africa (-40 to 40 lat, -20 to 55 lng) | Low |
+   903→| String sanitization | `trimString` with max length | No HTML entity encoding on storage | Encode on output if ever rendered in non-React context | Low |
+   904→
+   905→### 3.4 Encryption Controls
+   906→
+   907→| Control | Current State | Gap | Target | Priority |
+   908→|---------|--------------|-----|--------|----------|
+   909→| Transport encryption | HTTPS enforced by Vercel | No HSTS header | Add HSTS with preload | Medium |
+   910→| Database connection | TLS with optional verification bypass | `POSTGRES_SSL_NO_VERIFY` option exists | Remove bypass option, pin CA cert | Medium |
+   911→| Data at rest | Supabase manages disk encryption | No application-level encryption | Encrypt PII fields (email, phone) at application level | Phase 2 |
+   912→| Password storage | bcrypt (cost 10) | Cost factor slightly low | Increase to cost 12 | Medium |
+   913→| JWT signing | HMAC-SHA256 via AUTH_SECRET | Secret currently compromised (in .env) | Rotate secret, consider RSA key pair | Critical |
+   914→| Photo storage | Public URLs on Vercel Blob | No encryption, no access control | Signed URLs with time-limited access | Phase 2 |
+   915→| Secrets management | `.env` file in git | All secrets compromised | Vercel Environment Variables only, no local .env in git | Critical |
+   916→
+   917→### 3.5 Monitoring Controls
+   918→
+   919→| Control | Current State | Gap | Target | Priority |
+   920→|---------|--------------|-----|--------|----------|
+   921→| Security event logging | None | No audit trail for any security event | Log auth events, admin actions, permission denials | High |
+   922→| Failed login monitoring | None | Cannot detect brute force attempts | Alert on >10 failures per email per hour | High |
+   923→| Anomaly detection | None | Cannot detect unusual submission patterns | Flag users with >20 submissions/day or unusual GPS patterns | Medium |
+   924→| Data exfiltration monitoring | None | Cannot detect bulk data access | Monitor large GET responses and unusual access patterns | Phase 2 |
+   925→| Dependency vulnerability scanning | None visible in CI/CD | No automated CVE detection | Add `npm audit` to CI pipeline, Dependabot/Snyk | Medium |
+   926→| Uptime monitoring | Health endpoint exists | No alerting configured | Integrate with Vercel monitoring or external uptime service | Medium |
+   927→
+   928→---
+   929→
+   930→## 4. Incident Response Plan
+   931→
+   932→### 4.1 IR Team Roles and Responsibilities
+   933→
+   934→| Role | Responsibility | Current Assignment |
+   935→|------|---------------|-------------------|
+   936→| **Incident Commander (IC)** | Owns the incident lifecycle, makes escalation decisions, coordinates response | Project Lead |
+   937→| **Security Lead** | Performs technical investigation, containment, and forensics | Teammate 4 (Cybersecurity Expert) |
+   938→| **Engineering Lead** | Implements fixes, deploys patches, manages rollbacks | Teammate 3 (Cloud Engineer) |
+   939→| **Communications Lead** | Drafts internal/external communications, manages stakeholder updates | Teammate 8 (Service Delivery Manager) |
+   940→| **Data Protection Officer** | Assesses PII impact, manages regulatory notifications (GDPR, local data protection laws) | To be assigned |
+   941→
+   942→### 4.2 Incident Classification
+   943→
+   944→| Priority | Definition | Response Time | Resolution Target | Example |
+   945→|----------|-----------|---------------|-------------------|---------|
+   946→| **P1 -- Critical** | Active exploitation, data breach, complete service outage, admin account compromise | 15 minutes to acknowledge | 4 hours to contain, 24 hours to resolve | Database credentials leaked and accessed; admin session hijacked |
+   947→| **P2 -- High** | Vulnerability actively being exploited but contained, partial service degradation, PII exposure risk | 1 hour to acknowledge | 8 hours to contain, 72 hours to resolve | Brute force attack on login endpoint; API key abuse detected |
+   948→| **P3 -- Medium** | Vulnerability discovered but not yet exploited, minor data exposure, degraded security posture | 4 hours to acknowledge | 5 business days to resolve | Missing rate limiting identified; password hash in API response |
+   949→| **P4 -- Low** | Hardening opportunity, best practice gap, informational finding | 24 hours to acknowledge | 30 business days to resolve | Missing security headers; bcrypt cost factor upgrade |
+   950→
+   951→### 4.3 Response Procedures
+   952→
+   953→#### Phase 1: Detection and Triage (0-15 minutes for P1)
+   954→
+   955→1. **Identify** the incident source (monitoring alert, user report, security scan, external notification)
+   956→2. **Classify** the priority using the matrix above
+   957→3. **Assign** an Incident Commander
+   958→4. **Create** an incident channel (Slack/Discord/WhatsApp group)
+   959→5. **Notify** the IR team per the priority response time
+   960→
+   961→#### Phase 2: Containment (15 min - 4 hours for P1)
+   962→
+   963→1. **Isolate** affected components:
+   964→   - Rotate compromised credentials immediately
+   965→   - If database is compromised: change Supabase password, update `POSTGRES_URL` in Vercel
+   966→   - If admin account is compromised: change `ADMIN_EMAIL` and `AUTH_SECRET` to invalidate all JWTs
+   967→   - If API key is abused: revoke key in Google Cloud console
+   968→2. **Preserve evidence** before making changes:
+   969→   - Export Vercel function logs
+   970→   - Export database audit logs from Supabase
+   971→   - Screenshot relevant dashboard states
+   972→   - Save HTTP access logs
+   973→3. **Block** the attack vector:
+   974→   - Add IP to Vercel Firewall blocklist if applicable
+   975→   - Disable affected endpoint if necessary (via Vercel redirect rule)
+   976→
+   977→#### Phase 3: Eradication (4-24 hours for P1)
+   978→
+   979→1. **Root cause analysis**: Identify how the attacker gained access
+   980→2. **Patch** the vulnerability (code fix, config change, or dependency update)
+   981→3. **Deploy** the fix via standard CI/CD pipeline (do not skip tests)
+   982→4. **Verify** the fix in staging/preview before production
+   983→
+   984→#### Phase 4: Recovery (24-72 hours for P1)
+   985→
+   986→1. **Restore** service to full operation
+   987→2. **Monitor** closely for recurrence (increased logging, manual checks)
+   988→3. **Communicate** resolution to affected users if applicable
+   989→4. **Update** credentials rotation schedule
+   990→
+   991→#### Phase 5: Post-Incident Review (within 5 business days)
+   992→
+   993→1. **Timeline**: Minute-by-minute reconstruction of the incident
+   994→2. **Impact assessment**: Data affected, users affected, financial impact
+   995→3. **Root cause**: Technical and process failures that allowed the incident
+   996→4. **Action items**: Specific, assignable, time-bound improvements
+   997→5. **Lessons learned**: What worked well, what did not
+   998→
+   999→### 4.4 Communication Plan
+  1000→
+  1001→**Internal communications:**
+  1002→- P1/P2: Immediate notification to all team members via primary communication channel
+  1003→- P3: Notification to engineering team within 4 hours
+  1004→- P4: Include in weekly security review
+  1005→
+  1006→**External communications (if user data is affected):**
+  1007→- Within 72 hours: Notify affected users via email
+  1008→- Include: What happened, what data was affected, what we are doing, what users should do
+  1009→- Regulatory: Assess GDPR notification requirements (72-hour deadline to supervisory authority)
+  1010→
+  1011→**Status page updates:**
+  1012→- P1: Update status page within 30 minutes of detection
+  1013→- P2: Update within 2 hours
+  1014→- Use neutral language: "investigating an issue" rather than "security breach"
+  1015→
+  1016→### 4.5 Evidence Preservation Procedures
+  1017→
+  1018→1. **Do not modify** logs or database records before capturing them
+  1019→2. **Export** Vercel function logs for the affected time window
+  1020→3. **Capture** database state with `pg_dump` if data integrity is in question
+  1021→4. **Archive** HTTP request/response pairs from CDN logs
+  1022→5. **Store** all evidence in a time-stamped, access-controlled archive
+  1023→6. **Document** the chain of custody for any evidence that may be needed for legal proceedings
+  1024→
+  1025→### 4.6 Specific Playbooks
+  1026→
+  1027→#### Playbook A: Credential Compromise
+  1028→
+  1029→**Trigger:** Suspected or confirmed compromise of any credential (database password, API key, OAuth secret, admin password, AUTH_SECRET).
+  1030→
+  1031→**Steps:**
+  1032→1. Identify which credentials are compromised
+  1033→2. Rotate the compromised credentials immediately:
+  1034→   - `AUTH_SECRET`: Generate new value, update in Vercel env vars. This invalidates ALL user sessions.
+  1035→   - `POSTGRES_URL`: Change password in Supabase dashboard, update connection string in Vercel env vars
+  1036→   - `GOOGLE_CLIENT_SECRET`: Regenerate in Google Cloud Console, update in Vercel env vars
+  1037→   - `VERCEL_API_TOKEN`: Regenerate in Vercel dashboard
+  1038→   - `ADMIN_PASSWORD`: Generate new bcrypt hash, update in Vercel env vars
+  1039→   - `BLOB_READ_WRITE_TOKEN`: Regenerate in Vercel Blob settings
+  1040→3. Audit database for unauthorized changes:
+  1041→   ```sql
+  1042→   -- Check for recent suspicious user profile changes
+  1043→   SELECT * FROM user_profiles WHERE updated_at > NOW() - INTERVAL '24 hours' ORDER BY updated_at DESC;
+  1044→   -- Check for suspicious point events
+  1045→   SELECT * FROM point_events WHERE created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at DESC;
+  1046→   ```
+  1047→4. Check Vercel deployment history for unauthorized deployments
+  1048→5. Review git history for unauthorized commits
+  1049→6. If `AUTH_SECRET` was compromised, all users must re-authenticate (sessions are invalidated)
+  1050→
+  1051→#### Playbook B: Data Breach
+  1052→
+  1053→**Trigger:** Confirmed unauthorized access to user PII (emails, phone numbers, passwords) or submission data.
+  1054→
+  1055→**Steps:**
+  1056→1. Determine scope: Which tables were accessed? Which records? Which time period?
+  1057→2. Contain: Revoke the access vector (rotate credentials, block IP, disable endpoint)
+  1058→3. Assess PII impact:
+  1059→   - User emails and phone numbers: Notify affected users
+  1060→   - Password hashes: If bcrypt cost 10, assess cracking feasibility (generally low risk but notify users to change passwords)
+  1061→   - Submission data: Assess if location data constitutes PII under applicable law
+  1062→4. Legal assessment:
+  1063→   - GDPR applicability (EU users)
+  1064→   - Cameroon Data Protection Act (Law No. 2010/012)
+  1065→   - Nigeria Data Protection Regulation (NDPR)
+  1066→5. Notify supervisory authority within 72 hours if required
+  1067→6. Notify affected users with specific remediation steps
+  1068→7. Offer password reset for all affected accounts
+  1069→
+  1070→#### Playbook C: DDoS Attack
+  1071→
+  1072→**Trigger:** Sustained high traffic causing service degradation or outage.
+  1073→
+  1074→**Steps:**
+  1075→1. Verify it is a DDoS and not a legitimate traffic spike
+  1076→2. Enable Vercel's built-in DDoS protection (contact Vercel support if on Hobby plan)
+  1077→3. If attack targets specific endpoint:
+  1078→   - Add Vercel Firewall rules to block attacking IPs/ranges
+  1079→   - Temporarily add rate limiting via Edge Middleware
+  1080→   - If targeting `/api/submissions`, temporarily increase function timeout and memory
+  1081→4. If attack is volumetric:
+  1082→   - Enable Vercel's attack challenge mode if available
+  1083→   - Contact Vercel support for CDN-level mitigation
+  1084→5. Monitor database connection pool usage (`SELECT count(*) FROM pg_stat_activity`)
+  1085→6. Post-attack: Implement rate limiting (VULN-007) to prevent recurrence
+  1086→
+  1087→#### Playbook D: Fraudulent Data Injection at Scale
+  1088→
+  1089→**Trigger:** Discovery of large-scale fake submissions (bot-generated points, fabricated locations, stock photos).
+  1090→
+  1091→**Steps:**
+  1092→1. Identify the fraudulent submissions:
+  1093→   ```sql
+  1094→   -- Find users with abnormally high submission rates
+  1095→   SELECT user_id, COUNT(*) as count, MIN(created_at) as first, MAX(created_at) as last
+  1096→   FROM point_events
+  1097→   GROUP BY user_id
+  1098→   HAVING COUNT(*) > 50
+  1099→   ORDER BY count DESC;
+  1100→
+  1101→   -- Find submissions from the same device ID
+  1102→   SELECT details->>'clientDevice'->>'deviceId' as device_id, COUNT(*) as count
+  1103→   FROM point_events
+  1104→   WHERE details->'clientDevice'->>'deviceId' IS NOT NULL
+  1105→   GROUP BY details->'clientDevice'->>'deviceId'
+  1106→   HAVING COUNT(*) > 20;
+  1107→   ```
+  1108→2. Quarantine suspicious submissions (add a `status: "quarantined"` field via ENRICH_EVENT)
+  1109→3. Block the offending user accounts
+  1110→4. Assess data quality impact on projected points
+  1111→5. If photos were uploaded, check for duplicate image hashes across submissions
+  1112→6. Remove fraudulent data after confirmation
+  1113→7. Recalculate XP and leaderboard rankings
+  1114→8. Implement rate limiting and enhanced fraud detection to prevent recurrence
+  1115→
+  1116→#### Playbook E: Admin Account Compromise
+  1117→
+  1118→**Trigger:** Suspected unauthorized admin access.
+  1119→
+  1120→**Steps:**
+  1121→1. IMMEDIATELY:
+  1122→   - Change `ADMIN_EMAIL` to a new address in Vercel env vars
+  1123→   - Rotate `AUTH_SECRET` to invalidate all sessions
+  1124→   - Change `ADMIN_PASSWORD` to a new bcrypt hash
+  1125→2. Audit admin actions:
+  1126→   - Review all `DELETE` operations on point_events
+  1127→   - Check for unauthorized user profile modifications
+  1128→   - Review admin_events access logs (if logging is implemented)
+  1129→3. Check for data exfiltration:
+  1130→   - Admin can view all events including user identifiers
+  1131→   - Admin can view fraud check metadata including IP locations
+  1132→4. Restore any deleted events from database backups
+  1133→5. Post-incident: Implement admin audit logging, MFA for admin accounts
+  1134→
+  1135→---
+  1136→
+  1137→## 5. Security Hardening Checklist
+  1138→
+  1139→### 5.1 Must Fix Before Launch (Critical)
+  1140→
+  1141→| # | Item | Vulnerability | File(s) | Status |
+  1142→|---|------|--------------|---------|--------|
+  1143→| C-1 | Rotate ALL secrets exposed in `.env` | VULN-001 | `.env` | NOT DONE |
+  1144→| C-2 | Add `.env` to `.gitignore` and purge from git history | VULN-001 | `.gitignore` | NOT DONE |
+  1145→| C-3 | Move Gemini API calls to server-side proxy | VULN-002 | `vite.config.ts`, `lib/gemini.ts` | NOT DONE |
+  1146→| C-4 | Remove plaintext admin password fallback | VULN-003 | `api/auth/auth.ts:42-46` | NOT DONE |
+  1147→| C-5 | Set `ADMIN_PASSWORD` to bcrypt hash in Vercel env vars | VULN-003 | Vercel dashboard | NOT DONE |
+  1148→| C-6 | Strip `passwordHash` from user profile API response | VULN-004 | `api/user/index.ts:22` | NOT DONE |
+  1149→| C-7 | Verify all Vercel env vars are set correctly after secret rotation | VULN-001 | Vercel dashboard | NOT DONE |
+  1150→
+  1151→### 5.2 Fix Within 30 Days (High)
+  1152→
+  1153→| # | Item | Vulnerability | File(s) | Status |
+  1154→|---|------|--------------|---------|--------|
+  1155→| H-1 | Implement rate limiting on auth endpoints | VULN-007 | `api/auth/auth.ts`, `api/auth/register.ts` | NOT DONE |
+  1156→| H-2 | Implement server-side idempotency check for submissions | VULN-005 | `api/submissions/index.ts` | NOT DONE |
+  1157→| H-3 | Remove or validate `photoUrl` in PUT endpoint | VULN-006 | `api/submissions/[id].ts:100` | NOT DONE |
+  1158→| H-4 | Add security headers (HSTS, CSP, X-Frame-Options, etc.) | VULN-010 | `vercel.json` | NOT DONE |
+  1159→| H-5 | Add admin action audit logging | R-1 | `api/submissions/[id].ts`, `api/user/index.ts` | NOT DONE |
+  1160→| H-6 | Implement rate limiting on submission endpoint | D-1 | `api/submissions/index.ts` | NOT DONE |
+  1161→| H-7 | Change `bcrypt.compareSync` to `await bcrypt.compare` | VULN-012 | `api/auth/auth.ts:53` | NOT DONE |
+  1162→| H-8 | Reduce JWT session duration to 7 days | S-3 | `api/auth/auth.ts:103` | NOT DONE |
+  1163→| H-9 | Add ownership/admin check to PUT endpoint | E-4 | `api/submissions/[id].ts:68` | NOT DONE |
+  1164→| H-10 | Redact `userId` from public leaderboard response | VULN-011 | `api/leaderboard/index.ts:92` | NOT DONE |
+  1165→
+  1166→### 5.3 Fix Within 90 Days (Medium)
+  1167→
+  1168→| # | Item | Vulnerability | File(s) | Status |
+  1169→|---|------|--------------|---------|--------|
+  1170→| M-1 | Add CORS configuration | VULN-009 | `vercel.json` | NOT DONE |
+  1171→| M-2 | Prevent user enumeration on registration | VULN-008 | `api/auth/register.ts:38-39` | NOT DONE |
+  1172→| M-3 | Remove `POSTGRES_SSL_NO_VERIFY` option | VULN-013 | `lib/server/db.ts:50-51` | NOT DONE |
+  1173→| M-4 | Add request body validation with `zod` | 3.3 input validation | All API handlers | NOT DONE |
+  1174→| M-5 | Implement pagination for `getPointEvents` | D-2 | `lib/server/storage/postgresStore.ts:289-298` | NOT DONE |
+  1175→| M-6 | Add `npm audit` to CI pipeline | 3.5 monitoring | CI/CD configuration | NOT DONE |
+  1176→| M-7 | Implement failed login monitoring and alerting | 3.5 monitoring | New: `lib/server/securityEvents.ts` | NOT DONE |
+  1177→| M-8 | Add magic byte validation for uploaded images | 3.3 input validation | `api/submissions/index.ts:164-176` | NOT DONE |
+  1178→| M-9 | Increase bcrypt cost factor to 12 | 3.1 authentication | `api/auth/register.ts:50` | NOT DONE |
+  1179→| M-10 | Configure explicit JWT expiration (7 days standard, 24h admin) | S-3 | `api/auth/auth.ts:103` | NOT DONE |
+  1180→| M-11 | Set `AUTH_URL` explicitly, remove `trustHost: true` | VULN-016 | `api/auth/auth.ts:104` | NOT DONE |
+  1181→
+  1182→### 5.4 Nice to Have (Low / Phase 2)
+  1183→
+  1184→| # | Item | Vulnerability | Notes |
+  1185→|---|------|--------------|-------|
+  1186→| L-1 | Implement password complexity requirements | VULN-014 | Min 10 chars + uppercase + lowercase + digit |
+  1187→| L-2 | Add MFA for admin accounts (TOTP) | S-2 | Requires UI work + authenticator app integration |
+  1188→| L-3 | Implement server-side session store for revocation | S-3 | Redis or database-backed sessions |
+  1189→| L-4 | Switch to signed URLs for Vercel Blob photos | VULN-015 | Prevents direct photo access without auth |
+  1190→| L-5 | Implement per-user API rate limiting | D-1 | Token bucket algorithm with Redis |
+  1191→| L-6 | Add application-level PII encryption for email/phone fields | 3.4 encryption | AES-256-GCM with key management |
+  1192→| L-7 | Implement database-backed RBAC with roles table | E-1 | Roles: contributor, reviewer, admin, superadmin |
+  1193→| L-8 | Add device attestation for mobile contributors | R-2 | Android SafetyNet / iOS App Attest |
+  1194→| L-9 | Implement geographic anomaly detection | T-2 | Flag impossible travel patterns |
+  1195→| L-10 | Add Dependabot or Snyk for automated dependency updates | 3.5 monitoring | GitHub Dependabot is free |
+  1196→| L-11 | Implement WAF rules for common attack patterns | D-1 | Vercel Firewall or Cloudflare |
+  1197→| L-12 | Add CSP reporting endpoint to detect XSS attempts | VULN-010 | `report-uri` or `report-to` directive |
+  1198→
+  1199→---
+  1200→
+  1201→## Appendix A: Vulnerability Summary by Priority
+  1202→
+  1203→| Priority | Count | IDs |
+  1204→|----------|-------|-----|
+  1205→| Critical (fix now) | 3 | VULN-001, VULN-002, VULN-003 |
+  1206→| High (within 30 days) | 4 | VULN-004, VULN-005, VULN-006, VULN-007 |
+  1207→| Medium (within 90 days) | 6 | VULN-008, VULN-009, VULN-010, VULN-011, VULN-012, VULN-013 |
+  1208→| Low (Phase 2) | 3 | VULN-014, VULN-015, VULN-016 |
+  1209→| **Total** | **16** | |
+  1210→
+  1211→## Appendix B: Compliance Considerations
+  1212→
+  1213→ADL operates across multiple African jurisdictions. Key data protection regulations to monitor:
+  1214→
+  1215→| Jurisdiction | Regulation | Key Requirements |
+  1216→|-------------|-----------|-----------------|
+  1217→| Cameroon | Law No. 2010/012 on Cybersecurity and Cybercrime | Registration with ANTIC, consent for data collection, breach notification |
+  1218→| Nigeria | Nigeria Data Protection Regulation (NDPR) 2019 | Consent, data audit, breach notification within 72 hours |
+  1219→| Kenya | Data Protection Act 2019 | Registration with ODPC, data protection impact assessment |
+  1220→| Pan-African | African Union Convention on Cyber Security (Malabo Convention) | Framework for member states, cross-border data transfer provisions |
+  1221→| EU (if EU users) | GDPR | 72-hour breach notification, DPO appointment, privacy by design |
+  1222→
+  1223→**Recommendation:** Before launching in each new country, conduct a data protection impact assessment (DPIA) specific to that jurisdiction's requirements.
+  1224→
+  1225→## Appendix C: Security Testing Recommendations
+  1226→
+  1227→| Test Type | Frequency | Scope | Tool Recommendations |
+  1228→|-----------|-----------|-------|---------------------|
+  1229→| Dependency scanning | Every CI build | `package.json` dependencies | `npm audit`, Snyk, Dependabot |
+  1230→| SAST (Static Analysis) | Every PR | All TypeScript source | ESLint security plugins, Semgrep |
+  1231→| DAST (Dynamic Analysis) | Weekly in staging | All API endpoints | OWASP ZAP, Burp Suite Community |
+  1232→| Penetration testing | Quarterly | Full application | External security firm |
+  1233→| Secret scanning | Every commit | Entire repository | GitHub secret scanning, gitleaks |
+  1234→| Container/runtime scanning | Monthly | Vercel function runtime | Vercel security dashboard |
+  1235→
+  1236→---
+  1237→
+  1238→*This document represents the security posture as of 2026-02-28. All findings are based on actual code review of the ADL repository. The critical vulnerabilities (VULN-001 through VULN-003) require immediate remediation before any production deployment or external access is granted.*
+  1239→

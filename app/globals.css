@@ -20,22 +20,21 @@
     --color-primary: 178 37 79;
     --color-primary-container: 252 94 132;
     --color-primary-fixed-dim: 235 81 120;
-    --color-secondary: 20 155 226;
-    --color-secondary-container: 223 244 255;
-    --color-secondary-container-strong: 88 196 246;
+    --color-secondary: 87 96 104;
+    --color-secondary-container: 219 228 237;
+    --color-secondary-container-strong: 173 186 199;
     --color-tertiary: 127 95 144;
     --color-on-surface: 45 51 53;
     --color-on-surface-variant: 90 96 98;
     --color-on-primary: 255 247 247;
     --color-on-primary-container: 55 0 17;
-    --color-on-secondary-container: 13 81 118;
+    --color-on-secondary-container: 35 49 62;
     --color-outline: 118 124 126;
     --color-outline-variant: 173 179 181;
     --gradient-primary: linear-gradient(
       135deg,
       rgb(var(--color-primary)) 0%,
-      rgb(var(--color-primary-container)) 52%,
-      rgb(var(--color-secondary)) 100%
+      rgb(var(--color-primary-container)) 100%
     );
     --shadow-ambient: 0 10px 30px rgba(45, 51, 53, 0.05);
     --surface-border: rgba(173, 179, 181, 0.34);

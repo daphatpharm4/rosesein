@@ -26,9 +26,10 @@ const baseNavItems = [
 type BottomNavProps = {
   currentPath: string;
   profileKind: ProfileKind | null;
+  wide?: boolean;
 };
 
-export function BottomNav({ currentPath, profileKind }: BottomNavProps) {
+export function BottomNav({ currentPath, profileKind, wide = false }: BottomNavProps) {
   const navItems = [
     ...baseNavItems,
     ...(profileKind === "professional"
@@ -53,7 +54,7 @@ export function BottomNav({ currentPath, profileKind }: BottomNavProps) {
   return (
     <nav
       aria-label="Navigation principale"
-      className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-screen-md px-3 pb-[max(var(--safe-area-bottom),0.75rem)] sm:px-4 sm:pb-4"
+      className={`fixed inset-x-0 bottom-0 z-40 mx-auto w-full px-3 pb-[max(var(--safe-area-bottom),0.75rem)] sm:px-4 sm:pb-4 ${wide ? "max-w-screen-lg" : "max-w-screen-md"}`}
     >
       <div
         className={`shell-bar grid gap-1.5 rounded-[2rem] border border-outline-variant/25 bg-background/92 px-2 py-2 shadow-ambient backdrop-blur-sm sm:rounded-brand-xl sm:px-3 sm:py-3 ${

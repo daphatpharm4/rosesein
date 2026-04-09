@@ -1,0 +1,156 @@
+# Vertical Registry Refactor Plan
+
+## Context
+
+The app currently supports 3 hardcoded categories (`pharmacy`, `fuel_station`, `mobile_money`). Adding the 11 new verticals from the Kasi Insight meeting notes requires touching ~15 files with ~85+ references. This refactor creates a single source of truth so adding a new vertical means editing one config object and running one DB migration.
+
+## New Verticals to Add
+
+`alcohol_outlet`, `retail_kiosk`, `billboard`, `fmcg`, `transport_station_hub`, `census_satellite_groundtruth`, `fuel_fleet`, `ngo_services`, `public_goods`, `competitor_intelligence`, `water_point`
+
+---
+
+## Phase 1: Foundation — `shared/verticals.ts`
+
+Create the vertical registry as the single source of truth.
+
+**File: `shared/verticals.ts`** (NEW)
+
+```ts
+export interface VerticalConfig {
+  id: string;                          // e.g. "pharmacy"
+  labelEn: string;                     // "Pharmacy"
+  labelFr: string;                     // "Pharmacie"
+  pluralEn: string;                    // "Pharmacies"
+  pluralFr: string;                    // "Pharmacies"
+  icon: string;                        // lucide icon name: "pill"
+  color: string;                       // marker color hex
+  enrichableFields: string[];          // fields that can be enriched
+  createRequiredFields: string[];      // fields required on CREATE
+  normalizeDetails: (d: SubmissionDetails) => SubmissionDetails;  // category-specific normalization
+}
+
+export const VERTICALS: Record<string, VerticalConfig> = { ... };
+
+// Derived helpers
+export const VERTICAL_IDS: string[] = Object.keys(VERTICALS);
+export const SUBMISSION_CATEGORIES = VERTICAL_IDS as SubmissionCategory[];
+export function isValidCategory(v: string): v is SubmissionCategory { ... }
+export function getVertical(id: string): VerticalConfig { ... }
+export function categoryLabel(id: string, lang: 'en' | 'fr'): string { ... }
+export function categoryPluralLabel(id: string, lang: 'en' | 'fr'): string { ... }
+```
+
+**File: `shared/types.ts`** (MODIFY)
+- Change `SubmissionCategory` from a hardcoded union to be derived from `VERTICAL_IDS`:
+  ```ts
+  export type SubmissionCategory = (typeof VERTICAL_IDS)[number];
+  ```
+
+**File: `components/shared/VerticalIcon.tsx`** (NEW)
+- Maps icon string names to lucide-react components via a lookup table
+- Exports `<VerticalIcon name="pill" size={20} />` component
+
+---
+
+## Phase 2: Server-side refactor
+
+**File: `lib/server/pointProjection.ts`** (MODIFY)
+- Remove hardcoded `ENRICHABLE_FIELDS` and `CREATE_REQUIRED_FIELDS` objects (lines 13-23)
+- Replace with: `getVertical(category).enrichableFields` / `.createRequiredFields`
+- Remove `normalizeDetailsForCategory()` switch logic (lines 66-134), replace with: `getVertical(category).normalizeDetails(details)`
+
+**File: `api/submissions/index.ts`** (MODIFY)
+- Replace `allowedCategories` array (line 53) with `VERTICAL_IDS`
+- Replace `normalizeCategory()` hardcoded mappings (lines 115-118) with a lookup from registry + legacy alias map
+- Reuse `isValidCategory()` from shared/verticals
+
+**File: `lib/server/storage/postgresStore.ts`** (MODIFY)
+- Replace hardcoded category parsing (line 54) with `isValidCategory()` from shared/verticals
+
+---
+
+## Phase 3: UI refactor
+
+**File: `components/Screens/ContributionFlow.tsx`** (MODIFY)
+- Replace hardcoded category picker with `VERTICALS` iteration
+- Use `<VerticalIcon>` and `categoryLabel()` from registry
+
+**File: `components/Screens/AdminQueue.tsx`** (MODIFY)
+- Replace `getCategoryLabel()` (lines 55-57) with `categoryLabel()` from registry
+
+**File: `components/Screens/Home.tsx`** (MODIFY)
+- Replace hardcoded category tabs with `VERTICALS` iteration
+- Use `getVertical()` for colors/icons
+
+**File: `components/Screens/HomeMap.tsx`** (MODIFY)
+- Replace hardcoded icon/color mappings (lines 55-57, 119-135) with `getVertical(category).color`
+- Use `<VerticalIcon>` for markers
+
+**File: `components/Screens/Details.tsx`** (MODIFY)
+- Replace category label/icon ternaries (lines 30-34, 89) with registry lookups
+
+**File: `components/Screens/Analytics.tsx`** (MODIFY)
+- Replace hardcoded `categoryCounts` init (lines 136-139) and `categories` array (line 149) with `VERTICAL_IDS`
+- Replace `getCategoryLabel()` (lines 64-66) with `categoryPluralLabel()` from registry
+
+**File: `components/Screens/Profile.tsx`** (MODIFY)
+- Replace category label ternaries (lines 66-70, 84-86) with `categoryLabel()` from registry
+
+---
+
+## Phase 4: Database migration
+
+**File: `supabase/migrations/YYYYMMDD_add_verticals.sql`** (NEW)
+- Drop old CHECK constraint, add new one with all vertical IDs:
+  ```sql
+  ALTER TABLE point_events DROP CONSTRAINT IF EXISTS point_events_category_check;
+  ALTER TABLE point_events ADD CONSTRAINT point_events_category_check
+    CHECK (category IN ('pharmacy','fuel_station','mobile_money','alcohol_outlet','retail_kiosk','billboard','fmcg','transport_station_hub','census_satellite_groundtruth','fuel_fleet','ngo_services','public_goods','competitor_intelligence','water_point'));
+  ```
+
+---
+
+## Phase 5: Tests & legacy type cleanup
+
+**File: `types.ts`** (MODIFY)
+- Deprecate or remove the old `Category` enum; replace usages with `SubmissionCategory` from shared/types
+
+**File: `tests/pointProjection.test.ts`** (MODIFY)
+- Update to use registry imports; add test for one new vertical
+
+**File: `tests/submissionsValidation.test.ts`** (MODIFY)
+- Add test case for a new vertical category
+
+---
+
+## Files Summary
+
+| Action | File |
+|--------|------|
+| CREATE | `shared/verticals.ts` |
+| CREATE | `components/shared/VerticalIcon.tsx` |
+| CREATE | `supabase/migrations/YYYYMMDD_add_verticals.sql` |
+| MODIFY | `shared/types.ts` |
+| MODIFY | `lib/server/pointProjection.ts` |
+| MODIFY | `api/submissions/index.ts` |
+| MODIFY | `lib/server/storage/postgresStore.ts` |
+| MODIFY | `components/Screens/ContributionFlow.tsx` |
+| MODIFY | `components/Screens/AdminQueue.tsx` |
+| MODIFY | `components/Screens/Home.tsx` |
+| MODIFY | `components/Screens/HomeMap.tsx` |
+| MODIFY | `components/Screens/Details.tsx` |
+| MODIFY | `components/Screens/Analytics.tsx` |
+| MODIFY | `components/Screens/Profile.tsx` |
+| MODIFY | `types.ts` |
+| MODIFY | `tests/pointProjection.test.ts` |
+| MODIFY | `tests/submissionsValidation.test.ts` |
+
+## Verification
+
+1. **Type check**: `npx tsc --noEmit` — no errors
+2. **Tests**: `npx jest` — all existing + new tests pass
+3. **Manual test**: Submit a `pharmacy` (existing vertical) — verify it works as before
+4. **Manual test**: Submit with a new vertical (after DB migration) — verify it saves and displays correctly
+5. **Admin panel**: Verify grouped view shows correct labels/icons for all categories
+6. **Analytics**: Verify category breakdown includes all verticals

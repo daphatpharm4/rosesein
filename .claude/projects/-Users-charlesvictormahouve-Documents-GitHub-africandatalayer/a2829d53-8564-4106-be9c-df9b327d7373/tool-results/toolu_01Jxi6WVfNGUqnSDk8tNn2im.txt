@@ -1,0 +1,1572 @@
+     1→# ADL Cybersecurity: Security Controls, Privacy Framework, and Incident Response
+     2→## Bonamoussadi, Douala, Cameroon
+     3→
+     4→**Teammate 5 -- Cybersecurity Expert Deliverable**
+     5→**Date:** March 2026
+     6→
+     7→---
+     8→
+     9→## Table of Contents
+    10→
+    11→1. [Threat Model](#1-threat-model)
+    12→2. [Security Controls](#2-security-controls)
+    13→3. [Privacy and Consent Framework](#3-privacy-and-consent-framework)
+    14→4. [Incident Response Plan](#4-incident-response-plan)
+    15→5. [Field Agent Security Training](#5-field-agent-security-training)
+    16→6. [Compliance Checklist](#6-compliance-checklist)
+    17→
+    18→---
+    19→
+    20→## Existing Security Baseline
+    21→
+    22→Before prescribing controls, here is what ADL already has in place and where the gaps are:
+    23→
+    24→| Layer | Current State | Gap |
+    25→|---|---|---|
+    26→| **Authentication** | `@auth/core` with Google OAuth + email/password credentials; session-based JWTs; CSRF protection via `csrfToken` | No MFA; no role-based access beyond `isAdmin` boolean; no session timeout enforcement; no account lockout after failed attempts |
+    27→| **Authorization** | Single `isAdmin` flag on user session; API routes check `requireUser()` | No granular RBAC (field agent vs. team lead vs. admin vs. data consumer); no per-vertical access control |
+    28→| **Data Encryption** | HTTPS in transit (Vercel enforces TLS); Neon PostgreSQL encrypts at rest | No field-level encryption for PII; no client-side encryption before sync; photos stored in Vercel Blob without additional encryption layer |
+    29→| **Fraud Detection** | EXIF GPS extraction, haversine distance checks, IP geolocation cross-referencing (`submissionFraud.ts`) | GPS spoofing detection is limited to EXIF/haversine; no device fingerprinting; no behavioral anomaly detection |
+    30→| **API Security** | Vercel serverless functions with JWT validation | No explicit rate limiting beyond Vercel defaults; no input validation library; CORS not explicitly configured (relies on Vercel defaults) |
+    31→| **Photo Integrity** | Photos uploaded to Vercel Blob with URLs stored in `point_events` | No hash-on-capture; no tamper detection; no chain-of-custody for evidence photos |
+    32→| **Offline Security** | IndexedDB queue (`adl_offline_queue`) stores submissions locally | IndexedDB is not encrypted; device theft exposes queued data; no remote wipe capability |
+    33→| **Audit Trail** | Event-sourced `point_events` table is append-only | No dedicated security audit log; no login/logout tracking; no admin action logging |
+    34→| **Data Protection Compliance** | None formalized | No privacy policy; no consent workflow; no DPO appointed; no data subject rights mechanism; June 2026 deadline approaching |
+    35→
+    36→---
+    37→
+    38→## 1. Threat Model
+    39→
+    40→### 1.1 Methodology
+    41→
+    42→This threat model uses a risk-based approach adapted for ADL's operational context: field agents collecting ground-truth data with consumer Android phones in Bonamoussadi, Douala. Threats are ranked by **Likelihood x Impact** on a 5-point scale each (1=Very Low, 5=Very High), producing a risk score of 1--25.
+    43→
+    44→### 1.2 Threat Registry
+    45→
+    46→#### T1: Device Theft or Loss
+    47→
+    48→| Attribute | Detail |
+    49→|---|---|
+    50→| **Description** | Field agent's phone is stolen or lost during data collection in Bonamoussadi. Douala has significant petty crime, and agents visibly using phones in commercial areas are targets. |
+    51→| **Likelihood** | 4 (High) -- Phone theft is common in Douala's commercial areas; agents use phones openly for photo capture and GPS recording |
+    52→| **Impact** | 3 (Medium) -- Offline queue may contain unsynced submissions with GPS coordinates, business names, and photos; session tokens stored on device; but no highly sensitive PII in typical submissions |
+    53→| **Risk Score** | **12 / 25** |
+    54→| **Assets at Risk** | Unsynced IndexedDB queue, cached session tokens, photos in device gallery, agent's personal data on same device |
+    55→| **Existing Mitigations** | None specific to ADL; depends entirely on agent's personal device security |
+    56→
+    57→#### T2: Agent Impersonation
+    58→
+    59→| Attribute | Detail |
+    60→|---|---|
+    61→| **Description** | Unauthorized person gains access to an agent's credentials and submits fabricated data, or a terminated agent continues submitting. |
+    62→| **Likelihood** | 3 (Medium) -- Credential sharing is common in Cameroon's informal work culture; no MFA means stolen password = full access |
+    63→| **Impact** | 4 (High) -- Polluted dataset with fraudulent submissions; damages data product credibility; may be undetected if submissions appear plausible |
+    64→| **Risk Score** | **12 / 25** |
+    65→| **Assets at Risk** | Data integrity, platform reputation, downstream customer trust |
+    66→| **Existing Mitigations** | Fraud detection (EXIF/haversine/IP) catches geographically implausible submissions; session-based auth with CSRF protection |
+    67→
+    68→#### T3: Data Interception (Man-in-the-Middle)
+    69→
+    70→| Attribute | Detail |
+    71→|---|---|
+    72→| **Description** | Submissions intercepted during sync over MTN/Orange mobile networks, particularly on compromised public Wi-Fi or through network-level surveillance. |
+    73→| **Likelihood** | 2 (Low) -- Vercel enforces HTTPS/TLS; MitM on mobile data requires sophisticated capability |
+    74→| **Impact** | 3 (Medium) -- Business location data, GPS coordinates, and photos could be intercepted; no financial or health PII in typical submissions |
+    75→| **Risk Score** | **6 / 25** |
+    76→| **Assets at Risk** | Submission payloads (GPS, photos, business details), authentication tokens |
+    77→| **Existing Mitigations** | HTTPS enforced by Vercel; `__Secure-` cookie prefix in production; TLS 1.2+ on Vercel edge |
+    78→
+    79→#### T4: GPS Spoofing
+    80→
+    81→| Attribute | Detail |
+    82→|---|---|
+    83→| **Description** | Agent uses GPS spoofing apps (e.g., Fake GPS Location) to submit data without physically visiting locations, fabricating or recycling previous captures. |
+    84→| **Likelihood** | 4 (High) -- GPS spoofing apps are freely available on Android; financial incentive exists if agents are paid per submission; Android does not block mock locations by default |
+    85→| **Impact** | 4 (High) -- Fundamentally undermines the ground-truth value proposition; geolocated data becomes unreliable; clients paying for verified field data receive fabricated data |
+    86→| **Risk Score** | **16 / 25** |
+    87→| **Assets at Risk** | Data product integrity, commercial reputation, client trust |
+    88→| **Existing Mitigations** | EXIF GPS extraction and haversine distance check between reported GPS and photo EXIF GPS; IP geolocation cross-reference; Bonamoussadi geofence bounding box |
+    89→
+    90→#### T5: Insider Threats
+    91→
+    92→| Attribute | Detail |
+    93→|---|---|
+    94→| **Description** | ADL team member (admin, developer) misuses privileged access: bulk data export for sale, unauthorized data modification, or sabotage. |
+    95→| **Likelihood** | 2 (Low) -- Small team reduces surface but increases individual impact; economic pressures in Cameroon create motivation |
+    96→| **Impact** | 5 (Very High) -- Admin access to Neon PostgreSQL means full database access; Vercel environment variables contain all secrets; no audit trail for admin actions |
+    97→| **Risk Score** | **10 / 25** |
+    98→| **Assets at Risk** | Entire database, API keys, customer data, business reputation |
+    99→| **Existing Mitigations** | Event-sourced model means data modifications create new events (append-only); Vercel dashboard has basic access logs |
+   100→
+   101→#### T6: Physical Threats to Field Agents
+   102→
+   103→| Attribute | Detail |
+   104→|---|---|
+   105→| **Description** | Agents face physical danger: robbery, harassment by business owners who object to being photographed, confrontation in areas with informal/illegal operations (unlicensed bars, informal drug sellers). |
+   106→| **Likelihood** | 3 (Medium) -- Bonamoussadi is middle-class and relatively safe compared to other Douala neighborhoods, but agents photographing businesses can provoke hostile reactions; informal operators are inherently suspicious of documentation |
+   107→| **Impact** | 5 (Very High) -- Agent physical safety is paramount; legal liability for ADL; reputational damage; operational disruption if agents refuse to work |
+   108→| **Risk Score** | **15 / 25** |
+   109→| **Assets at Risk** | Agent safety (non-negotiable), ADL operational continuity, legal exposure |
+   110→| **Existing Mitigations** | None formalized |
+   111→
+   112→#### T7: Regulatory Non-Compliance
+   113→
+   114→| Attribute | Detail |
+   115→|---|---|
+   116→| **Description** | Failure to comply with Cameroon Law No. 2024/017 (data protection) before the June 23, 2026 deadline. ADL collects GPS locations, photos of businesses, and potentially identifiable information without formalized consent or registration. |
+   117→| **Likelihood** | 5 (Very High) -- Currently no compliance program exists; deadline is less than 4 months away; cross-border data transfer (Vercel/Neon servers outside Cameroon) adds complexity |
+   118→| **Impact** | 4 (High) -- Fines, mandatory data deletion orders, operational shutdown, reputational damage; potential personal liability for data controller |
+   119→| **Risk Score** | **20 / 25** |
+   120→| **Assets at Risk** | Business continuity, all collected data, financial exposure, executive liability |
+   121→| **Existing Mitigations** | None |
+   122→
+   123→#### T8: Third-Party/Supply Chain Risks
+   124→
+   125→| Attribute | Detail |
+   126→|---|---|
+   127→| **Description** | Compromise or failure of Vercel, Neon PostgreSQL, Vercel Blob, Google OAuth, or Google Gemini AI. Also includes npm supply chain attacks on the 40+ dependencies. |
+   128→| **Likelihood** | 2 (Low) -- Vercel and Neon are established providers with strong security postures; but npm supply chain attacks are increasingly common |
+   129→| **Impact** | 4 (High) -- Total platform unavailability (Vercel outage); data exposure (Neon breach); authentication bypass (Google OAuth compromise); dependency injection (npm package compromise) |
+   130→| **Risk Score** | **8 / 25** |
+   131→| **Assets at Risk** | Platform availability, data confidentiality, authentication integrity |
+   132→| **Existing Mitigations** | Edge Config fallback for read-only when Postgres unavailable; `package-lock.json` pins dependency versions |
+   133→
+   134→#### T9: Data Exfiltration via API
+   135→
+   136→| Attribute | Detail |
+   137→|---|---|
+   138→| **Description** | Unauthorized bulk extraction of data through the API by an authenticated user (competitor intelligence gathering) or exploitation of API vulnerabilities. |
+   139→| **Likelihood** | 3 (Medium) -- `/api/submissions GET` returns data; no pagination limits documented; any authenticated user can query |
+   140→| **Impact** | 3 (Medium) -- Entire Bonamoussadi dataset extracted; competitor gains ADL's data product without paying; but data is observational (not trade secrets) |
+   141→| **Risk Score** | **9 / 25** |
+   142→| **Assets at Risk** | Commercial value of collected data, competitive advantage |
+   143→| **Existing Mitigations** | Authentication required for API access; Vercel's default rate limiting |
+   144→
+   145→### 1.3 Threat Priority Matrix
+   146→
+   147→| Rank | Threat | Risk Score | Priority |
+   148→|---|---|---|---|
+   149→| 1 | T7: Regulatory Non-Compliance | 20 | **CRITICAL** |
+   150→| 2 | T4: GPS Spoofing | 16 | **HIGH** |
+   151→| 3 | T6: Physical Threats to Agents | 15 | **HIGH** |
+   152→| 4 | T1: Device Theft/Loss | 12 | **HIGH** |
+   153→| 5 | T2: Agent Impersonation | 12 | **HIGH** |
+   154→| 6 | T5: Insider Threats | 10 | **MEDIUM** |
+   155→| 7 | T9: Data Exfiltration via API | 9 | **MEDIUM** |
+   156→| 8 | T8: Third-Party/Supply Chain | 8 | **MEDIUM** |
+   157→| 9 | T3: Data Interception | 6 | **LOW** |
+   158→
+   159→---
+   160→
+   161→## 2. Security Controls
+   162→
+   163→### 2.1 Mobile Device Security
+   164→
+   165→ADL uses a PWA on consumer Android phones (not company-issued devices), which limits MDM options. Controls must work within this constraint.
+   166→
+   167→#### 2.1.1 Minimum Device Requirements (Enforced at Login)
+   168→
+   169→```typescript
+   170→// lib/client/devicePolicy.ts
+   171→export interface DeviceComplianceResult {
+   172→  compliant: boolean;
+   173→  violations: string[];
+   174→}
+   175→
+   176→export function checkDeviceCompliance(): DeviceComplianceResult {
+   177→  const violations: string[] = [];
+   178→
+   179→  // Check HTTPS context (implies no MitM proxy downgrade)
+   180→  if (location.protocol !== 'https:') {
+   181→    violations.push('HTTPS required');
+   182→  }
+   183→
+   184→  // Check for mock location capability (Android)
+   185→  // Note: PWAs cannot directly detect mock locations, but we can
+   186→  // check the Geolocation API permission state
+   187→  if (!navigator.geolocation) {
+   188→    violations.push('Geolocation not available');
+   189→  }
+   190→
+   191→  // Check for minimum screen resolution (prevents headless automation)
+   192→  if (screen.width < 320 || screen.height < 480) {
+   193→    violations.push('Screen resolution too low');
+   194→  }
+   195→
+   196→  // Check for IndexedDB availability (required for offline queue)
+   197→  if (!window.indexedDB) {
+   198→    violations.push('IndexedDB not available');
+   199→  }
+   200→
+   201→  return {
+   202→    compliant: violations.length === 0,
+   203→    violations,
+   204→  };
+   205→}
+   206→```
+   207→
+   208→#### 2.1.2 Session and Local Data Protection
+   209→
+   210→| Control | Implementation | Mitigates |
+   211→|---|---|---|
+   212→| **Session timeout** | Set JWT `maxAge` to 8 hours (one field shift); force re-authentication after inactivity | T1, T2 |
+   213→| **Automatic queue flush** | On app foreground and every 5 minutes when online, flush IndexedDB queue to server | T1 (reduce exposure window) |
+   214→| **IndexedDB data minimization** | Store only submission payloads in queue; do not cache historical data locally | T1 |
+   215→| **Photo purge after sync** | Delete photos from Vercel Blob URL cache after confirmed server receipt | T1 |
+   216→| **Remote session revocation** | Admin endpoint to invalidate all sessions for a specific user ID by rotating the per-user `sub` claim | T1, T2 |
+   217→
+   218→#### 2.1.3 Remote Wipe (Application-Level)
+   219→
+   220→Since ADL cannot enforce MDM on personal devices, implement application-level wipe:
+   221→
+   222→```typescript
+   223→// lib/client/remoteWipe.ts
+   224→export async function executeAppWipe(): Promise<void> {
+   225→  // 1. Clear IndexedDB offline queue
+   226→  const databases = await indexedDB.databases();
+   227→  for (const db of databases) {
+   228→    if (db.name) indexedDB.deleteDatabase(db.name);
+   229→  }
+   230→
+   231→  // 2. Clear all localStorage and sessionStorage
+   232→  localStorage.clear();
+   233→  sessionStorage.clear();
+   234→
+   235→  // 3. Unregister service worker
+   236→  const registrations = await navigator.serviceWorker.getRegistrations();
+   237→  for (const reg of registrations) {
+   238→    await reg.unregister();
+   239→  }
+   240→
+   241→  // 4. Clear caches
+   242→  const cacheNames = await caches.keys();
+   243→  for (const name of cacheNames) {
+   244→    await caches.delete(name);
+   245→  }
+   246→
+   247→  // 5. Redirect to login
+   248→  window.location.href = '/login?wiped=true';
+   249→}
+   250→```
+   251→
+   252→Trigger: The app checks a server-side `wipe_requested` flag on every sync attempt. If set, execute wipe before any other operation.
+   253→
+   254→```typescript
+   255→// Added to sync engine check
+   256→const statusResponse = await fetch('/api/user/status');
+   257→const status = await statusResponse.json();
+   258→if (status.wipeRequested) {
+   259→  await executeAppWipe();
+   260→  return; // Stop sync
+   261→}
+   262→```
+   263→
+   264→### 2.2 Authentication and Authorization
+   265→
+   266→#### 2.2.1 Multi-Factor Authentication
+   267→
+   268→Add OTP-based MFA for all agent accounts. SMS OTP is the most practical for Cameroon (agents have phone numbers; authenticator apps require explanation and training).
+   269→
+   270→| Step | Implementation |
+   271→|---|---|
+   272→| **OTP generation** | Server generates 6-digit TOTP, stores hash in `user_profiles.mfa_secret` |
+   273→| **OTP delivery** | Send via SMS using a Cameroon-compatible provider (Africa's Talking, Twilio with Cameroon numbers, or MTN/Orange SMS API) |
+   274→| **OTP verification** | Verify within 5-minute window; max 3 attempts before lockout |
+   275→| **When required** | On every login (not every request -- JWT session handles ongoing auth) |
+   276→| **Fallback** | Admin can generate a bypass code for agents who lose phone access; bypass codes are single-use and logged |
+   277→
+   278→**Important consideration for Cameroon:** SMS delivery in Cameroon can be delayed, especially during network congestion. Set OTP validity to 10 minutes (not the typical 5) and allow re-send after 60 seconds.
+   279→
+   280→#### 2.2.2 Role-Based Access Control
+   281→
+   282→Replace the single `isAdmin` boolean with a proper RBAC model:
+   283→
+   284→```sql
+   285→-- Migration: Add role column to user_profiles
+   286→ALTER TABLE user_profiles ADD COLUMN role TEXT NOT NULL DEFAULT 'field_agent'
+   287→  CHECK (role IN ('field_agent', 'team_lead', 'admin', 'data_consumer', 'auditor'));
+   288→
+   289→-- Migration: Add agent-specific fields
+   290→ALTER TABLE user_profiles ADD COLUMN assigned_zone TEXT; -- e.g., 'bonamoussadi_a'
+   291→ALTER TABLE user_profiles ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT true;
+   292→ALTER TABLE user_profiles ADD COLUMN last_active_at TIMESTAMPTZ;
+   293→ALTER TABLE user_profiles ADD COLUMN deactivated_at TIMESTAMPTZ;
+   294→ALTER TABLE user_profiles ADD COLUMN deactivated_by TEXT;
+   295→```
+   296→
+   297→**Permission Matrix:**
+   298→
+   299→| Permission | field_agent | team_lead | admin | data_consumer | auditor |
+   300→|---|---|---|---|---|---|
+   301→| Submit data (own zone) | Yes | Yes | Yes | No | No |
+   302→| View own submissions | Yes | Yes | Yes | No | Yes |
+   303→| View team submissions | No | Yes | Yes | No | Yes |
+   304→| View all submissions | No | No | Yes | Yes (read) | Yes |
+   305→| Approve/reject submissions | No | Yes | Yes | No | No |
+   306→| Manage agents | No | Yes (own team) | Yes | No | No |
+   307→| Export data | No | No | Yes | Yes | Yes |
+   308→| View audit logs | No | No | Yes | No | Yes |
+   309→| Manage system settings | No | No | Yes | No | No |
+   310→| Remote wipe agent | No | No | Yes | No | No |
+   311→
+   312→#### 2.2.3 Session Management Hardening
+   313→
+   314→```typescript
+   315→// Additions to lib/auth.ts
+   316→
+   317→// Session configuration
+   318→export const SESSION_CONFIG = {
+   319→  maxAge: 8 * 60 * 60,        // 8 hours (one field shift)
+   320→  updateAge: 30 * 60,          // Refresh token every 30 minutes
+   321→  idleTimeout: 60 * 60,        // Force re-auth after 1 hour idle
+   322→};
+   323→
+   324→// Account lockout
+   325→export const LOCKOUT_CONFIG = {
+   326→  maxFailedAttempts: 5,
+   327→  lockoutDurationMinutes: 30,
+   328→  progressiveDelay: true,      // 1s, 2s, 4s, 8s, 16s between attempts
+   329→};
+   330→```
+   331→
+   332→### 2.3 Data Encryption
+   333→
+   334→#### 2.3.1 Encryption at Rest
+   335→
+   336→| Layer | Current | Target |
+   337→|---|---|---|
+   338→| **Neon PostgreSQL** | AES-256 at rest (Neon default) | Sufficient for pilot; add column-level encryption for PII fields in Phase 2 |
+   339→| **Vercel Blob (photos)** | Server-side encryption (Vercel default) | Sufficient; photos are of businesses/infrastructure, not individuals |
+   340→| **IndexedDB (client)** | No encryption | Encrypt queue payloads with a session-derived key (see below) |
+   341→
+   342→#### 2.3.2 Client-Side Queue Encryption
+   343→
+   344→Encrypt IndexedDB contents so stolen devices yield no readable data:
+   345→
+   346→```typescript
+   347→// lib/client/queueEncryption.ts
+   348→const ALGORITHM = 'AES-GCM';
+   349→
+   350→export async function deriveKey(sessionToken: string): Promise<CryptoKey> {
+   351→  const encoder = new TextEncoder();
+   352→  const keyMaterial = await crypto.subtle.importKey(
+   353→    'raw',
+   354→    encoder.encode(sessionToken),
+   355→    'PBKDF2',
+   356→    false,
+   357→    ['deriveKey']
+   358→  );
+   359→
+   360→  return crypto.subtle.deriveKey(
+   361→    {
+   362→      name: 'PBKDF2',
+   363→      salt: encoder.encode('adl-queue-v1'),
+   364→      iterations: 100000,
+   365→      hash: 'SHA-256',
+   366→    },
+   367→    keyMaterial,
+   368→    { name: ALGORITHM, length: 256 },
+   369→    false,
+   370→    ['encrypt', 'decrypt']
+   371→  );
+   372→}
+   373→
+   374→export async function encryptPayload(
+   375→  data: string,
+   376→  key: CryptoKey
+   377→): Promise<{ iv: string; ciphertext: string }> {
+   378→  const iv = crypto.getRandomValues(new Uint8Array(12));
+   379→  const encoded = new TextEncoder().encode(data);
+   380→  const ciphertext = await crypto.subtle.encrypt(
+   381→    { name: ALGORITHM, iv },
+   382→    key,
+   383→    encoded
+   384→  );
+   385→  return {
+   386→    iv: btoa(String.fromCharCode(...iv)),
+   387→    ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
+   388→  };
+   389→}
+   390→
+   391→export async function decryptPayload(
+   392→  encrypted: { iv: string; ciphertext: string },
+   393→  key: CryptoKey
+   394→): Promise<string> {
+   395→  const iv = Uint8Array.from(atob(encrypted.iv), c => c.charCodeAt(0));
+   396→  const ciphertext = Uint8Array.from(atob(encrypted.ciphertext), c => c.charCodeAt(0));
+   397→  const decrypted = await crypto.subtle.decrypt(
+   398→    { name: ALGORITHM, iv },
+   399→    key,
+   400→    ciphertext
+   401→  );
+   402→  return new TextDecoder().decode(decrypted);
+   403→}
+   404→```
+   405→
+   406→#### 2.3.3 Field-Level Encryption for PII
+   407→
+   408→For fields that qualify as personal data under Cameroon Law No. 2024/017 (business owner names, phone numbers, agent identifiers):
+   409→
+   410→```sql
+   411→-- Create an encryption key managed via Neon/Supabase secrets
+   412→-- Field-level encryption using pgcrypto extension
+   413→
+   414→CREATE EXTENSION IF NOT EXISTS pgcrypto;
+   415→
+   416→-- Example: encrypting business_owner_name in details JSONB
+   417→-- Application layer handles encrypt/decrypt using a server-side key
+   418→-- stored in Vercel environment variables (FIELD_ENCRYPTION_KEY)
+   419→```
+   420→
+   421→**Implementation approach:** Application-level encryption is preferred over database-level because:
+   422→1. Neon PostgreSQL's pgcrypto works but creates key management complexity
+   423→2. Server-side Node.js encryption using `crypto.createCipheriv` with AES-256-GCM keeps the key in Vercel env vars
+   424→3. Encrypted fields are stored as base64 strings in the JSONB `details` column
+   425→4. Decryption happens at query time in the API layer, only for authorized roles
+   426→
+   427→### 2.4 API Security
+   428→
+   429→#### 2.4.1 Rate Limiting
+   430→
+   431→Implement per-user and per-IP rate limiting using Vercel's Edge Middleware or application-level checks:
+   432→
+   433→```typescript
+   434→// api/_middleware.ts (Vercel Edge Middleware)
+   435→// Rate limit configuration
+   436→const RATE_LIMITS = {
+   437→  // Submissions: 60 per hour per user (one per minute average)
+   438→  'POST /api/submissions': { window: 3600, max: 60 },
+   439→  // Auth attempts: 10 per 15 minutes per IP
+   440→  'POST /api/auth/callback/credentials': { window: 900, max: 10 },
+   441→  // Data reads: 100 per hour per user
+   442→  'GET /api/submissions': { window: 3600, max: 100 },
+   443→  // Export: 5 per hour per user (data_consumer/admin only)
+   444→  'GET /api/export': { window: 3600, max: 5 },
+   445→};
+   446→```
+   447→
+   448→For the pilot, use an in-memory rate limiter backed by Vercel KV (Redis) or a simple sliding window with PostgreSQL:
+   449→
+   450→```sql
+   451→CREATE TABLE rate_limits (
+   452→  key TEXT NOT NULL,
+   453→  window_start TIMESTAMPTZ NOT NULL,
+   454→  request_count INT NOT NULL DEFAULT 1,
+   455→  PRIMARY KEY (key, window_start)
+   456→);
+   457→```
+   458→
+   459→#### 2.4.2 Input Validation
+   460→
+   461→Add Zod schemas for all API inputs (builds on Cloud Architect's recommendation):
+   462→
+   463→```typescript
+   464→// lib/shared/validation.ts
+   465→import { z } from 'zod';
+   466→
+   467→export const submissionSchema = z.object({
+   468→  category: z.enum([
+   469→    'pharmacy', 'fuel_station', 'mobile_money',
+   470→    'alcohol_outlet', 'billboard', 'transport_road', 'census_proxy'
+   471→  ]),
+   472→  latitude: z.number().min(4.0755).max(4.0999),   // Bonamoussadi bounds
+   473→  longitude: z.number().min(9.7185).max(9.7602),   // Bonamoussadi bounds
+   474→  details: z.record(z.unknown()).refine(
+   475→    (d) => JSON.stringify(d).length < 50000,
+   476→    'Details payload too large'
+   477→  ),
+   478→  photoUrl: z.string().url().optional(),
+   479→  idempotencyKey: z.string().uuid(),
+   480→});
+   481→
+   482→// Sanitize all string inputs to prevent XSS/injection
+   483→export function sanitizeString(input: string): string {
+   484→  return input
+   485→    .replace(/[<>]/g, '')           // Strip HTML angle brackets
+   486→    .replace(/[\x00-\x1F]/g, '')    // Strip control characters
+   487→    .trim()
+   488→    .slice(0, 1000);                // Enforce max length
+   489→}
+   490→```
+   491→
+   492→#### 2.4.3 CORS Configuration
+   493→
+   494→```typescript
+   495→// vercel.json - explicit CORS headers
+   496→{
+   497→  "headers": [
+   498→    {
+   499→      "source": "/api/(.*)",
+   500→      "headers": [
+   501→        { "key": "Access-Control-Allow-Origin", "value": "https://africandatalayer.vercel.app" },
+   502→        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
+   503→        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" },
+   504→        { "key": "Access-Control-Max-Age", "value": "86400" },
+   505→        { "key": "X-Content-Type-Options", "value": "nosniff" },
+   506→        { "key": "X-Frame-Options", "value": "DENY" },
+   507→        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+   508→      ]
+   509→    }
+   510→  ]
+   511→}
+   512→```
+   513→
+   514→### 2.5 Photo/Evidence Integrity
+   515→
+   516→#### 2.5.1 Hash-on-Capture
+   517→
+   518→Generate a SHA-256 hash of each photo immediately upon capture, before any upload:
+   519→
+   520→```typescript
+   521→// lib/client/photoIntegrity.ts
+   522→export async function hashPhoto(file: File): Promise<string> {
+   523→  const buffer = await file.arrayBuffer();
+   524→  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+   525→  const hashArray = Array.from(new Uint8Array(hashBuffer));
+   526→  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+   527→}
+   528→
+   529→export interface PhotoEvidence {
+   530→  file: File;
+   531→  sha256: string;
+   532→  capturedAt: string;       // ISO 8601
+   533→  deviceInfo: string;       // navigator.userAgent (truncated)
+   534→  gpsAtCapture: {
+   535→    latitude: number;
+   536→    longitude: number;
+   537→    accuracy: number;
+   538→  } | null;
+   539→}
+   540→```
+   541→
+   542→#### 2.5.2 Server-Side Verification
+   543→
+   544→```typescript
+   545→// In api/submissions.ts POST handler
+   546→async function verifyPhotoIntegrity(
+   547→  photoUrl: string,
+   548→  clientHash: string
+   549→): Promise<boolean> {
+   550→  const response = await fetch(photoUrl);
+   551→  const buffer = await response.arrayBuffer();
+   552→  const serverHash = createHash('sha256').update(Buffer.from(buffer)).digest('hex');
+   553→  return serverHash === clientHash;
+   554→}
+   555→```
+   556→
+   557→#### 2.5.3 EXIF Metadata Preservation
+   558→
+   559→Preserve EXIF metadata as a separate JSON record for audit purposes, even if the photo itself is re-encoded:
+   560→
+   561→```sql
+   562→ALTER TABLE point_events ADD COLUMN photo_metadata JSONB;
+   563→-- Contains: { exif_gps, exif_timestamp, exif_device, sha256_hash,
+   564→--             capture_gps, capture_timestamp, hash_verified }
+   565→```
+   566→
+   567→### 2.6 Network Security
+   568→
+   569→#### 2.6.1 Certificate Pinning (Service Worker)
+   570→
+   571→For the PWA, implement certificate pinning via the service worker to detect MitM attempts:
+   572→
+   573→```typescript
+   574→// service-worker.ts addition
+   575→self.addEventListener('fetch', (event: FetchEvent) => {
+   576→  if (event.request.url.startsWith('https://africandatalayer.vercel.app/api/')) {
+   577→    event.respondWith(
+   578→      fetch(event.request).then(response => {
+   579→        // Verify the response comes from Vercel's expected certificate
+   580→        // In practice, this is handled by the browser's TLS implementation
+   581→        // The key control is ensuring the service worker only allows
+   582→        // requests to our known-good origin
+   583→        if (new URL(event.request.url).origin !== self.location.origin) {
+   584→          return new Response('Blocked: cross-origin API request', { status: 403 });
+   585→        }
+   586→        return response;
+   587→      })
+   588→    );
+   589→  }
+   590→});
+   591→```
+   592→
+   593→Note: True certificate pinning is not possible in PWAs/browsers (deprecated by Chrome in 2018). The practical alternative is:
+   594→1. Strict CORS enforcement (Section 2.4.3)
+   595→2. Vercel's automatic HTTPS with HSTS
+   596→3. Service worker origin checks
+   597→4. Content Security Policy headers
+   598→
+   599→#### 2.6.2 Admin VPN Requirement
+   600→
+   601→For admin operations (database access, Vercel dashboard, Neon console):
+   602→
+   603→| Control | Implementation |
+   604→|---|---|
+   605→| **Neon IP allowlist** | Configure Neon to only accept connections from known IPs (Vercel serverless IPs + admin VPN IP) |
+   606→| **Vercel dashboard** | Enable SSO enforcement when available; use strong passwords + authenticator app |
+   607→| **GitHub repository** | Require 2FA on all GitHub accounts with repository access; enable branch protection on `main` |
+   608→
+   609→#### 2.6.3 Security Headers
+   610→
+   611→```typescript
+   612→// Comprehensive security headers for vercel.json
+   613→{
+   614→  "headers": [
+   615→    {
+   616→      "source": "/(.*)",
+   617→      "headers": [
+   618→        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+   619→        { "key": "X-Content-Type-Options", "value": "nosniff" },
+   620→        { "key": "X-Frame-Options", "value": "DENY" },
+   621→        { "key": "X-XSS-Protection", "value": "0" },
+   622→        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+   623→        { "key": "Permissions-Policy", "value": "camera=(self), geolocation=(self), microphone=()" },
+   624→        {
+   625→          "key": "Content-Security-Policy",
+   626→          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://*.public.blob.vercel-storage.com https://tile.openstreetmap.org data:; connect-src 'self' https://africandatalayer.vercel.app; frame-ancestors 'none';"
+   627→        }
+   628→      ]
+   629→    }
+   630→  ]
+   631→}
+   632→```
+   633→
+   634→### 2.7 Security Audit Logging
+   635→
+   636→Create a dedicated audit log table for security-relevant events:
+   637→
+   638→```sql
+   639→CREATE TABLE security_audit_log (
+   640→  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   641→  event_type TEXT NOT NULL CHECK (event_type IN (
+   642→    'login_success', 'login_failure', 'logout', 'mfa_challenge',
+   643→    'mfa_success', 'mfa_failure', 'session_expired', 'session_revoked',
+   644→    'account_locked', 'account_unlocked', 'role_changed',
+   645→    'agent_activated', 'agent_deactivated', 'remote_wipe_triggered',
+   646→    'data_export', 'submission_flagged', 'submission_rejected',
+   647→    'admin_action', 'api_rate_limited', 'suspicious_activity'
+   648→  )),
+   649→  user_id TEXT,
+   650→  ip_address TEXT,
+   651→  user_agent TEXT,
+   652→  details JSONB,
+   653→  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   654→);
+   655→
+   656→CREATE INDEX idx_audit_log_user ON security_audit_log(user_id, created_at DESC);
+   657→CREATE INDEX idx_audit_log_type ON security_audit_log(event_type, created_at DESC);
+   658→
+   659→-- Retention: 2 years (Cameroon law does not specify, but 2 years is standard practice)
+   660→```
+   661→
+   662→---
+   663→
+   664→## 3. Privacy and Consent Framework
+   665→
+   666→### 3.1 Data Inventory and Legal Basis
+   667→
+   668→Under Cameroon Law No. 2024/017, ADL must identify all personal data collected and establish a legal basis for processing.
+   669→
+   670→#### 3.1.1 Personal Data Collected by ADL
+   671→
+   672→| Data Element | Vertical(s) | Personal Data? | Sensitivity | Legal Basis |
+   673→|---|---|---|---|---|
+   674→| **GPS coordinates of businesses** | All | Yes (if business is identifiable with an individual owner) | Low | Legitimate interest (Article 6) |
+   675→| **Photos of business premises** | All | Yes (if individuals are incidentally captured; if business facade identifies an individual) | Medium | Consent (for identifiable individuals); Legitimate interest (for premises only) |
+   676→| **Business name** | All | Yes (if sole proprietorship or clearly identified with an individual) | Low | Legitimate interest |
+   677→| **Business owner name** | Pharmacy, alcohol, fuel | Yes | Medium | Consent |
+   678→| **Business phone number** | Mobile money, pharmacy | Yes | Medium | Consent |
+   679→| **Agent GPS tracks** | Internal | Yes (employee monitoring) | Medium | Employment contract (legitimate interest) |
+   680→| **Agent identity (name, email, phone)** | Internal | Yes | Medium | Employment contract |
+   681→| **Agent device information** | Internal | Yes | Low | Employment contract |
+   682→| **Road condition photos** | Transport roads | Potentially (incidental capture of people/vehicles) | Low | Legitimate interest (public interest) |
+   683→| **Building photos** | Census proxy | Potentially (incidental capture of residents) | Low | Legitimate interest |
+   684→
+   685→#### 3.1.2 Legal Basis Analysis Under Law No. 2024/017
+   686→
+   687→Cameroon's law recognizes the following legal bases (modeled after GDPR):
+   688→
+   689→1. **Consent (Article 7):** Required when processing has no other legal basis. Must be free, specific, informed, and unambiguous.
+   690→2. **Legitimate interest (Article 6):** ADL's primary basis for most business data -- mapping commercial infrastructure serves a legitimate purpose (market intelligence, urban planning, public safety).
+   691→3. **Public interest:** Potential basis for road condition and census-proxy data.
+   692→4. **Contractual necessity:** Basis for processing agent data under employment/contractor agreements.
+   693→
+   694→**Key legal determination needed:** Whether a photo of a business facade constitutes personal data of the business owner. Under Cameroonian civil law tradition (French-influenced), the answer likely depends on whether the individual is identifiable. For sole proprietorships where the owner's name is on the facade, it qualifies as personal data. For branded chain outlets (Total fuel station, MTN agent point), it likely does not.
+   695→
+   696→### 3.2 Consent Collection Workflow
+   697→
+   698→#### 3.2.1 When Consent Is Required
+   699→
+   700→| Scenario | Consent Required? | Method |
+   701→|---|---|---|
+   702→| Photo of a branded chain outlet (Total, Orange, MTN) | No -- legitimate interest suffices | No action needed |
+   703→| Photo of a sole proprietorship with owner name visible | Yes | Verbal consent + digital record |
+   704→| Photo that incidentally captures a person's face | Yes (best practice) | Verbal notice + anonymization option |
+   705→| Collecting business owner's phone number | Yes | Verbal consent + digital record |
+   706→| Collecting business owner's name | Yes | Verbal consent + digital record |
+   707→| GPS location of a business open to the public | No -- publicly observable | No action needed |
+   708→| Road condition photo (no identifiable people) | No | No action needed |
+   709→
+   710→#### 3.2.2 Consent Collection Process
+   711→
+   712→```
+   713→FIELD AGENT CONSENT WORKFLOW
+   714→==============================
+   715→
+   716→Step 1: APPROACH
+   717→  - Agent identifies self and ADL
+   718→  - Shows ADL identification badge (printed + digital)
+   719→  - Explains purpose in French or local language:
+   720→
+   721→    "Bonjour, je m'appelle [Nom] et je travaille pour African Data Layer.
+   722→     Nous cartographions les commerces de Bonamoussadi pour aider a
+   723→     ameliorer les services dans le quartier. Puis-je prendre une photo
+   724→     de votre etablissement et noter quelques informations de base?"
+   725→
+   726→Step 2: INFORM
+   727→  - Explain what data will be collected (photo, location, business type)
+   728→  - Explain how data will be used (commercial mapping database)
+   729→  - Explain data subject rights (access, correction, deletion)
+   730→  - Provide ADL contact information for questions
+   731→  - Note: agents carry a printed "Fiche d'Information" (info sheet) in
+   732→    French with all required information per Article 7
+   733→
+   734→Step 3: RECORD CONSENT
+   735→  - In the app, before submitting:
+   736→    [x] Consent obtained verbally (checkbox)
+   737→    [ ] Consent refused -- submit without PII (checkbox)
+   738→    [ ] No consent needed -- public/branded location (checkbox)
+   739→  - App records: consent_status, consent_timestamp, agent_id
+   740→  - If consent refused: submit GPS + category + non-PII details only;
+   741→    do NOT photograph individuals; blur or skip business name if identifiable
+   742→
+   743→Step 4: PROVIDE CONTACT
+   744→  - Leave a printed card with:
+   745→    - ADL contact email
+   746→    - Phone number for data subject requests
+   747→    - Reference number (point_id) for the data subject to use when
+   748→      exercising rights
+   749→```
+   750→
+   751→#### 3.2.3 Consent Data Model
+   752→
+   753→```sql
+   754→ALTER TABLE point_events ADD COLUMN consent_status TEXT
+   755→  CHECK (consent_status IN (
+   756→    'obtained',           -- Verbal consent recorded
+   757→    'refused_pii_only',   -- Consent refused; PII stripped
+   758→    'not_required',       -- Public/branded location; no PII collected
+   759→    'withdrawn'           -- Previously consented, now withdrawn
+   760→  ));
+   761→ALTER TABLE point_events ADD COLUMN consent_recorded_at TIMESTAMPTZ;
+   762→```
+   763→
+   764→### 3.3 Data Subject Rights Implementation
+   765→
+   766→Law No. 2024/017 grants the following rights that ADL must implement:
+   767→
+   768→#### 3.3.1 Right of Access (Article 34)
+   769→
+   770→| Aspect | Implementation |
+   771→|---|---|
+   772→| **Channel** | Email (privacy@africandatalayer.com) or phone; in-person at ADL office |
+   773→| **Identity verification** | Requester must provide the reference number from the card left by the agent, plus a form of identification |
+   774→| **Response time** | 30 days maximum (per law) |
+   775→| **Format** | JSON export or printed summary in French |
+   776→| **Scope** | All data associated with the requester's business or person |
+   777→
+   778→#### 3.3.2 Right of Rectification (Article 35)
+   779→
+   780→| Aspect | Implementation |
+   781→|---|---|
+   782→| **Channel** | Same as access |
+   783→| **Process** | Requester identifies incorrect data; ADL creates an `ENRICH_EVENT` with corrected data; original event preserved for audit |
+   784→| **Response time** | 30 days maximum |
+   785→| **Notification** | If corrected data has been shared with data consumers, notify them of the correction |
+   786→
+   787→#### 3.3.3 Right of Erasure (Article 36)
+   788→
+   789→| Aspect | Implementation |
+   790→|---|---|
+   791→| **Channel** | Same as access |
+   792→| **Process** | Soft-delete: mark events as `erased` and exclude from projections and snapshots; hard-delete PII fields; retain anonymized location data for statistical purposes |
+   793→| **Response time** | 30 days maximum |
+   794→| **Exceptions** | ADL may retain anonymized, non-identifiable aggregate data (e.g., "there is a pharmacy at this GPS coordinate" without owner name/photo) |
+   795→| **Photo deletion** | Delete photo from Vercel Blob storage; remove `photo_url` from events |
+   796→
+   797→```sql
+   798→-- Erasure implementation
+   799→ALTER TABLE point_events ADD COLUMN erased_at TIMESTAMPTZ;
+   800→ALTER TABLE point_events ADD COLUMN erased_by TEXT;
+   801→ALTER TABLE point_events ADD COLUMN erasure_reason TEXT;
+   802→
+   803→-- Erasure procedure (run as a function)
+   804→-- 1. Set erased_at, erased_by, erasure_reason
+   805→-- 2. Null out: details fields containing PII, photo_url
+   806→-- 3. Delete photo from Vercel Blob
+   807→-- 4. Log in security_audit_log
+   808→-- 5. Rebuild affected snapshots
+   809→```
+   810→
+   811→#### 3.3.4 Right to Object (Article 37)
+   812→
+   813→A data subject can object to processing based on legitimate interest. ADL must then either demonstrate compelling legitimate grounds or cease processing that individual's data.
+   814→
+   815→**Process:** Same as erasure, but ADL first evaluates whether the legitimate interest outweighs the data subject's rights. Document the decision.
+   816→
+   817→### 3.4 Data Minimization by Vertical
+   818→
+   819→| Vertical | Required Fields | Explicitly NOT Collected | Rationale |
+   820→|---|---|---|---|
+   821→| **Pharmacy** | GPS, photo of facade, business name, license status, operating hours | Owner personal phone, employee names, drug inventory, patient information | Mapping commercial presence, not healthcare records |
+   822→| **Fuel Station** | GPS, photo, brand, fuel types, services offered | Employee names, sales volumes, security arrangements | Mapping infrastructure, not business intelligence |
+   823→| **Mobile Money** | GPS, photo, operator(s), agent status | Agent personal phone, transaction volumes, float amounts, customer information | Mapping access points, not financial data |
+   824→| **Alcohol Outlet** | GPS, photo, establishment type, formal/informal status | Owner phone, revenue, supplier information | Mapping presence and type, not business operations |
+   825→| **Billboard** | GPS, photo, size, type, content category | Advertiser contract details, pricing, operator revenue | Mapping physical assets, not commercial terms |
+   826→| **Transport Road** | GPS, photo, road condition, blockage status | License plates of vehicles, faces of pedestrians | Mapping infrastructure, not surveilling individuals |
+   827→| **Census Proxy** | GPS, photo of building, building type, stories, occupancy indicator | Resident names, household composition, income, ethnicity | Mapping density, not conducting a census |
+   828→
+   829→### 3.5 Cross-Border Data Transfer Controls
+   830→
+   831→ADL's infrastructure stores data outside Cameroon:
+   832→- **Vercel serverless functions:** Deployed to Vercel's edge network; nearest PoP is likely in Europe (no African PoP yet)
+   833→- **Neon PostgreSQL:** Hosted in AWS regions; nearest to Cameroon would be eu-west-1 (Ireland) or eu-central-1 (Frankfurt)
+   834→- **Vercel Blob:** Stored in Vercel's cloud storage (US/EU)
+   835→
+   836→Under Law No. 2024/017, cross-border transfers of personal data to countries without "adequate" data protection require additional safeguards.
+   837→
+   838→#### 3.5.1 Transfer Mechanism
+   839→
+   840→Since neither the US nor any EU country has been formally assessed for "adequacy" by Cameroon's nascent Data Protection Authority, ADL should implement:
+   841→
+   842→1. **Standard Contractual Clauses (SCCs):** Draft SCCs for the Vercel and Neon data processing relationships, modeled on EU SCCs (which Cameroon's law is based on).
+   843→
+   844→2. **Data Processing Agreements (DPAs):**
+   845→   - Vercel: Review Vercel's existing DPA (available at vercel.com/legal/dpa); ensure it covers Cameroon law requirements
+   846→   - Neon: Review Neon's DPA; ensure adequate security commitments
+   847→   - Google (OAuth, Gemini): Review Google's data processing terms
+   848→
+   849→3. **Supplementary Measures:**
+   850→   - Field-level encryption of PII before it leaves Cameroon (encryption keys held by ADL, not by cloud providers)
+   851→   - Data pseudonymization (replace agent names with IDs in stored data)
+   852→   - Geographic restriction where possible (prefer EU regions which have stronger data protection alignment)
+   853→
+   854→#### 3.5.2 Data Localization Assessment
+   855→
+   856→| Option | Feasibility | Cost Impact | Recommendation |
+   857→|---|---|---|---|
+   858→| **Full localization (servers in Cameroon)** | Low -- no major cloud provider has a Cameroon region; local hosting lacks reliability | Very High | Not recommended for pilot |
+   859→| **Regional localization (EU region)** | High -- Neon and Vercel both support EU regions | Low | Recommended: Neon EU region + Vercel EU deployment preference |
+   860→| **Encryption-based protection** | High -- encrypt PII before upload; keys in ADL control | Low | Recommended: implement immediately |
+   861→| **Hybrid** | Medium -- store PII locally, store non-PII in cloud | Medium | Consider for Phase 2 if DPA requires |
+   862→
+   863→### 3.6 Privacy Impact Assessment Template
+   864→
+   865→ADL must conduct a PIA for each vertical before collecting data. Template:
+   866→
+   867→```
+   868→PRIVACY IMPACT ASSESSMENT -- [VERTICAL NAME]
+   869→==============================================
+   870→
+   871→1. DESCRIPTION OF PROCESSING
+   872→   - What data is collected:
+   873→   - Why it is collected:
+   874→   - How it is collected:
+   875→   - Who collects it:
+   876→   - How long it is retained:
+   877→   - Who has access:
+   878→
+   879→2. NECESSITY AND PROPORTIONALITY
+   880→   - Is each data element necessary for the stated purpose?
+   881→   - Could the purpose be achieved with less data?
+   882→   - Is the processing proportionate to the benefit?
+   883→
+   884→3. DATA PROTECTION RISKS
+   885→   - Risk of unauthorized access:        [Low/Medium/High]
+   886→   - Risk of unauthorized disclosure:     [Low/Medium/High]
+   887→   - Risk of data loss:                   [Low/Medium/High]
+   888→   - Risk of harm to data subjects:       [Low/Medium/High]
+   889→   - Risk of discrimination or profiling: [Low/Medium/High]
+   890→
+   891→4. MITIGATING MEASURES
+   892→   - Technical controls:
+   893→   - Organizational controls:
+   894→   - Consent mechanisms:
+   895→   - Retention limits:
+   896→
+   897→5. RESIDUAL RISK ASSESSMENT
+   898→   - After mitigations, is the residual risk acceptable? [Yes/No]
+   899→   - If No, what additional measures are needed?
+   900→
+   901→6. APPROVAL
+   902→   - Prepared by:          Date:
+   903→   - Reviewed by DPO:      Date:
+   904→   - Approved by:          Date:
+   905→```
+   906→
+   907→### 3.7 Data Protection Officer (DPO)
+   908→
+   909→Law No. 2024/017 requires organizations processing personal data to appoint a DPO when:
+   910→- Processing is carried out by a public authority
+   911→- Core activities involve regular and systematic monitoring of data subjects at large scale
+   912→- Core activities involve large-scale processing of special categories of data
+   913→
+   914→ADL likely falls under the second category (systematic mapping of businesses constitutes regular and systematic monitoring of economic activity that can be linked to identifiable individuals).
+   915→
+   916→#### DPO Requirements
+   917→
+   918→| Requirement | ADL Approach |
+   919→|---|---|
+   920→| **Appointment** | Appoint a named DPO before pilot launch; may be part-time for pilot phase |
+   921→| **Qualifications** | Must have knowledge of Cameroonian data protection law; legal background preferred; can be external consultant |
+   922→| **Independence** | DPO must not receive instructions regarding the exercise of their tasks; must report directly to highest management |
+   923→| **Contact** | DPO contact details must be published and communicated to the Data Protection Authority |
+   924→| **Tasks** | Inform and advise ADL on obligations; monitor compliance; cooperate with DPA; serve as contact point for data subjects |
+   925→| **Registration** | Register the DPO appointment with the Data Protection Authority (once it is operational) |
+   926→
+   927→**Practical recommendation for pilot:** Engage a Cameroonian lawyer with data protection expertise as an external DPO on a retainer basis. Cost estimate: 200,000 -- 500,000 XAF/month (~300 -- 750 USD). This is more practical than hiring a full-time DPO for a pilot.
+   928→
+   929→### 3.8 Data Retention Policy
+   930→
+   931→| Data Category | Retention Period | Justification | Deletion Method |
+   932→|---|---|---|---|
+   933→| **Active point_events** | Indefinite (as long as the entity exists) | Core data product; value increases over time | Retained until erasure request or entity confirmed permanently closed |
+   934→| **Erased/withdrawn events** | PII deleted immediately; anonymized stub retained 5 years | Legal record of processing history | PII fields nulled; photo deleted; anonymized record retained |
+   935→| **Security audit logs** | 2 years | Incident investigation; regulatory compliance | Automated purge after 2 years |
+   936→| **Agent employment data** | Duration of engagement + 5 years | Cameroonian labor law record-keeping requirements | Delete after retention period |
+   937→| **Consent records** | Duration of data processing + 5 years | Proof of consent for regulatory compliance | Archive after retention period |
+   938→| **Photos (Vercel Blob)** | Same as parent point_event | Evidence integrity | Delete when parent event is erased or entity confirmed closed for 1 year |
+   939→| **Snapshots** | Indefinite | Historical trend data (core product value) | Anonymize PII in snapshots when source events are erased |
+   940→
+   941→---
+   942→
+   943→## 4. Incident Response Plan
+   944→
+   945→### 4.1 Incident Classification
+   946→
+   947→| Severity | Definition | Examples | Response Time | Escalation |
+   948→|---|---|---|---|---|
+   949→| **SEV-1: Critical** | Active data breach; agent physical danger; complete platform outage | Database compromise, agent assault, ransomware, unauthorized bulk data export | Immediate (within 30 minutes) | CEO + DPO + legal counsel |
+   950→| **SEV-2: High** | Confirmed security incident without active exploitation; significant data exposure risk | Stolen device with unsynced data, compromised agent credentials, Vercel/Neon outage >1 hour | Within 2 hours | CTO + DPO |
+   951→| **SEV-3: Medium** | Suspected security incident; limited impact | Unusual API access patterns, failed MFA bypass attempts, single agent impersonation attempt | Within 24 hours | CTO |
+   952→| **SEV-4: Low** | Minor security event; no data exposure | Password reset requests, expired certificates, minor phishing attempts targeting agents | Within 72 hours | Engineering lead |
+   953→
+   954→### 4.2 Response Procedures
+   955→
+   956→#### 4.2.1 Device Theft/Loss
+   957→
+   958→```
+   959→RUNBOOK: DEVICE THEFT OR LOSS
+   960→================================
+   961→
+   962→TRIGGER: Agent reports device stolen or lost
+   963→
+   964→IMMEDIATE (within 30 minutes):
+   965→1. Agent calls team lead or ADL emergency number
+   966→2. Team lead logs incident in security_audit_log via admin panel
+   967→3. Admin triggers remote wipe for the agent's account:
+   968→   - Set wipe_requested = true on user_profiles
+   969→   - Revoke all active sessions (rotate JWT secret for this user)
+   970→   - Mark account as suspended (is_active = false)
+   971→4. If device had unsynced submissions:
+   972→   - Note the approximate count and recency from agent's memory
+   973→   - Mark potentially compromised data window in incident log
+   974→
+   975→WITHIN 24 HOURS:
+   976→5. Agent files police report at nearest Douala commissariat
+   977→6. ADL receives copy of police report (PV) for records
+   978→7. Assess data exposure:
+   979→   - Was IndexedDB queue encrypted? (If encryption implemented: LOW risk)
+   980→   - How many unsynced submissions were on device?
+   981→   - Did any submissions contain PII (business owner names, photos)?
+   982→8. If PII was on device and queue was NOT encrypted:
+   983→   - This qualifies as a personal data breach under Law No. 2024/017
+   984→   - Proceed to regulatory notification procedure (Section 4.2.2)
+   985→
+   986→WITHIN 48 HOURS:
+   987→9. Issue replacement access to agent (new account or reactivated with new credentials + MFA)
+   988→10. Agent re-collects any lost unsynced data
+   989→11. Document lessons learned
+   990→
+   991→SEVERITY: SEV-2 (unless PII exposure confirmed, then SEV-1)
+   992→```
+   993→
+   994→#### 4.2.2 Data Breach (Regulatory Notification)
+   995→
+   996→```
+   997→RUNBOOK: DATA BREACH NOTIFICATION
+   998→====================================
+   999→
+  1000→TRIGGER: Confirmed exposure of personal data to unauthorized parties
+  1001→
+  1002→CLASSIFICATION:
+  1003→- Unencrypted device theft with PII: BREACH
+  1004→- Database compromise: BREACH
+  1005→- API exploitation with data exfiltration: BREACH
+  1006→- Vercel/Neon provider breach affecting ADL data: BREACH
+  1007→- Stolen device with encrypted queue, no PII: NOT A BREACH (document and close)
+  1008→
+  1009→WITHIN 72 HOURS (legal requirement under Law No. 2024/017):
+  1010→1. DPO prepares breach notification to the Data Protection Authority:
+  1011→   - Nature of the breach
+  1012→   - Categories and approximate number of data subjects affected
+  1013→   - Categories and approximate number of personal data records affected
+  1014→   - Likely consequences of the breach
+  1015→   - Measures taken or proposed to address the breach
+  1016→   - Contact details of the DPO
+  1017→
+  1018→2. DPO submits notification to:
+  1019→   - Cameroon Data Protection Authority (once operational)
+  1020→   - Until DPA is operational: Ministry of Posts and Telecommunications
+  1021→     (transitional authority for data protection matters)
+  1022→   - Email + registered letter
+  1023→
+  1024→3. If breach is likely to result in HIGH risk to data subjects:
+  1025→   - Notify affected data subjects directly
+  1026→   - Use communication template (Section 4.3.2)
+  1027→   - Provide in French
+  1028→   - Notify via: phone call (primary), email (secondary),
+  1029→     physical visit to affected business (if feasible)
+  1030→
+  1031→WITHIN 7 DAYS:
+  1032→4. Complete internal investigation
+  1033→5. Implement remediation measures
+  1034→6. Update DPA with full investigation report
+  1035→
+  1036→WITHIN 30 DAYS:
+  1037→7. Complete post-incident review (Section 4.5)
+  1038→8. Update security controls based on findings
+  1039→9. File final report with DPA
+  1040→```
+  1041→
+  1042→#### 4.2.3 Agent Compromise (Credential Theft / Impersonation)
+  1043→
+  1044→```
+  1045→RUNBOOK: AGENT COMPROMISE
+  1046→============================
+  1047→
+  1048→TRIGGER: Suspected unauthorized use of agent credentials
+  1049→
+  1050→DETECTION SIGNALS:
+  1051→- Submissions from unusual IP addresses
+  1052→- Submissions outside assigned zone
+  1053→- Submissions at unusual hours (e.g., 3 AM)
+  1054→- Multiple simultaneous sessions for same agent
+  1055→- GPS patterns inconsistent with walking speed (>50 km/h)
+  1056→- EXIF/GPS mismatch on photos
+  1057→- Sudden change in submission volume or pattern
+  1058→
+  1059→IMMEDIATE:
+  1060→1. Suspend agent account (is_active = false)
+  1061→2. Revoke all active sessions
+  1062→3. Trigger remote wipe
+  1063→4. Contact the real agent via known phone number to verify
+  1064→
+  1065→IF IMPERSONATION CONFIRMED:
+  1066→5. Flag all submissions from suspected compromise window
+  1067→6. Admin reviews flagged submissions for data integrity
+  1068→7. Delete or quarantine fraudulent submissions
+  1069→8. Agent creates new account with new credentials + MFA
+  1070→9. Investigate how credentials were compromised:
+  1071→   - Shared credentials? -> Agent training
+  1072→   - Phishing? -> Security awareness training
+  1073→   - Malware on device? -> Device inspection
+  1074→10. If fraudulent data was served to customers, notify them
+  1075→
+  1076→SEVERITY: SEV-2 (SEV-1 if large volume of fraudulent data was distributed)
+  1077→```
+  1078→
+  1079→#### 4.2.4 System Outage
+  1080→
+  1081→```
+  1082→RUNBOOK: SYSTEM OUTAGE
+  1083→=========================
+  1084→
+  1085→TRIGGER: Platform unavailable for >15 minutes
+  1086→
+  1087→TRIAGE:
+  1088→1. Check Vercel status page (vercel.com/status)
+  1089→2. Check Neon status page (neon.tech/status)
+  1090→3. Check /api/health endpoint from external monitor
+  1091→4. Check GitHub Actions for failed deployments
+  1092→
+  1093→IF VERCEL OUTAGE:
+  1094→- Field agents continue collecting offline (IndexedDB queue)
+  1095→- Communicate to team leads: "Continue collecting; data will sync when service restores"
+  1096→- Monitor Vercel status for resolution
+  1097→- No action needed unless outage exceeds 24 hours
+  1098→
+  1099→IF NEON/DATABASE OUTAGE:
+  1100→- API returns errors; Edge Config fallback serves read-only cached data
+  1101→- Field agents can still submit (queue locally) but submissions won't persist
+  1102→- Monitor Neon status
+  1103→- If >4 hours: consider activating backup database restore procedure
+  1104→
+  1105→IF ADL APPLICATION BUG:
+  1106→- Roll back to previous Vercel deployment via Vercel dashboard
+  1107→- Investigate root cause
+  1108→- Fix, test, and redeploy
+  1109→
+  1110→COMMUNICATION:
+  1111→- Team leads notified within 30 minutes via WhatsApp group
+  1112→- Field agents notified within 1 hour via team leads
+  1113→- If >4 hours: post status update to admin dashboard
+  1114→
+  1115→SEVERITY: SEV-2 (if >1 hour); SEV-3 (if <1 hour)
+  1116→```
+  1117→
+  1118→### 4.3 Communication Templates
+  1119→
+  1120→#### 4.3.1 Internal Incident Alert
+  1121→
+  1122→```
+  1123→ALERTE SECURITE ADL -- [SEV-X]
+  1124→================================
+  1125→Date/Heure: [YYYY-MM-DD HH:MM UTC]
+  1126→Type d'incident: [Device theft / Data breach / Agent compromise / Outage]
+  1127→Description: [Brief description in French]
+  1128→Impact: [What data/users/operations are affected]
+  1129→Actions immediates prises: [List actions already taken]
+  1130→Prochaines etapes: [Next steps and responsible parties]
+  1131→Point de contact: [Name + phone number]
+  1132→
+  1133→NE PAS PARTAGER EN DEHORS DE L'EQUIPE ADL.
+  1134→```
+  1135→
+  1136→#### 4.3.2 Data Subject Breach Notification (French)
+  1137→
+  1138→```
+  1139→NOTIFICATION DE VIOLATION DE DONNEES PERSONNELLES
+  1140→====================================================
+  1141→
+  1142→Madame, Monsieur,
+  1143→
+  1144→Nous vous informons qu'un incident de securite affectant vos donnees
+  1145→personnelles a ete detecte le [DATE].
+  1146→
+  1147→Nature de l'incident: [Description]
+  1148→
+  1149→Donnees concernees: [List of affected data types, e.g., nom commercial,
+  1150→localisation GPS, photo de facade]
+  1151→
+  1152→Consequences probables: [e.g., "Vos informations commerciales pourraient
+  1153→avoir ete consultees par des personnes non autorisees."]
+  1154→
+  1155→Mesures prises: [e.g., "Nous avons immediatement securise nos systemes,
+  1156→revoque les acces compromis, et renforce nos controles de securite."]
+  1157→
+  1158→Mesures recommandees: [e.g., "Si vous constatez une utilisation
+  1159→inhabituelle de vos informations, veuillez nous contacter immediatement."]
+  1160→
+  1161→Vos droits: Conformement a la Loi No. 2024/017 relative a la protection
+  1162→des donnees a caractere personnel, vous avez le droit d'acceder a vos
+  1163→donnees, de les faire rectifier ou supprimer. Pour exercer ces droits,
+  1164→contactez notre Delegue a la Protection des Donnees:
+  1165→
+  1166→[DPO Name]
+  1167→Email: privacy@africandatalayer.com
+  1168→Telephone: [+237 XXX XXX XXX]
+  1169→
+  1170→Nous vous prions d'agreer, Madame, Monsieur, l'expression de nos
+  1171→sinceres regrets pour cet incident.
+  1172→
+  1173→[Signature]
+  1174→African Data Layer
+  1175→```
+  1176→
+  1177→#### 4.3.3 Regulatory Notification to DPA
+  1178→
+  1179→```
+  1180→NOTIFICATION DE VIOLATION DE DONNEES A L'AUTORITE DE PROTECTION
+  1181→=================================================================
+  1182→
+  1183→A l'attention de: [Autorite de Protection des Donnees Personnelles
+  1184→du Cameroun / Ministere des Postes et Telecommunications]
+  1185→
+  1186→De: African Data Layer, [Address]
+  1187→DPO: [Name], [Contact]
+  1188→Date de notification: [DATE]
+  1189→
+  1190→1. NATURE DE LA VIOLATION
+  1191→   [Description of what happened]
+  1192→
+  1193→2. DATE ET HEURE DE LA VIOLATION
+  1194→   Detectee le: [DATE]
+  1195→   Estimee avoir eu lieu le: [DATE]
+  1196→
+  1197→3. CATEGORIES DE DONNEES CONCERNEES
+  1198→   [List: e.g., localisation GPS, photos de facades commerciales,
+  1199→   noms d'etablissements]
+  1200→
+  1201→4. NOMBRE APPROXIMATIF DE PERSONNES CONCERNEES
+  1202→   [Number]
+  1203→
+  1204→5. NOMBRE APPROXIMATIF D'ENREGISTREMENTS CONCERNES
+  1205→   [Number]
+  1206→
+  1207→6. CONSEQUENCES PROBABLES
+  1208→   [Assessment of likely impact]
+  1209→
+  1210→7. MESURES PRISES OU PROPOSEES
+  1211→   [List of remediation actions]
+  1212→
+  1213→8. COORDONNEES DU DPO
+  1214→   [Full contact details]
+  1215→
+  1216→Document soumis conformement a la Loi No. 2024/017 du 23 decembre 2024.
+  1217→```
+  1218→
+  1219→### 4.4 Evidence Preservation
+  1220→
+  1221→During any security incident:
+  1222→
+  1223→1. **Do not modify production systems** until evidence is collected
+  1224→2. **Database:** Take an immediate `pg_dump` snapshot before any remediation
+  1225→3. **Vercel logs:** Export all relevant request logs via Vercel CLI (`vercel logs --output json`)
+  1226→4. **Security audit logs:** Export all entries from `security_audit_log` for the incident window
+  1227→5. **Screenshots:** Capture Vercel dashboard, Neon dashboard, and any relevant admin panels
+  1228→6. **Agent testimony:** Record written statements from affected agents (in French, signed and dated)
+  1229→7. **Police report:** For physical incidents (theft, assault), obtain a copy of the PV (proces-verbal)
+  1230→8. **Chain of custody:** All evidence is stored in a dedicated, access-restricted directory with hash verification
+  1231→
+  1232→### 4.5 Post-Incident Review
+  1233→
+  1234→Conduct within 7 days of incident resolution:
+  1235→
+  1236→```
+  1237→POST-INCIDENT REVIEW TEMPLATE
+  1238→================================
+  1239→
+  1240→INCIDENT: [ID] -- [Title]
+  1241→DATE: [Date of incident]
+  1242→SEVERITY: [SEV-X]
+  1243→DURATION: [Time from detection to resolution]
+  1244→
+  1245→1. TIMELINE
+  1246→   [Chronological list of events with timestamps]
+  1247→
+  1248→2. ROOT CAUSE
+  1249→   [What caused the incident]
+  1250→
+  1251→3. CONTRIBUTING FACTORS
+  1252→   [What allowed it to happen or made it worse]
+  1253→
+  1254→4. DETECTION
+  1255→   - How was the incident detected?
+  1256→   - How long between occurrence and detection?
+  1257→   - Could we have detected it sooner? How?
+  1258→
+  1259→5. RESPONSE ASSESSMENT
+  1260→   - Were procedures followed?
+  1261→   - What worked well?
+  1262→   - What could be improved?
+  1263→
+  1264→6. IMPACT
+  1265→   - Data subjects affected: [count]
+  1266→   - Data records affected: [count]
+  1267→   - Business impact: [description]
+  1268→   - Regulatory impact: [notifications sent]
+  1269→
+  1270→7. ACTION ITEMS
+  1271→   [Numbered list of improvements with owners and deadlines]
+  1272→
+  1273→8. SIGN-OFF
+  1274→   Reviewed by: [Names]
+  1275→   Date: [Date]
+  1276→```
+  1277→
+  1278→---
+  1279→
+  1280→## 5. Field Agent Security Training
+  1281→
+  1282→### 5.1 Training Program Overview
+  1283→
+  1284→| Module | Duration | Delivery | Frequency |
+  1285→|---|---|---|---|
+  1286→| **M1: Device Security** | 45 minutes | In-person, hands-on | At onboarding + annual refresh |
+  1287→| **M2: Data Handling** | 30 minutes | In-person with scenarios | At onboarding + annual refresh |
+  1288→| **M3: Consent Collection** | 60 minutes | In-person with role-play | At onboarding + quarterly refresh |
+  1289→| **M4: Social Engineering** | 30 minutes | In-person with examples | At onboarding + semi-annual refresh |
+  1290→| **M5: Incident Reporting** | 20 minutes | In-person + quick-reference card | At onboarding + annual refresh |
+  1291→| **M6: Physical Safety** | 30 minutes | In-person with local context | At onboarding + annual refresh |
+  1292→
+  1293→**Total onboarding training time:** ~3.5 hours (can be split across 2 days)
+  1294→**Language:** French (primary), with key terms in English for the app interface
+  1295→**Assessment:** Short quiz (10 questions) at end of each module; must score 80% to be activated as an agent
+  1296→
+  1297→### 5.2 Module Details
+  1298→
+  1299→#### M1: Device Security
+  1300→
+  1301→**Learning objectives:** Agents can secure their device, enable screen lock, and know what to do if their phone is stolen.
+  1302→
+  1303→Content:
+  1304→1. **Screen lock:** Set a 6-digit PIN or fingerprint; do NOT use pattern lock (easy to observe)
+  1305→2. **App lock:** If available, set app-specific lock on the ADL PWA
+  1306→3. **Avoid public Wi-Fi:** Use mobile data (MTN/Orange) for syncing; public Wi-Fi in Douala is not secure
+  1307→4. **Keep phone updated:** Accept Android security updates when prompted
+  1308→5. **Do not root/jailbreak:** Rooted phones compromise security; ADL may refuse submissions from rooted devices in the future
+  1309→6. **Charging security:** Do not use public USB charging stations (juice-jacking risk); use personal power banks or wall chargers
+  1310→7. **What to do if phone is stolen or lost:**
+  1311→   - Immediately call team lead: [Phone number]
+  1312→   - Do NOT try to recover the phone yourself
+  1313→   - File a police report at the nearest commissariat within 24 hours
+  1314→   - ADL will remotely disable your account and wipe app data
+  1315→
+  1316→**Hands-on exercise:** Each agent configures screen lock and demonstrates sync while connected to mobile data.
+  1317→
+  1318→#### M2: Data Handling
+  1319→
+  1320→**Learning objectives:** Agents understand what data they can and cannot collect, and how to handle it.
+  1321→
+  1322→**DO:**
+  1323→- Only collect data for the vertical(s) you are assigned
+  1324→- Sync your data as frequently as possible (do not accumulate a large offline queue)
+  1325→- Use the ADL app for all data entry (do not use notes apps, WhatsApp, or paper)
+  1326→- Report any data errors you notice (wrong location, wrong category)
+  1327→
+  1328→**DO NOT:**
+  1329→- Take photos of people's faces (focus on business facades and infrastructure)
+  1330→- Collect data about people's personal lives, health conditions, or financial details
+  1331→- Share your login credentials with anyone, including other agents
+  1332→- Share ADL data with anyone outside ADL (including screenshots of the app)
+  1333→- Store ADL data outside the app (no WhatsApp photos, no email exports)
+  1334→- Continue using ADL if your account is suspended (contact team lead)
+  1335→
+  1336→**Scenario exercise:** Present 5 field situations and ask agents to identify what they should and should not do.
+  1337→
+  1338→#### M3: Consent Collection
+  1339→
+  1340→**Learning objectives:** Agents can explain ADL's purpose, collect consent, and handle refusals professionally.
+  1341→
+  1342→**Role-play scenarios (in French):**
+  1343→
+  1344→1. **Willing business owner:** Agent approaches, explains, owner agrees, agent records consent and collects data.
+  1345→
+  1346→2. **Reluctant business owner:** Owner is suspicious. Agent remains calm, explains data subject rights, offers to leave the info card, and respects the refusal. Agent records `consent_refused` and collects only non-PII data (GPS + category).
+  1347→
+  1348→3. **Informal operator:** Agent approaches an informal mobile money agent who is not registered. Agent explains that ADL maps services to improve access. Does NOT mention regulatory compliance or enforcement. Collects only publicly observable data if consent is not given.
+  1349→
+  1350→4. **Person objects to being photographed:** Agent apologizes, explains they are only photographing the business facade, and offers to retake the photo when the person has moved. If person insists, agent skips the photo and submits text-only.
+  1351→
+  1352→5. **Language barrier:** Business owner speaks only a local language (e.g., Pidgin English, Bassa, Duala). Agent uses basic phrases or asks a nearby person to help translate the core message. If cannot communicate, skip the consent-required data and record `consent_refused`.
+  1353→
+  1354→**Consent script (laminated card for each agent):**
+  1355→
+  1356→```
+  1357→SCRIPT DE CONSENTEMENT -- CARTE AGENT ADL
+  1358→==========================================
+  1359→
+  1360→[Montrer le badge ADL]
+  1361→
+  1362→"Bonjour Madame/Monsieur, je suis [Nom], je travaille pour African Data
+  1363→Layer. Nous cartographions les commerces et services de Bonamoussadi.
+  1364→
+  1365→Je souhaite prendre une photo de votre etablissement et noter des
+  1366→informations de base comme le nom, le type d'activite, et la localisation.
+  1367→
+  1368→Ces informations servent a ameliorer la connaissance des services
+  1369→disponibles dans le quartier.
+  1370→
+  1371→Vous avez le droit de refuser. Vous avez aussi le droit de demander a
+  1372→voir, corriger ou supprimer vos informations a tout moment en nous
+  1373→contactant.
+  1374→
+  1375→[Donner la carte de contact ADL]
+  1376→
+  1377→Acceptez-vous que je prenne ces informations?"
+  1378→
+  1379→SI OUI: "Merci. Voici une carte avec nos coordonnees et votre numero
+  1380→de reference si vous avez des questions a l'avenir."
+  1381→
+  1382→SI NON: "Pas de probleme, je vous remercie. Bonne journee."
+  1383→```
+  1384→
+  1385→#### M4: Social Engineering Awareness
+  1386→
+  1387→**Learning objectives:** Agents recognize manipulation attempts and do not disclose ADL information.
+  1388→
+  1389→**Scenarios to recognize:**
+  1390→
+  1391→1. **"I'm from the government, show me your data":** No government official can demand to see ADL data on your phone. Ask for their identification, explain you will report the request to ADL management, and leave. Call your team lead.
+  1392→
+  1393→2. **"I work for ADL too, let me use your phone":** Never let anyone use your ADL account. Credential sharing is grounds for termination.
+  1394→
+  1395→3. **"My boss wants to know what you are recording":** Explain ADL's purpose using the standard script. Do not show the app interface or data to anyone.
+  1396→
+  1397→4. **"Send me the photos on WhatsApp":** ADL data is never shared via WhatsApp, email, or any channel outside the app. Decline politely.
+  1398→
+  1399→5. **"Give me your login, I forgot mine":** Each agent has their own credentials. They must contact the team lead for password reset. Never share credentials.
+  1400→
+  1401→#### M5: Incident Reporting
+  1402→
+  1403→**Quick-reference card (wallet-sized, laminated):**
+  1404→
+  1405→```
+  1406→URGENCE ADL -- QUE FAIRE?
+  1407→============================
+  1408→
+  1409→TELEPHONE VOLE OU PERDU:
+  1410→-> Appeler [Team Lead]: +237 XXX XXX XXX
+  1411→-> Commissariat le plus proche dans 24h
+  1412→
+  1413→AGRESSION OU MENACE:
+  1414→-> Quitter les lieux immediatement
+  1415→-> Appeler le 117 (police)
+  1416→-> Appeler [Team Lead]: +237 XXX XXX XXX
+  1417→-> NE PAS revenir seul sur les lieux
+  1418→
+  1419→PROBLEME AVEC L'APPLICATION:
+  1420→-> Redemarrer l'application
+  1421→-> Verifier la connexion internet
+  1422→-> Appeler [Tech Support]: +237 XXX XXX XXX
+  1423→
+  1424→QUELQU'UN DEMANDE VOS IDENTIFIANTS:
+  1425→-> Refuser poliment
+  1426→-> Signaler a [Team Lead]
+  1427→
+  1428→VOUS REMARQUEZ DES DONNEES SUSPECTES:
+  1429→-> Ne pas modifier
+  1430→-> Signaler a [Team Lead]
+  1431→```
+  1432→
+  1433→#### M6: Physical Safety
+  1434→
+  1435→**Learning objectives:** Agents can assess risk before entering an area and know when to disengage.
+  1436→
+  1437→**Safety rules:**
+  1438→
+  1439→1. **Always inform your team lead of your planned route** before starting a shift
+  1440→2. **Work in pairs** in areas with higher risk (market areas at night, areas near informal operations)
+  1441→3. **Do not enter private property** without invitation
+  1442→4. **If someone becomes aggressive, leave immediately.** No data point is worth your safety.
+  1443→5. **Carry minimal valuables** during field work -- just your phone, ADL badge, and water
+  1444→6. **Avoid working after dark** unless specifically authorized and paired
+  1445→7. **During rainy season:** Do not attempt to cross flooded roads; report blocked roads from a safe distance
+  1446→8. **Know your exits:** Before entering a narrow alley or market, note how you will leave
+  1447→9. **Dress appropriately:** ADL-branded shirt/vest provides legitimacy but can also make you a target if perceived as "wealthy." Discuss with team lead based on zone.
+  1448→10. **Trust your instincts:** If a situation feels wrong, leave and report
+  1449→
+  1450→**Emergency contacts (on badge and phone):**
+  1451→- Team Lead: +237 XXX XXX XXX
+  1452→- Police emergency: 117
+  1453→- Fire/ambulance: 118
+  1454→- ADL Office: +237 XXX XXX XXX
+  1455→
+  1456→---
+  1457→
+  1458→## 6. Compliance Checklist
+  1459→
+  1460→### Pre-Pilot Launch Checklist (Deadline: Before June 23, 2026)
+  1461→
+  1462→#### Legal and Regulatory
+  1463→
+  1464→| # | Task | Owner | Status | Deadline | Notes |
+  1465→|---|---|---|---|---|---|
+  1466→| L1 | Appoint a Data Protection Officer (DPO) | CEO | Not started | April 15, 2026 | External consultant recommended; see Section 3.7 |
+  1467→| L2 | Register as data controller with the DPA (or transitional authority) | DPO | Not started | May 15, 2026 | Submit registration form with description of processing activities |
+  1468→| L3 | Draft and publish a Privacy Policy (in French) | DPO + Legal | Not started | May 1, 2026 | Must cover all points in Article 7 of Law No. 2024/017; publish on website and in app |
+  1469→| L4 | Execute Data Processing Agreements with Vercel, Neon, Google | DPO + CTO | Not started | May 15, 2026 | Review existing provider DPAs for Cameroon law compatibility |
+  1470→| L5 | Prepare Standard Contractual Clauses for cross-border transfers | DPO + Legal | Not started | May 15, 2026 | Required for data stored outside Cameroon |
+  1471→| L6 | Complete Privacy Impact Assessments for each vertical | DPO | Not started | May 30, 2026 | Use template in Section 3.6; start with P0 verticals (roads, mobile money) |
+  1472→| L7 | Establish data subject rights procedure (access, rectification, erasure) | DPO + Engineering | Not started | May 30, 2026 | Implement technical capability + documented procedure |
+  1473→| L8 | Create data retention policy and schedule | DPO | Not started | May 15, 2026 | See Section 3.8 |
+  1474→| L9 | Prepare breach notification templates | DPO | Not started | May 15, 2026 | See Section 4.3 |
+  1475→| L10 | Document lawful basis for each data processing activity | DPO | Not started | May 15, 2026 | See Section 3.1.2 |
+  1476→
+  1477→#### Technical Security
+  1478→
+  1479→| # | Task | Owner | Status | Deadline | Notes |
+  1480→|---|---|---|---|---|---|
+  1481→| S1 | Implement RBAC (replace isAdmin boolean) | Engineering | Not started | April 30, 2026 | See Section 2.2.2; database migration + API changes |
+  1482→| S2 | Add SMS-based MFA for agent login | Engineering | Not started | May 15, 2026 | See Section 2.2.1; integrate Africa's Talking or Twilio |
+  1483→| S3 | Implement session timeout (8 hours) and idle timeout (1 hour) | Engineering | Not started | April 30, 2026 | See Section 2.2.3 |
+  1484→| S4 | Implement account lockout after 5 failed attempts | Engineering | Not started | April 30, 2026 | See Section 2.2.3 |
+  1485→| S5 | Add consent_status field to point_events | Engineering | Not started | April 30, 2026 | See Section 3.2.3; database migration |
+  1486→| S6 | Implement application-level remote wipe | Engineering | Not started | May 15, 2026 | See Section 2.1.3 |
+  1487→| S7 | Add security audit logging table and instrumentation | Engineering | Not started | May 15, 2026 | See Section 2.7 |
+  1488→| S8 | Implement photo hash-on-capture | Engineering | Not started | May 15, 2026 | See Section 2.5.1 |
+  1489→| S9 | Configure security headers (CSP, HSTS, X-Frame-Options) | Engineering | Not started | April 30, 2026 | See Section 2.6.3; vercel.json changes |
+  1490→| S10 | Implement API rate limiting | Engineering | Not started | May 15, 2026 | See Section 2.4.1 |
+  1491→| S11 | Add Zod input validation to all API endpoints | Engineering | Not started | May 15, 2026 | See Section 2.4.2 |
+  1492→| S12 | Implement IndexedDB queue encryption | Engineering | Not started | May 30, 2026 | See Section 2.3.2 |
+  1493→| S13 | Configure explicit CORS policy | Engineering | Not started | April 30, 2026 | See Section 2.4.3 |
+  1494→| S14 | Implement data subject rights API endpoints (access, erasure) | Engineering | Not started | May 30, 2026 | See Section 3.3 |
+  1495→| S15 | Deploy Neon database to EU region | Engineering | Not started | April 30, 2026 | Minimizes cross-border transfer risk |
+  1496→
+  1497→#### Operational
+  1498→
+  1499→| # | Task | Owner | Status | Deadline | Notes |
+  1500→|---|---|---|---|---|---|
+  1501→| O1 | Develop agent consent collection training materials (French) | Operations + DPO | Not started | May 15, 2026 | See Section 5.2 M3 |
+  1502→| O2 | Print agent badges, consent scripts, and info cards | Operations | Not started | May 30, 2026 | Laminated, French language |
+  1503→| O3 | Conduct field agent security training (all 6 modules) | Operations + Security | Not started | June 1, 2026 | 3.5 hours per agent; schedule 2 sessions |
+  1504→| O4 | Create incident response WhatsApp group | Operations | Not started | May 15, 2026 | Team leads + admin + DPO |
+  1505→| O5 | Establish emergency contact list and print wallet cards | Operations | Not started | May 30, 2026 | See Section 5.2 M5 |
+  1506→| O6 | Test incident response procedures (tabletop exercise) | Security + Operations | Not started | June 1, 2026 | Run through device theft and data breach scenarios |
+  1507→| O7 | Document and test data subject rights fulfillment process end-to-end | DPO + Engineering | Not started | June 1, 2026 | Submit a test access/erasure request and verify |
+  1508→| O8 | Configure external uptime monitoring for /api/health | Engineering | Not started | May 15, 2026 | UptimeRobot or Better Uptime; 5-minute intervals |
+  1509→| O9 | Set up Sentry error tracking with PII scrubbing rules | Engineering | Not started | May 15, 2026 | Ensure no PII appears in error reports |
+  1510→
+  1511→### Compliance Confidence Assessment
+  1512→
+  1513→| Area | Current Readiness | Target by June 23 | Risk if Not Met |
+  1514→|---|---|---|---|
+  1515→| **DPO appointment** | 0% | 100% | Cannot demonstrate compliance; regulatory exposure |
+  1516→| **DPA registration** | 0% | 100% | Operating without registration is a violation |
+  1517→| **Privacy policy** | 0% | 100% | Agents cannot inform data subjects without it |
+  1518→| **Consent workflow** | 0% | 100% | Every data point collected without consent is a potential violation |
+  1519→| **Cross-border transfer safeguards** | 0% | 80% | All data currently stored outside Cameroon without safeguards |
+  1520→| **Data subject rights** | 0% | 80% | Must be able to respond within 30 days |
+  1521→| **Breach notification capability** | 0% | 100% | 72-hour legal deadline is non-negotiable |
+  1522→| **Technical security controls** | 30% (auth exists, fraud detection exists) | 80% | Security gaps increase breach risk |
+  1523→| **Agent training** | 0% | 100% | Untrained agents will mishandle consent and data |
+  1524→
+  1525→**Overall assessment:** ADL has approximately 14 weeks until the June 23, 2026 compliance deadline. The work is substantial but achievable if started immediately. The highest priority items are DPO appointment (L1), privacy policy (L3), consent workflow (S5 + O1), and cross-border transfer safeguards (L4 + L5).
+  1526→
+  1527→---
+  1528→
+  1529→## Appendix A: Key Provisions of Cameroon Law No. 2024/017
+  1530→
+  1531→For quick reference by the ADL team:
+  1532→
+  1533→| Article | Provision | ADL Relevance |
+  1534→|---|---|---|
+  1535→| **Art. 2** | Applies to any processing of personal data by a person in Cameroon or using means located in Cameroon | ADL is subject -- agents in Cameroon, data about Cameroon |
+  1536→| **Art. 5** | Defines personal data as any information relating to an identified or identifiable natural person | Business owner names, photos with faces, phone numbers qualify |
+  1537→| **Art. 6** | Processing must have a legal basis (consent, contract, legal obligation, public interest, legitimate interest) | ADL relies on legitimate interest (mapping) and consent (PII) |
+  1538→| **Art. 7** | Consent must be free, specific, informed, and unambiguous; can be withdrawn at any time | Consent workflow required for PII collection |
+  1539→| **Art. 15-16** | Data controller must register with the DPA before processing | ADL must register before pilot launch |
+  1540→| **Art. 20** | DPO appointment required in certain circumstances | ADL likely requires a DPO (systematic monitoring) |
+  1541→| **Art. 28-32** | Cross-border transfers require adequate protection in recipient country or appropriate safeguards | SCCs and DPAs required for Vercel, Neon, Google |
+  1542→| **Art. 34-37** | Data subject rights: access, rectification, erasure, objection | Must implement technical and organizational measures |
+  1543→| **Art. 45** | Breach notification to DPA within 72 hours | Incident response plan must be operational |
+  1544→| **Art. 52-55** | Penalties: fines up to 100 million XAF (~$150,000 USD); imprisonment for certain violations | Material financial and personal risk |
+  1545→| **Art. 60** | 6-month transitional period for compliance (expires June 23, 2026) | Hard deadline for all controls |
+  1546→
+  1547→## Appendix B: Third-Party Risk Register
+  1548→
+  1549→| Provider | Data Processed | Location | DPA Available? | Risk Level | Action Required |
+  1550→|---|---|---|---|---|---|
+  1551→| **Vercel** | All API traffic, photos (Blob), serverless function logs, analytics | US (primary), EU (available) | Yes (vercel.com/legal/dpa) | Medium | Review DPA for Cameroon law compatibility; prefer EU deployment |
+  1552→| **Neon (PostgreSQL)** | All structured data (point_events, user_profiles, snapshots) | US/EU (configurable) | Yes | Medium | Deploy to EU region; review DPA |
+  1553→| **Google (OAuth)** | User email, name, profile photo (for Google login users) | US/Global | Yes (Google Cloud DPA) | Low | Review DPA; minimal data scope |
+  1554→| **Google (Gemini AI)** | Search queries from admin interface | US/Global | Yes | Low | Ensure no PII is sent in AI queries; review data retention terms |
+  1555→| **Africa's Talking / Twilio** | Agent phone numbers (for SMS OTP) | Kenya/US | Yes | Low | Review DPA; data is limited to phone numbers and OTP codes |
+  1556→| **Sentry** | Error traces, potentially including PII in stack traces | US/EU | Yes | Medium | Enable PII scrubbing; configure to EU region; review DPA |
+  1557→| **GitHub** | Source code, CI/CD logs | US | Yes | Low | No personal data in code; ensure secrets are not committed |
+  1558→
+  1559→---
+  1560→
+  1561→## Sources
+  1562→
+  1563→- [Cameroon Law No. 2024/017 on Personal Data Protection](https://prc.cm/en/multimedia/documents/10271-law-n-2024-017-of-23-12-2024-web)
+  1564→- [Key Features of Cameroon Law 2024/017 -- Pollicy](https://pollicy.medium.com/key-features-of-law-2024-017-on-personal-data-protection-in-cameroon-5ee06f79dd1a)
+  1565→- [Cameroon Data Protection Compliance -- Lex Africa](https://lexafrica.com/2025/10/cameroon-data-protection-law-compliance/)
+  1566→- [OWASP Mobile Security Testing Guide](https://owasp.org/www-project-mobile-security-testing-guide/)
+  1567→- [NIST Incident Response Guide (SP 800-61 Rev. 2)](https://csrc.nist.gov/publications/detail/sp/800-61/rev-2/final)
+  1568→- [Vercel Security and DPA](https://vercel.com/security)
+  1569→- [Neon Security Documentation](https://neon.tech/docs/security)
+  1570→- [Web Crypto API -- MDN](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API)
+  1571→- [Africa's Talking SMS API](https://africastalking.com/sms)
+  1572→

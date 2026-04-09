@@ -1,0 +1,1097 @@
+     1→# ADL Execution Plan: 6-Week Bonamoussadi Pilot
+     2→## Service Delivery Manager / Project Leader Deliverable
+     3→
+     4→**Teammate 9 -- Service Delivery Manager**
+     5→**Date:** March 2026
+     6→
+     7→---
+     8→
+     9→## Table of Contents
+    10→
+    11→1. [6-Week Pilot Execution Plan](#1-6-week-pilot-execution-plan)
+    12→2. [Team Structure and Roles](#2-team-structure-and-roles)
+    13→3. [Budget](#3-budget)
+    14→4. [KPIs and Metrics](#4-kpis-and-metrics)
+    15→5. [Dependencies and Critical Path](#5-dependencies-and-critical-path)
+    16→6. [RAID Log](#6-raid-log)
+    17→7. [Governance Cadence](#7-governance-cadence)
+    18→8. [Go/No-Go Decision Framework](#8-gono-go-decision-framework)
+    19→9. [Milestones](#9-milestones)
+    20→
+    21→---
+    22→
+    23→## Synthesis of Prior Deliverables
+    24→
+    25→This execution plan synthesizes the work of all 8 prior teammates:
+    26→
+    27→- **Teammate 1 (Data Analyst):** Bonamoussadi has ~560 businesses, 7 verticals, estimated 375-615 POIs. Priority order: Roads and Mobile Money (P0), then Pharmacy/Fuel/Alcohol (P1), then Billboards/Census (P2). Rainy season starts June. Cameroon's data protection law compliance deadline is June 23, 2026.
+    28→- **Teammate 2 (System Design):** Event-sourced model (`point_events`), weekly snapshots, delta computation with z-score anomaly detection, per-vertical field schemas, confidence scoring (recency 25%, sourceCount 20%, photoEvidence 20%, gpsAccuracy 15%, reviewerApproval 10%, fieldCompleteness 10%).
+    29→- **Teammate 3 (Cloud Architect):** Current stack: React PWA on Vercel, Neon PostgreSQL, Vercel Blob for photos, IndexedDB offline queue. Infrastructure cost: $50-200/month. Sync protocol with idempotency keys and exponential backoff.
+    30→- **Teammate 4 (Cloud Engineer):** 12 API routes deployed, Vercel Cron for weekly snapshots, 8 test files. CI/CD via Vercel Git Integration on GitHub. Implementation roadmap with phased delivery.
+    31→- **Teammate 5 (Cybersecurity):** Threat model (GPS spoofing highest risk at 16/25), privacy framework for Law 2024/017, incident response plan, field agent security training requirements. Current gaps: no MFA, no granular RBAC, no field-level PII encryption.
+    32→- **Teammate 6 (Fraud Specialist):** Multi-layered GPS spoofing detection, duplicate detection via perceptual hashing, confidence scoring with fraud penalty, velocity analysis, collusion pattern detection. Priority: A1 (Fabrication) + A3 (GPS Spoofing) highest risk.
+    33→- **Teammate 7 (Marketing):** Top 3 use cases: road blockage alerts, mobile money agent mapping, alcohol distribution intelligence. First 10 target accounts identified. Pricing tiers: Starter CFA 200-500K/month, Professional CFA 1-3M/month, Enterprise CFA 5-15M/month. Revenue target: CFA 5-10M/month by month 6.
+    34→- **Teammate 8 (UI/UX):** Field agent persona (20-35 yrs, mid-range Android, 30-60 POIs/day), 3-tap capture design, step-based wizard, sunlight-readable palette, offline sync status bar. Admin reviewer needs batch operations and keyboard-driven workflows.
+    35→
+    36→---
+    37→
+    38→## 1. 6-Week Pilot Execution Plan
+    39→
+    40→### Pilot Start Date: Week 1 Day 1 = Monday, April 14, 2026
+    41→### Pilot End Date: Week 6 Day 5 = Friday, May 22, 2026
+    42→
+    43→---
+    44→
+    45→### Week 1: Setup and Preparation (April 14-18)
+    46→
+    47→| Day | Task | Owner | Deliverable | Success Criteria |
+    48→|---|---|---|---|---|
+    49→| **W1D1 (Mon)** | Finalize field team lead hire; confirm contract terms | Charles (CEO) | Signed contract with Field Team Lead | Team Lead confirmed and available by W1D3 |
+    50→| **W1D1** | Deploy RBAC migration: add `field_agent`, `team_lead`, `admin`, `data_consumer` roles to database | Charles (CEO) | Database migration applied to production | Roles queryable; existing users unaffected |
+    51→| **W1D1** | Purchase 4x Android phones (Samsung A15 or Tecno Spark 20) + 4x power banks + 4x SIM cards (MTN or Orange) | Charles (CEO) | Equipment procurement order placed | Delivery confirmed by W1D3 |
+    52→| **W1D2 (Tue)** | Deploy transport_road and census_proxy vertical schemas to production (Teammate 2 specs) | Charles (CEO) | New verticals visible in PWA | All 7 verticals selectable in capture form |
+    53→| **W1D2** | Deploy GPS integrity module (client-side mock location detection, sensor data collection) per Teammate 6 spec | Charles (CEO) | `gpsIntegrity.ts` deployed, collecting data on submissions | GPS integrity data appearing in submission payloads |
+    54→| **W1D2** | Deploy velocity check and photo hash deduplication endpoints per Teammate 6 spec | Charles (CEO) | Fraud detection pipeline operational | Test submissions correctly flagged/passed |
+    55→| **W1D3 (Wed)** | Field Team Lead orientation (remote video call): ADL mission, system walkthrough, pilot objectives, reporting structure | Charles (CEO) + Field Team Lead | Team Lead understands system and objectives | Team Lead can navigate PWA, submit test POI, access admin queue |
+    56→| **W1D3** | Recruit 3 field agents via Field Team Lead's local network; criteria: smartphone-literate, knows Bonamoussadi, available full-time for 6 weeks | Field Team Lead | 3 agent candidates identified | Candidates confirmed and available from W1D5 |
+    57→| **W1D3** | Define Bonamoussadi zone grid: divide pilot area into 4 collection zones (A: north Bonamoussadi, B: central/Carrefour, C: south/Makepe, D: commercial corridor) | Charles (CEO) + Field Team Lead | Zone map with GPS boundaries | 4 zones defined with bounding boxes matching Teammate 2 geofence (4.0755-4.0999 N, 9.7185-9.7602 E) |
+    58→| **W1D4 (Thu)** | Field agent onboarding: 3-hour training session in Bonamoussadi covering app usage, photo standards, data quality expectations, fraud rules, safety protocols | Field Team Lead | 3 agents trained and equipped with phones/power banks | Each agent completes 5 practice submissions that pass fraud checks |
+    59→| **W1D4** | Create agent accounts in system with `field_agent` role; assign each agent to a primary zone | Charles (CEO) | 3 agent accounts + 1 team lead account active | All accounts can log in, submit, and sync |
+    60→| **W1D4** | Deploy consent collection flow per Teammate 5 privacy framework (click-through consent for agents; data collection notice for public-facing capture) | Charles (CEO) | Consent flow live in PWA | Agents must accept terms before first submission |
+    61→| **W1D5 (Fri)** | Supervised test day: all 3 agents + Team Lead do a half-day supervised field test in Zone B (Carrefour Bonamoussadi) | Field Team Lead + All Agents | 20-30 test submissions per agent | >80% of submissions pass quality checks; sync works; photos acceptable |
+    62→| **W1D5** | Review test submissions; identify training gaps; adjust field protocols | Charles (CEO) + Field Team Lead | Training gap analysis document | Issues documented and remediation planned for W2D1 |
+    63→| **W1D5** | Set up Supabase/Neon database monitoring alerts (disk usage, connection count, query performance) | Charles (CEO) | Monitoring dashboard live | Alerts configured for >80% disk, >50 connections, queries >5s |
+    64→
+    65→**Week 1 Deliverables:**
+    66→- M1: Infrastructure Ready (all technical deployments complete)
+    67→- Team of 4 (1 Team Lead + 3 agents) hired, trained, equipped
+    68→- Zone grid defined
+    69→- 60-90 test submissions in the system
+    70→- All fraud detection and quality scoring operational
+    71→
+    72→**Week 1 Success Criteria:**
+    73→- All 7 verticals deployable and functional in PWA
+    74→- GPS integrity, velocity checks, photo hash dedup all operational
+    75→- Each agent can independently capture, sync, and verify submissions
+    76→- Zero data loss during test day
+    77→
+    78→---
+    79→
+    80→### Week 2: Baseline Capture (April 21-25) -- First Full Survey
+    81→
+    82→| Day | Task | Owner | Deliverable | Success Criteria |
+    83→|---|---|---|---|---|
+    84→| **W2D1 (Mon)** | Remediation training for issues found in W1D5 test day (30 min morning briefing) | Field Team Lead | Agents briefed on corrections | Team Lead confirms all agents understand adjustments |
+    85→| **W2D1** | Begin systematic baseline capture: Agent 1 = Zone A, Agent 2 = Zone B, Agent 3 = Zone C. Team Lead floats across zones and covers Zone D. | All Agents + Team Lead | Day 1 submissions | 30+ submissions per agent per day |
+    86→| **W2D1** | Priority verticals for baseline: Roads (all road segments) + Mobile Money (all visible agents) + Fuel (all stations) | All Agents | P0 + easy P1 verticals captured first | Roads: target 50 segments. MoMo: target 100 agents. Fuel: target all 5-10 stations. |
+    87→| **W2D2 (Tue)** | Continue baseline: add Pharmacy (formal only first) + Billboards to capture list | All Agents | Expanding vertical coverage | Pharmacies: target all 10-15 formal. Billboards: target 30+. |
+    88→| **W2D3 (Wed)** | Continue baseline: add Alcohol outlets (formal bars and visible informal) | All Agents | Alcohol vertical populated | Target 50+ alcohol POIs |
+    89→| **W2D3** | Charles reviews first 200 submissions in admin queue; provides quality feedback to Team Lead | Charles (CEO) | Quality review notes | Review turnaround <24h; feedback communicated to agents by W2D4 morning |
+    90→| **W2D4 (Thu)** | Continue baseline: Census proxy capture begins (building counts, construction activity) | All Agents | Census proxy data collection started | Target 50+ buildings/commercial properties |
+    91→| **W2D4** | Mid-week quality checkpoint: Team Lead reviews agent productivity, photo quality, GPS accuracy distributions | Field Team Lead | Mid-week quality report | Identify bottom-performing agent for additional coaching |
+    92→| **W2D5 (Fri)** | Baseline capture push: fill remaining gaps across all zones and verticals | All Agents | Baseline substantially complete | Target: 400+ unique POIs across 7 verticals |
+    93→| **W2D5** | End-of-week admin review: Charles + Team Lead review all submissions, approve/reject, compute first quality metrics | Charles (CEO) + Field Team Lead | Baseline quality scorecard | >70% approval rate; <5% fraud-flagged |
+    94→| **W2D5** | Trigger first weekly snapshot via Vercel Cron (or manually if cron not yet running) | Charles (CEO) | Snapshot S1 frozen in `snapshots` table | Snapshot contains all approved baseline POIs |
+    95→
+    96→**Week 2 Deliverables:**
+    97→- M2: Baseline Complete -- first full survey of Bonamoussadi across 7 verticals
+    98→- Snapshot S1 frozen
+    99→- Quality scorecard for baseline
+   100→
+   101→**Week 2 Daily Targets per Agent:**
+   102→
+   103→| Vertical | Target POIs (Week 2 Total) | Per Agent/Day Approx. |
+   104→|---|---|---|
+   105→| Transport Roads | 50-80 segments | 5-6 per agent per day |
+   106→| Mobile Money | 100-200 agents | 8-15 per agent per day |
+   107→| Fuel | 5-10 stations | 1-2 per agent (one-time) |
+   108→| Pharmacy | 10-15 formal + 20-40 informal | 3-4 per agent per day |
+   109→| Alcohol | 80-150 outlets | 6-12 per agent per day |
+   110→| Billboards | 30-60 locations | 3-5 per agent per day |
+   111→| Census Proxy | 50-100 buildings | 4-8 per agent per day |
+   112→
+   113→**Week 2 Success Criteria:**
+   114→- 400+ unique POIs captured (minimum)
+   115→- All 4 zones covered
+   116→- All 7 verticals represented
+   117→- GPS accuracy <50m for >90% of submissions
+   118→- Photo quality acceptable for >85% of submissions
+   119→- Sync success rate >95%
+   120→- Snapshot S1 frozen successfully
+   121→
+   122→---
+   123→
+   124→### Week 3: First Delta Cycle (April 28 - May 2)
+   125→
+   126→| Day | Task | Owner | Deliverable | Success Criteria |
+   127→|---|---|---|---|---|
+   128→| **W3D1 (Mon)** | Agents revisit Zone assignments with focus on ENRICH_EVENTs for baseline POIs (fill missing fields) | All Agents | Enrichment submissions | 50+ enrichment events per agent over the week |
+   129→| **W3D1** | Agents also capture NEW POIs missed during baseline (gaps identified during W2 review) | All Agents | Gap-fill submissions | 20+ new POIs across all agents |
+   130→| **W3D2 (Tue)** | Targeted re-survey of high-priority verticals: Roads (condition changes?), Mobile Money (any new agents? closures?) | All Agents | Delta-relevant observations | Agents trained to flag CHANGES vs. confirming SAME |
+   131→| **W3D3 (Wed)** | Charles processes delta computation: S2 snapshot vs. S1 baseline. Review delta output for correctness. | Charles (CEO) | Delta D1 computed (S2 - S1) | Delta report shows new/changed/removed POIs; z-score anomaly detection functioning |
+   132→| **W3D3** | Prepare first data sample: "Bonamoussadi Week 1-2 Snapshot" -- one-page summary per vertical with map, POI count, key stats | Charles (CEO) | Data sample document (PDF + interactive dashboard link) | Professional-quality output suitable for showing to prospects |
+   133→| **W3D4 (Thu)** | Team Lead conducts spot-check audit: physically visit 10 random POIs from baseline to verify data accuracy | Field Team Lead | Audit report (10 POIs verified) | >80% match field reality (location, name, status all correct) |
+   134→| **W3D5 (Fri)** | Weekly review meeting (all team): W2-W3 performance, quality metrics, agent feedback, process adjustments | Charles (CEO) + Field Team Lead + All Agents | Weekly review notes + action items | Meeting completed; issues documented; adjustments communicated |
+   135→| **W3D5** | Freeze Snapshot S2 | Charles (CEO) | S2 in database | Delta D1 (S2-S1) published |
+   136→
+   137→**Week 3 Deliverables:**
+   138→- Snapshot S2 frozen
+   139→- Delta D1 (S2 - S1) computed and reviewed
+   140→- First data sample document ready for client conversations
+   141→- 10-POI audit completed with accuracy assessment
+   142→- M3: First Delta Published
+   143→
+   144→**Week 3 Success Criteria:**
+   145→- Delta D1 shows meaningful changes (even if small -- proves the system works)
+   146→- Audit accuracy >80%
+   147→- Enrichment rate: >30% of baseline POIs enriched with at least one additional field
+   148→- Agent daily submission rate sustained at 25+ per agent
+   149→
+   150→---
+   151→
+   152→### Week 4: Second Delta Cycle + Process Optimization (May 5-9)
+   153→
+   154→| Day | Task | Owner | Deliverable | Success Criteria |
+   155→|---|---|---|---|---|
+   156→| **W4D1 (Mon)** | Focus collection on Roads (if any weather events) and Mobile Money (high-churn vertical) | All Agents | Road condition updates; MoMo agent status updates | Agents demonstrating ability to detect and report changes |
+   157→| **W4D1** | Deploy any technical fixes identified during W3 (sync issues, UI bugs, fraud false positives) | Charles (CEO) | Bug fixes deployed | Known issues from W3 resolved |
+   158→| **W4D2 (Tue)** | Expand Alcohol collection: target evening/night establishments (Team Lead + 1 agent do a 5-9 PM shift) | Field Team Lead + 1 Agent | Night-economy POIs captured | 15+ night-only alcohol outlets added |
+   159→| **W4D3 (Wed)** | Prepare commercial outreach materials: 2-page pitch deck per vertical with real Bonamoussadi data | Charles (CEO) | 3 pitch decks: Roads, Mobile Money, Alcohol | Decks contain real data, real maps, real delta examples |
+   160→| **W4D3** | Second spot-check audit: Team Lead verifies 10 different random POIs | Field Team Lead | Second audit report | >85% accuracy (improvement over W3 audit) |
+   161→| **W4D4 (Thu)** | Agents continue systematic coverage; focus on under-represented zones/verticals from W2-W3 gap analysis | All Agents | Gap-fill submissions | All zones at >80% of target POI count |
+   162→| **W4D5 (Fri)** | Freeze Snapshot S3; compute Delta D2 (S3 - S2) | Charles (CEO) | S3 + D2 | Delta D2 computed and reviewed |
+   163→| **W4D5** | Weekly review meeting | Charles (CEO) + Full Team | Review notes | All KPIs tracked; agent productivity trends visible |
+   164→
+   165→**Week 4 Deliverables:**
+   166→- Snapshot S3 frozen
+   167→- Delta D2 (S3 - S2) computed
+   168→- 3 pitch decks ready for client outreach
+   169→- Second audit completed
+   170→- Night-economy capture tested
+   171→
+   172→**Week 4 Success Criteria:**
+   173→- Total POI count >600 (cumulative)
+   174→- Delta D2 shows system consistently detecting changes
+   175→- Audit accuracy >85%
+   176→- Agent retention: all 3 agents still active
+   177→- Pitch decks presentable quality
+   178→
+   179→---
+   180→
+   181→### Week 5: Client Outreach with Initial Data Products (May 12-16)
+   182→
+   183→| Day | Task | Owner | Deliverable | Success Criteria |
+   184→|---|---|---|---|---|
+   185→| **W5D1 (Mon)** | Begin outreach to Tier 1 targets: Yango Cameroon (roads), SABC (alcohol), Acmar Media (billboards) | Charles (CEO) | 3 outreach messages sent (email + WhatsApp) | Messages sent with personalized data samples attached |
+   186→| **W5D1** | Agents continue regular collection; focus on maintaining data freshness for verticals being pitched | All Agents | Continued submissions | 25+ submissions per agent per day maintained |
+   187→| **W5D2 (Tue)** | Outreach to Tier 1 continued: MTN MoMo (mobile money), Orange Money (mobile money) | Charles (CEO) | 2 additional outreach messages | Personalized mobile money data samples included |
+   188→| **W5D2** | Prepare "Bonamoussadi Data Sample" one-pagers: free sample report per vertical for cold outreach | Charles (CEO) | 7 one-page data samples (one per vertical) | Each sample shows: POI count, map, 2-3 key insights, sample delta |
+   189→| **W5D3 (Wed)** | Follow up on W5D1-D2 outreach via WhatsApp; schedule meetings for W5D4-D5 or W6 | Charles (CEO) | Follow-up messages sent | At least 1 meeting scheduled |
+   190→| **W5D3** | Cold outreach to Tier 2: TotalEnergies (fuel), Gozem (roads), AGL (roads+fuel) | Charles (CEO) | 3 outreach messages | Messages with ROI-focused pitch |
+   191→| **W5D4 (Thu)** | First client meeting (if scheduled); demo live dashboard with real Bonamoussadi data | Charles (CEO) | Meeting completed; prospect feedback captured | Prospect expresses interest in pilot or paid subscription |
+   192→| **W5D4** | Third spot-check audit: Team Lead verifies 15 POIs (expanded scope) | Field Team Lead | Third audit report | >90% accuracy |
+   193→| **W5D5 (Fri)** | Freeze Snapshot S4; compute Delta D3 (S4 - S3) | Charles (CEO) | S4 + D3 | Delta D3 includes 3 weeks of longitudinal data |
+   194→| **W5D5** | Weekly review: focus on outreach results, pipeline status, data quality trends | Charles (CEO) + Full Team | Review notes + pipeline tracker | Pipeline has at least 3 warm leads |
+   195→
+   196→**Week 5 Deliverables:**
+   197→- M4: First Client Meeting with Real Data
+   198→- 8-10 outreach messages sent to target accounts
+   199→- At least 1 client meeting conducted
+   200→- 7 vertical-specific data sample one-pagers
+   201→- Snapshot S4 + Delta D3
+   202→- Third audit completed
+   203→
+   204→**Week 5 Success Criteria:**
+   205→- At least 5 outreach messages sent
+   206→- At least 1 meeting scheduled or completed
+   207→- At least 3 prospects in pipeline (any stage)
+   208→- Total POI count >700
+   209→- Audit accuracy >90%
+   210→- Agent productivity stable (no decline trend)
+   211→
+   212→---
+   213→
+   214→### Week 6: Assessment and Go/No-Go Decision (May 19-22)
+   215→
+   216→| Day | Task | Owner | Deliverable | Success Criteria |
+   217→|---|---|---|---|---|
+   218→| **W6D1 (Mon)** | Final data collection push: agents fill remaining gaps and do a complete re-survey of P0 verticals (Roads, MoMo) | All Agents | Final submissions | Coverage >90% of estimated POIs for P0 verticals |
+   219→| **W6D1** | Follow up on all outstanding outreach; push for meetings this week | Charles (CEO) | Outreach follow-ups | All prospects contacted at least twice |
+   220→| **W6D2 (Tue)** | Freeze final Snapshot S5; compute Delta D4 (S5 - S4) and cumulative delta (S5 - S1) | Charles (CEO) | S5 + D4 + cumulative delta report | 5 snapshots + 4 deltas = complete pilot dataset |
+   221→| **W6D2** | Comprehensive data quality audit: Team Lead + Charles review sample of 50 POIs across all verticals | Charles (CEO) + Field Team Lead | Final audit report (50 POIs) | >85% accuracy across all verticals |
+   222→| **W6D3 (Wed)** | Compile pilot metrics dashboard: all KPIs from Section 4 aggregated over 6 weeks | Charles (CEO) | Pilot metrics report | All KPIs computed and documented |
+   223→| **W6D3** | Agent debrief sessions: 30 min individual interviews with each agent on experience, challenges, suggestions | Field Team Lead | Agent feedback summary | Feedback collected from all 3 agents |
+   224→| **W6D4 (Thu)** | Go/No-Go assessment: Charles evaluates pilot against framework in Section 8 | Charles (CEO) | Go/No-Go recommendation document | Clear recommendation with supporting data |
+   225→| **W6D4** | If GO: draft Phase 2 plan (expand to full Bonamoussadi + begin adjacent neighborhoods); begin agent retention conversations | Charles (CEO) + Field Team Lead | Phase 2 draft plan + agent retention status | Plan outlines next 3 months |
+   226→| **W6D4** | If NO-GO: document lessons learned; identify pivots; determine whether to restart, pivot scope, or pause | Charles (CEO) | Lessons learned document | Honest assessment with actionable next steps |
+   227→| **W6D5 (Fri)** | Final client outreach: share pilot results with all prospects in pipeline; schedule Phase 2 demo meetings | Charles (CEO) | Updated pipeline status | Pipeline documented with next steps per prospect |
+   228→| **W6D5** | Pilot closeout meeting: full team review of 6-week results | Charles (CEO) + Full Team | Pilot closeout report | Report completed and shared |
+   229→
+   230→**Week 6 Deliverables:**
+   231→- M5: Go/No-Go Decision
+   232→- Final Snapshot S5 + Delta D4 + cumulative delta
+   233→- 50-POI comprehensive audit
+   234→- Pilot metrics report
+   235→- Agent feedback summary
+   236→- Go/No-Go recommendation
+   237→- Phase 2 plan (if GO)
+   238→
+   239→**Week 6 Success Criteria:**
+   240→- All KPIs computed and evaluated against thresholds
+   241→- Go/No-Go decision made with data-backed justification
+   242→- Client pipeline status clear
+   243→- Team informed of next steps
+   244→
+   245→---
+   246→
+   247→## 2. Team Structure and Roles
+   248→
+   249→### 2.1 Organization Chart
+   250→
+   251→```
+   252→Charles Mahouve (CEO / Founder)
+   253→  Based: Lyon, France
+   254→  Available: Evenings CET (mornings Douala time overlap 8-10 AM WAT)
+   255→  │
+   256→  ├── Field Team Lead (Douala-based, full-time for pilot)
+   257→  │   ├── Field Agent 1 (Zone A + D rotation)
+   258→  │   ├── Field Agent 2 (Zone B primary)
+   259→  │   └── Field Agent 3 (Zone C primary)
+   260→  │
+   261→  └── [Future: Data Consumer / Client Support]
+   262→```
+   263→
+   264→### 2.2 Role Descriptions
+   265→
+   266→#### Charles Mahouve -- CEO / Founder / Technical Lead
+   267→
+   268→| Attribute | Detail |
+   269→|---|---|
+   270→| **Location** | Lyon, France (CET, UTC+1) |
+   271→| **Availability** | Evening CET = morning WAT overlap; async rest of day |
+   272→| **Responsibilities** | Technical platform (all code, deployments, infrastructure), admin review queue, data quality oversight, client outreach, commercial strategy, budget management, Go/No-Go decision |
+   273→| **Time Commitment** | ~30 hours/week during pilot (evenings + weekends) |
+   274→| **Key Deliverables** | Platform deployments, admin reviews, pitch decks, client meetings, pilot metrics, Go/No-Go report |
+   275→
+   276→#### Field Team Lead (to be hired)
+   277→
+   278→| Attribute | Detail |
+   279→|---|---|
+   280→| **Location** | Douala, Cameroon (must live in or near Bonamoussadi) |
+   281→| **Hiring Criteria** | University-educated (GIS, data, IT, or business preferred); fluent French + functional English; smartphone-literate; local knowledge of Bonamoussadi; leadership experience (managed 2+ people); available full-time for 6 weeks; trustworthy (references required) |
+   282→| **Compensation** | CFA 200,000/month (see Budget section) |
+   283→| **Responsibilities** | Agent recruitment and training, daily field supervision, quality spot-checks, zone assignment management, daily standup facilitation, agent performance tracking, issue escalation to Charles, local logistics (SIM cards, transport) |
+   284→| **Key Deliverables** | Trained agent team, daily standup notes, weekly audit reports, agent feedback summaries |
+   285→
+   286→#### Field Agents (3 agents)
+   287→
+   288→| Attribute | Detail |
+   289→|---|---|
+   290→| **Location** | Douala, Cameroon (Bonamoussadi or adjacent) |
+   291→| **Hiring Criteria** | Age 20-35; secondary school minimum; owns or can use a smartphone; knows Bonamoussadi geography; physically able to walk 8-15 km/day; available full-time for 6 weeks; no criminal record; references from community |
+   292→| **Compensation** | CFA 100,000/month base + CFA 20,000 transport allowance + performance bonus up to CFA 30,000 (see Budget) |
+   293→| **Daily Expectations** | 30-50 POI submissions/day; 8 AM - 5 PM field hours; daily sync before leaving field; photo for every submission; GPS accuracy <50m |
+   294→| **Key Deliverables** | POI submissions meeting quality standards |
+   295→
+   296→### 2.3 RACI Matrix
+   297→
+   298→| Activity | Charles (CEO) | Field Team Lead | Field Agents |
+   299→|---|---|---|---|
+   300→| Platform development/deployment | **R, A** | I | -- |
+   301→| Agent recruitment | C | **R, A** | -- |
+   302→| Agent training | C | **R, A** | I |
+   303→| Daily field supervision | I | **R, A** | -- |
+   304→| POI data capture | I | C | **R, A** |
+   305→| Daily standup facilitation | I | **R, A** | C |
+   306→| Admin review queue | **R, A** | C | I |
+   307→| Data quality spot-check audits | C | **R, A** | I |
+   308→| Weekly snapshot/delta computation | **R, A** | I | -- |
+   309→| Client outreach | **R, A** | C | -- |
+   310→| Pitch deck preparation | **R, A** | C | -- |
+   311→| Budget management | **R, A** | I | -- |
+   312→| Go/No-Go decision | **R, A** | C | I |
+   313→| Fraud investigation | **R, A** | C | I |
+   314→| Equipment procurement | **R, A** | C | -- |
+   315→| Zone assignment | C | **R, A** | I |
+   316→| Incident escalation | A | **R** | C |
+   317→
+   318→**Legend:** R = Responsible, A = Accountable, C = Consulted, I = Informed
+   319→
+   320→---
+   321→
+   322→## 3. Budget
+   323→
+   324→### 3.1 Detailed 6-Week Pilot Budget
+   325→
+   326→All amounts in CFA (XAF). Exchange rate reference: 1 USD ~ 615 CFA.
+   327→
+   328→#### Personnel Costs
+   329→
+   330→| Line Item | Unit Cost | Quantity | Duration | Total (CFA) | Notes |
+   331→|---|---|---|---|---|---|
+   332→| Field Team Lead salary | 200,000/month | 1 | 1.5 months | **300,000** | Includes W1 setup through W6 |
+   333→| Field Agent base salary | 100,000/month | 3 | 1.5 months | **450,000** | 3 agents x 1.5 months |
+   334→| Field Agent transport allowance | 20,000/month | 3 | 1.5 months | **90,000** | Moto-taxi costs to/from field zones |
+   335→| Field Agent performance bonus | up to 30,000/month | 3 | 1.5 months | **135,000** | Maximum; paid based on quality + volume KPIs |
+   336→| **Personnel Subtotal** | | | | **975,000** | ~$1,585 USD |
+   337→
+   338→#### Equipment Costs
+   339→
+   340→| Line Item | Unit Cost | Quantity | Total (CFA) | Notes |
+   341→|---|---|---|---|---|
+   342→| Android smartphones (Samsung A15 or Tecno Spark 20) | 75,000 | 4 | **300,000** | 3 agents + 1 Team Lead; reusable beyond pilot |
+   343→| Power banks (10,000 mAh) | 10,000 | 4 | **40,000** | Essential for all-day GPS + camera use |
+   344→| SIM cards with data plans (MTN/Orange, 5GB/month) | 5,000/month | 4 | **30,000** | 4 SIMs x 1.5 months |
+   345→| Phone cases / screen protectors | 3,000 | 4 | **12,000** | Protect field equipment from rain/drops |
+   346→| Branded ID badges / T-shirts | 3,000 | 5 | **15,000** | Professional appearance; community trust |
+   347→| Notebook + pen per agent | 500 | 5 | **2,500** | Backup for offline notes |
+   348→| **Equipment Subtotal** | | | **399,500** | ~$650 USD |
+   349→
+   350→#### Infrastructure Costs
+   351→
+   352→| Line Item | Monthly Cost | Duration | Total (CFA) | Notes |
+   353→|---|---|---|---|---|
+   354→| Vercel Pro plan | CFA 12,300 ($20) | 1.5 months | **18,450** | Current hosting |
+   355→| Neon PostgreSQL (Pro) | CFA 12,300 ($20) | 1.5 months | **18,450** | Database hosting |
+   356→| Vercel Blob storage | CFA 0 (included in Pro) | -- | **0** | Photo storage within Pro limits |
+   357→| Domain renewal (if needed) | CFA 6,150 | 1 | **6,150** | africandatalayer.com |
+   358→| Google Gemini API (search) | CFA 6,150 ($10 est.) | 1.5 months | **9,225** | AI-assisted search features |
+   359→| **Infrastructure Subtotal** | | | **52,275** | ~$85 USD |
+   360→
+   361→#### Operations Costs
+   362→
+   363→| Line Item | Cost | Total (CFA) | Notes |
+   364→|---|---|---|---|
+   365→| Training venue rental (half-day, W1D4) | 15,000 | **15,000** | Meeting room in Bonamoussadi |
+   366→| Printed training materials | 5,000 | **5,000** | Field guides, vertical reference sheets |
+   367→| Team Lead phone credit (calls to agents) | 5,000/month x 1.5 | **7,500** | Coordination calls |
+   368→| Weekly team meeting refreshments | 3,000/week x 5 | **15,000** | Tea/snacks for weekly reviews |
+   369→| Charles travel to Douala (if needed, 1 trip) | 350,000 | **350,000** | Lyon-Douala round trip; optional but budgeted |
+   370→| **Operations Subtotal** | | | **392,500** | ~$638 USD |
+   371→
+   372→#### Contingency
+   373→
+   374→| Line Item | Basis | Total (CFA) | Notes |
+   375→|---|---|---|---|
+   376→| 15% contingency on all costs | 15% x (975K + 399.5K + 52.3K + 392.5K) | **272,893** | Covers agent replacement, equipment failure, unexpected costs |
+   377→
+   378→### 3.2 Budget Summary
+   379→
+   380→| Category | Amount (CFA) | Amount (USD) | % of Total |
+   381→|---|---|---|---|
+   382→| Personnel | 975,000 | $1,585 | 46.5% |
+   383→| Equipment | 399,500 | $650 | 19.1% |
+   384→| Infrastructure | 52,275 | $85 | 2.5% |
+   385→| Operations | 392,500 | $638 | 18.7% |
+   386→| Contingency | 272,893 | $444 | 13.0% |
+   387→| **TOTAL** | **2,092,168** | **~$3,402** | **100%** |
+   388→
+   389→### 3.3 Per-Week Breakdown
+   390→
+   391→| Week | Personnel | Equipment | Infra | Ops | Total (CFA) |
+   392→|---|---|---|---|---|---|
+   393→| Week 1 | 162,500 | 399,500 | 8,713 | 377,500 | **948,213** |
+   394→| Week 2 | 162,500 | 0 | 8,713 | 3,000 | **174,213** |
+   395→| Week 3 | 162,500 | 0 | 8,713 | 3,000 | **174,213** |
+   396→| Week 4 | 162,500 | 0 | 8,713 | 3,000 | **174,213** |
+   397→| Week 5 | 162,500 | 0 | 8,713 | 3,000 | **174,213** |
+   398→| Week 6 | 162,500 | 0 | 8,713 | 3,000 | **174,213** |
+   399→| Contingency | -- | -- | -- | -- | **272,893** |
+   400→| **Total** | **975,000** | **399,500** | **52,275** | **392,500** | **2,092,168** |
+   401→
+   402→**Note:** Week 1 is front-loaded with equipment purchases and Charles's potential travel. Weeks 2-6 are steady-state at ~CFA 174K/week (~$283/week).
+   403→
+   404→---
+   405→
+   406→## 4. KPIs and Metrics
+   407→
+   408→### 4.1 Data Collection KPIs
+   409→
+   410→| KPI | Definition | Target (End of Pilot) | Measured |
+   411→|---|---|---|---|
+   412→| **Total POIs Captured** | Unique point_events with CREATE_EVENT | >700 | Weekly |
+   413→| **Coverage %** | POIs captured / estimated POIs per vertical (from Teammate 1 estimates) | >80% for P0 verticals, >60% for P1, >40% for P2 | Weekly |
+   414→| **Submission Quality Score** | % of submissions with: GPS <50m accuracy + photo present + all required fields complete | >85% | Daily |
+   415→| **Enrichment Rate** | % of baseline POIs with at least 1 ENRICH_EVENT | >40% | Weekly |
+   416→| **Vertical Coverage Balance** | Each vertical has at least 60% of its estimated POI count | 5 of 7 verticals at 60%+ | Weekly |
+   417→| **Zone Coverage Balance** | Each zone has at least 70% of its estimated POI count | All 4 zones at 70%+ | Weekly |
+   418→
+   419→### 4.2 Operational KPIs
+   420→
+   421→| KPI | Definition | Target | Measured |
+   422→|---|---|---|---|
+   423→| **Agent Productivity** | Submissions per agent per day | 30-50 | Daily |
+   424→| **Sync Success Rate** | Successful syncs / total sync attempts | >95% | Daily |
+   425→| **Admin Review Turnaround** | Time from submission to admin approve/reject | <48 hours | Daily |
+   426→| **Review Backlog** | Submissions awaiting review | <100 at any point | Daily |
+   427→| **Agent Attendance** | Days each agent is active / scheduled days | >90% | Weekly |
+   428→| **System Uptime** | Platform availability during field hours (7 AM - 6 PM WAT) | >99% | Daily |
+   429→| **Snapshot Freeze Success** | Weekly snapshots computed without error | 5/5 | Weekly |
+   430→
+   431→### 4.3 Commercial KPIs
+   432→
+   433→| KPI | Definition | Target | Measured |
+   434→|---|---|---|---|
+   435→| **Outreach Messages Sent** | Emails/WhatsApp to target accounts | >10 | Weekly (W5-W6) |
+   436→| **Meetings Booked** | Confirmed meetings with prospects | >2 | Weekly (W5-W6) |
+   437→| **Meetings Completed** | Meetings held with data demo | >1 | End of pilot |
+   438→| **Pipeline Value** | Sum of estimated annual value of prospects in pipeline | >CFA 10M | End of pilot |
+   439→| **Pilot Interest Letters** | Written expressions of interest from prospects | >1 | End of pilot |
+   440→| **Data Samples Delivered** | Personalized data samples sent to prospects | >5 | End of pilot |
+   441→
+   442→### 4.4 Quality KPIs
+   443→
+   444→| KPI | Definition | Target | Measured |
+   445→|---|---|---|---|
+   446→| **Fraud Flag Rate** | Submissions flagged by fraud detection / total submissions | <10% | Weekly |
+   447→| **Fraud Confirmed Rate** | Confirmed fraud / flagged submissions | <20% of flagged | Weekly |
+   448→| **False Positive Rate** | Non-fraud submissions incorrectly flagged / total flagged | <50% | Weekly |
+   449→| **Audit Accuracy** | Spot-check verified POIs matching field reality / total audited | >85% | Weekly (W3-W6) |
+   450→| **Photo Quality Pass Rate** | Submissions with usable photo (in focus, correct subject, readable) | >90% | Weekly |
+   451→| **GPS Accuracy Distribution** | % of submissions with GPS accuracy <30m | >80% | Weekly |
+   452→| **Duplicate Detection Rate** | Duplicate submissions caught by dedup / total duplicates | >90% | Weekly |
+   453→
+   454→### 4.5 Weekly Dashboard Design
+   455→
+   456→```
+   457→┌─────────────────────────────────────────────────────────────────────┐
+   458→│  ADL PILOT DASHBOARD -- WEEK [N] of 6                              │
+   459→│  Period: [Date Range]          Last Updated: [Timestamp]           │
+   460→├─────────────────────────────────────────────────────────────────────┤
+   461→│                                                                     │
+   462→│  COLLECTION SUMMARY                                                 │
+   463→│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────┐│
+   464→│  │ Total POIs   │ │ New This Week│ │ Enrichments  │ │ Coverage % ││
+   465→│  │     ###      │ │     ###      │ │     ###      │ │    ##%     ││
+   466→│  └──────────────┘ └──────────────┘ └──────────────┘ └────────────┘│
+   467→│                                                                     │
+   468→│  VERTICAL BREAKDOWN          │  ZONE BREAKDOWN                     │
+   469→│  ┌───────────────────────┐   │  ┌───────────────────────┐          │
+   470→│  │ Roads:       ## / ##  │   │  │ Zone A:     ## POIs   │          │
+   471→│  │ MoMo:        ## / ##  │   │  │ Zone B:     ## POIs   │          │
+   472→│  │ Fuel:        ## / ##  │   │  │ Zone C:     ## POIs   │          │
+   473→│  │ Pharmacy:    ## / ##  │   │  │ Zone D:     ## POIs   │          │
+   474→│  │ Alcohol:     ## / ##  │   │  └───────────────────────┘          │
+   475→│  │ Billboards:  ## / ##  │   │                                     │
+   476→│  │ Census:      ## / ##  │   │  AGENT PRODUCTIVITY                 │
+   477→│  └───────────────────────┘   │  ┌───────────────────────┐          │
+   478→│                               │  │ Agent 1:  ##/day avg  │          │
+   479→│  QUALITY METRICS              │  │ Agent 2:  ##/day avg  │          │
+   480→│  ┌───────────────────────┐   │  │ Agent 3:  ##/day avg  │          │
+   481→│  │ Quality Score:   ##%  │   │  │ Team Lead: ##/day avg │          │
+   482→│  │ Fraud Flags:     ##%  │   │  └───────────────────────┘          │
+   483→│  │ Audit Accuracy:  ##%  │   │                                     │
+   484→│  │ Sync Success:    ##%  │   │  COMMERCIAL PIPELINE                │
+   485→│  │ GPS <30m:        ##%  │   │  ┌───────────────────────┐          │
+   486→│  │ Review Backlog:  ###  │   │  │ Outreach:     ##      │          │
+   487→│  └───────────────────────┘   │  │ Meetings:     ##      │          │
+   488→│                               │  │ Pipeline: CFA ##M    │          │
+   489→│  DELTA SUMMARY (vs prev wk)  │  │ Interest:     ##      │          │
+   490→│  ┌───────────────────────┐   │  └───────────────────────┘          │
+   491→│  │ New POIs:        +##  │   │                                     │
+   492→│  │ Changed:         +##  │   │  ALERTS                             │
+   493→│  │ Removed:          -## │   │  ┌───────────────────────┐          │
+   494→│  │ Anomalies:        ##  │   │  │ [!] Issue description │          │
+   495→│  └───────────────────────┘   │  │ [!] Issue description │          │
+   496→│                               │  └───────────────────────┘          │
+   497→├─────────────────────────────────────────────────────────────────────┤
+   498→│  TREND CHARTS (sparklines over pilot weeks)                        │
+   499→│  POIs/week:    [___/--/```]    Quality:  [___/--/```]              │
+   500→│  Agents/day:   [___/--/```]    Sync:     [___/--/```]              │
+   501→└─────────────────────────────────────────────────────────────────────┘
+   502→```
+   503→
+   504→---
+   505→
+   506→## 5. Dependencies and Critical Path
+   507→
+   508→### 5.1 Dependency Map
+   509→
+   510→```
+   511→DEPENDENCY GRAPH
+   512→================
+   513→
+   514→[D1] Platform Deployments (RBAC, verticals, fraud detection)
+   515→  │
+   516→  ├──> [D2] Equipment Procurement (phones, SIMs, power banks)
+   517→  │     │
+   518→  │     └──> [D4] Agent Training (requires phones + working platform)
+   519→  │           │
+   520→  │           └──> [D6] Test Day (requires trained agents + working platform)
+   521→  │                 │
+   522→  │                 └──> [D7] Baseline Capture Start (W2D1)
+   523→  │                       │
+   524→  │                       ├──> [D8] Snapshot S1 (requires baseline data)
+   525→  │                       │     │
+   526→  │                       │     └──> [D9] Delta D1 (requires S1 + S2)
+   527→  │                       │           │
+   528→  │                       │           └──> [D10] Data Samples (requires delta data)
+   529→  │                       │                 │
+   530→  │                       │                 └──> [D11] Client Outreach (requires samples)
+   531→  │                       │                       │
+   532→  │                       │                       └──> [D12] Client Meetings
+   533→  │                       │
+   534→  │                       └──> [D13] First Audit (requires baseline POIs to verify)
+   535→  │
+   536→  └──> [D3] Team Lead Hire (requires job posting + interviews)
+   537→        │
+   538→        └──> [D5] Agent Recruitment (requires Team Lead)
+   539→              │
+   540→              └──> [D4] Agent Training (requires recruited agents)
+   541→
+   542→PARALLEL TRACKS:
+   543→  D1 (tech) ║ D3 (hiring) -- can run simultaneously W1D1-D3
+   544→  D2 (procurement) ║ D3 (hiring) -- can run simultaneously
+   545→  D7 (baseline) ║ admin review -- continuous parallel operation
+   546→```
+   547→
+   548→### 5.2 Critical Path
+   549→
+   550→The critical path is the longest sequence of dependent activities:
+   551→
+   552→```
+   553→CRITICAL PATH (determines minimum pilot duration):
+   554→
+   555→D3 (Team Lead Hire) ──> D5 (Agent Recruit) ──> D4 (Training) ──> D6 (Test Day)
+   556→──> D7 (Baseline Start) ──> D8 (S1 Snapshot) ──> D9 (Delta D1) ──> D10 (Samples)
+   557→──> D11 (Outreach) ──> D12 (Meetings) ──> Go/No-Go
+   558→
+   559→Duration: W1D1 ──────────────────────────────────────────────────────> W6D4
+   560→          April 14                                                     May 22
+   561→
+   562→Critical path items that cannot slip without delaying the pilot:
+   563→  - Team Lead hire (W1D1-D3): 3 days. If delayed, everything shifts.
+   564→  - Agent training (W1D4): 1 day. If delayed, baseline starts late.
+   565→  - Baseline capture (W2): 5 days. If incomplete, deltas are meaningless.
+   566→  - First snapshot (W2D5): Must happen to enable delta computation.
+   567→  - Client outreach (W5): Must happen with enough data to be credible.
+   568→```
+   569→
+   570→### 5.3 Parallel Workstreams
+   571→
+   572→```
+   573→WORKSTREAM 1: TECHNICAL (Charles)
+   574→W1: Deploy verticals + fraud detection + RBAC
+   575→W2: Admin review queue processing
+   576→W3: Delta computation + data sample preparation
+   577→W4: Bug fixes + pitch deck preparation
+   578→W5: Client outreach + meetings
+   579→W6: Metrics compilation + Go/No-Go analysis
+   580→
+   581→WORKSTREAM 2: FIELD OPERATIONS (Team Lead + Agents)
+   582→W1: Hiring + training + test day
+   583→W2: Baseline capture (all zones, all verticals)
+   584→W3: Enrichment + gap-fill + first audit
+   585→W4: Continued collection + night capture test + second audit
+   586→W5: Steady-state collection + third audit
+   587→W6: Final push + comprehensive audit + agent debriefs
+   588→
+   589→WORKSTREAM 3: COMMERCIAL (Charles, starts W3)
+   590→W3: Prepare data samples
+   591→W4: Prepare pitch decks
+   592→W5: Outreach + meetings
+   593→W6: Pipeline assessment + follow-up
+   594→```
+   595→
+   596→### 5.4 Gantt Chart
+   597→
+   598→```
+   599→ACTIVITY                        W1          W2          W3          W4          W5          W6
+   600→                                D1 D2 D3 D4 D5 D1 D2 D3 D4 D5 D1 D2 D3 D4 D5 D1 D2 D3 D4 D5 D1 D2 D3 D4 D5 D1 D2 D3 D4
+   601→──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   602→TECHNICAL
+   603→  Deploy RBAC + verticals       ████████
+   604→  Deploy fraud detection           ████
+   605→  Deploy GPS integrity             ████
+   606→  DB monitoring setup                       ██
+   607→  Bug fixes                                                            ████
+   608→  Snapshot/delta computation                    ██          ██          ██          ██          ██
+   609→
+   610→HIRING & TRAINING
+   611→  Team Lead hire                ██████
+   612→  Agent recruitment                ██████
+   613→  Agent training                         ████
+   614→  Test day                                   ██
+   615→
+   616→FIELD OPERATIONS
+   617→  Baseline capture                          ██████████████████████████
+   618→  Enrichment collection                                    ██████████████████████████████████████████████████
+   619→  Gap-fill collection                                      ████████████████████████████████
+   620→  Night capture test                                                   ████
+   621→  Audit #1 (10 POIs)                                          ████
+   622→  Audit #2 (10 POIs)                                                      ████
+   623→  Audit #3 (15 POIs)                                                                 ████
+   624→  Audit #4 (50 POIs)                                                                            ████
+   625→  Agent debriefs                                                                                   ████
+   626→
+   627→COMMERCIAL
+   628→  Data sample preparation                                  ████████
+   629→  Pitch deck creation                                                  ████████
+   630→  Tier 1 outreach                                                                ████████
+   631→  Tier 2 outreach                                                                   ████████
+   632→  Client meetings                                                                      ████████████████
+   633→  Pipeline assessment                                                                               ████
+   634→
+   635→GOVERNANCE
+   636→  Daily standups               .................................................................(daily)
+   637→  Weekly reviews                         ██          ██          ██          ██          ██
+   638→  Milestone reviews                      M1    M2         M3                   M4              M5
+   639→
+   640→DECISION
+   641→  Go/No-Go assessment                                                                           ████████
+   642→```
+   643→
+   644→---
+   645→
+   646→## 6. RAID Log
+   647→
+   648→### 6.1 Risks
+   649→
+   650→| ID | Risk | Probability | Impact | Score | Mitigation | Owner | Status |
+   651→|---|---|---|---|---|---|---|---|
+   652→| R01 | **Cannot hire qualified Team Lead by W1D3** | Medium | High | 12 | Pre-screen candidates before pilot start; have backup candidate identified; Charles can remotely manage W1 if needed | Charles | Open |
+   653→| R02 | **Field agents produce low-quality data** | Medium | High | 12 | Structured training W1D4; test day W1D5 with quality gate; daily Team Lead supervision; progressive disclosure UI (Teammate 8) | Field Team Lead | Open |
+   654→| R03 | **GPS spoofing by agents** | High | Critical | 20 | Multi-layered GPS detection (Teammate 6); EXIF cross-validation; velocity checks; spot-check audits; XP withheld until review | Charles | Open |
+   655→| R04 | **Agent attrition during pilot** | Medium | Medium | 8 | Competitive pay (CFA 120-150K/month total); performance bonuses; gamification (XP, leaderboard); community building | Field Team Lead | Open |
+   656→| R05 | **Connectivity issues during field capture** | High | Medium | 10 | Offline-first architecture (IndexedDB queue); sync status bar always visible; agents trained to sync on WiFi; no data loss by design | Charles | Mitigated |
+   657→| R06 | **Rainy season early onset disrupts fieldwork** | Low | Medium | 4 | Pilot starts April (dry season); rainy season typically June; if early rain, pivot to road condition data (highest value during rain) | Field Team Lead | Open |
+   658→| R07 | **Phone theft or damage in field** | Medium | Low | 4 | Budget includes phone cases; agents carry equipment home; 15% contingency covers replacement; agents sign equipment agreement | Field Team Lead | Open |
+   659→| R08 | **Zero client meetings by end of W6** | Medium | High | 12 | Start outreach W5D1 (not later); use free data samples as hook; leverage Yannick Lefang's network; target 10+ outreach messages | Charles | Open |
+   660→| R09 | **Admin review bottleneck (Charles alone)** | High | Medium | 10 | Batch approval for low-risk submissions; auto-approve submissions from high-trust agents (trust score >80); prioritize fraud-flagged only | Charles | Open |
+   661→| R10 | **Data protection compliance risk** | Low | Critical | 10 | Consent flow deployed W1D4 (Teammate 5); no PII collection beyond business names; photos of storefronts (public spaces); register as data controller before June 2026 deadline | Charles | Open |
+   662→| R11 | **Platform downtime during field hours** | Low | High | 6 | Offline-first design; Vercel 99.9% SLA; Neon monitoring alerts; agents can work offline indefinitely | Charles | Mitigated |
+   663→| R12 | **Fraud detection false positives frustrate agents** | Medium | Medium | 8 | Low-end device exceptions for GPS accuracy; gradual tuning of thresholds based on W2 data; transparent feedback to agents on quality | Charles | Open |
+   664→| R13 | **Insufficient POI density to demonstrate value** | Low | High | 6 | Teammate 1 estimates 375-615 POIs in Bonamoussadi; even 400 POIs across 7 verticals is commercially meaningful | Charles | Open |
+   665→| R14 | **Budget overrun** | Low | Medium | 4 | 15% contingency budgeted; weekly expense tracking; no variable costs beyond personnel and data plans | Charles | Open |
+   666→| R15 | **Charles unavailable due to personal emergency** | Low | Critical | 10 | Document all platform access credentials; Team Lead trained to manage field ops independently for 1 week; snapshot cron is automated | Charles | Open |
+   667→| R16 | **Competitor launches similar product in Douala** | Very Low | High | 3 | ADL's head start with ground-truth data is the moat; 6-week pilot creates dataset no competitor has; focus on execution speed | Charles | Open |
+   668→| R17 | **Community resistance to data collectors in neighborhood** | Low | Medium | 4 | Branded ID badges; agents explain ADL mission; no personal data collected; photos of public storefronts only; Team Lead handles escalations | Field Team Lead | Open |
+   669→
+   670→### 6.2 Actions
+   671→
+   672→| ID | Action | Owner | Deadline | Status |
+   673→|---|---|---|---|---|
+   674→| A01 | Post Field Team Lead job ad in Douala networks (WhatsApp groups, LinkedIn, university boards) | Charles | W1D1 (April 14) | Not Started |
+   675→| A02 | Purchase 4 Android phones + power banks + SIM cards | Charles | W1D1 (April 14) | Not Started |
+   676→| A03 | Deploy RBAC migration to production database | Charles | W1D1 (April 14) | Not Started |
+   677→| A04 | Deploy transport_road + census_proxy vertical schemas | Charles | W1D2 (April 15) | Not Started |
+   678→| A05 | Deploy GPS integrity module (client-side) | Charles | W1D2 (April 15) | Not Started |
+   679→| A06 | Deploy velocity check + photo hash dedup (server-side) | Charles | W1D2 (April 15) | Not Started |
+   680→| A07 | Deploy consent collection flow | Charles | W1D4 (April 17) | Not Started |
+   681→| A08 | Define Bonamoussadi 4-zone grid with GPS boundaries | Charles + Team Lead | W1D3 (April 16) | Not Started |
+   682→| A09 | Create field agent training manual (2 pages, French, with screenshots) | Charles | W1D3 (April 16) | Not Started |
+   683→| A10 | Set up database monitoring alerts (Neon dashboard) | Charles | W1D5 (April 18) | Not Started |
+   684→| A11 | Create weekly dashboard template (spreadsheet or Notion) | Charles | W2D1 (April 21) | Not Started |
+   685→| A12 | Prepare "Bonamoussadi Data Sample" template for client outreach | Charles | W4D3 (May 7) | Not Started |
+   686→| A13 | Register ADL as vendor with World Bank procurement system | Charles | W4D5 (May 9) | Not Started |
+   687→| A14 | Draft client outreach email/WhatsApp templates per vertical | Charles | W4D5 (May 9) | Not Started |
+   688→| A15 | Begin data controller registration under Law 2024/017 | Charles | W6D5 (May 22) | Not Started |
+   689→
+   690→### 6.3 Issues
+   691→
+   692→| ID | Issue | Severity | Description | Resolution Needed By | Owner | Status |
+   693→|---|---|---|---|---|---|---|
+   694→| I01 | **No RBAC beyond `isAdmin` boolean** | High | Current system has only admin/non-admin distinction. Field agents, team lead, and data consumers need distinct roles. | W1D1 | Charles | Open |
+   695→| I02 | **transport_road and census_proxy verticals not in production** | High | System currently has 6 verticals (pharmacy, fuel, mobile_money, alcohol, billboard, retail_kiosk). Need 7 for pilot. | W1D2 | Charles | Open |
+   696→| I03 | **No batch approval in admin queue** | Medium | Charles will be sole reviewer; reviewing 100+ submissions one-by-one is unsustainable. | W2D1 | Charles | Open |
+   697→| I04 | **No agent assignment/zone system** | Medium | Current system has no concept of assigning agents to zones. Team Lead manages this manually via WhatsApp for pilot. | W1D3 (manual workaround) | Field Team Lead | Open |
+   698→| I05 | **No French-language field training materials** | Medium | App supports FR/EN but no printed training guide exists for field agents. | W1D3 | Charles | Open |
+   699→| I06 | **No automated weekly dashboard** | Low | KPI tracking is manual for pilot. Acceptable for 6 weeks but not scalable. | W2D1 (manual template) | Charles | Open |
+   700→
+   701→### 6.4 Decisions
+   702→
+   703→| ID | Decision Needed | Options | Recommended | Deadline | Decision Maker | Status |
+   704→|---|---|---|---|---|---|---|
+   705→| DC01 | **Which phone model to buy for agents?** | (a) Samsung A15 (~CFA 75K, reliable) (b) Tecno Spark 20 (~CFA 60K, cheaper) (c) Agents use own phones + stipend | (a) Samsung A15 -- reliable GPS, good camera, reusable | W1D1 | Charles | Pending |
+   706→| DC02 | **Should Charles travel to Douala for W1?** | (a) Yes, in-person setup (b) No, remote via video calls | (b) Remote for W1; travel only if issues arise by W3. Saves CFA 350K. | W1D1 | Charles | Pending |
+   707→| DC03 | **Agent compensation structure** | (a) Fixed salary only (b) Base + performance bonus (c) Per-submission payment | (b) Base CFA 100K + transport CFA 20K + bonus up to CFA 30K. Motivates quality without incentivizing pure volume. | W1D1 | Charles | Pending |
+   708→| DC04 | **How to handle the admin review bottleneck?** | (a) Charles reviews all (b) Auto-approve low-risk, manual review flagged only (c) Train Team Lead as reviewer | (b) Auto-approve submissions with fraud score <20 and confidence >70; manual review the rest. Revisit in W3 based on volume. | W2D1 | Charles | Pending |
+   709→| DC05 | **Free pilot or paid from first client?** | (a) Offer free pilot to first 3 prospects (b) Charge Starter tier from day 1 (c) Free data sample, then paid | (c) Free one-page data sample as hook; charge for ongoing subscription. No free pilots longer than 1 week. | W5D1 | Charles | Pending |
+   710→| DC06 | **Should agents work evenings for alcohol vertical?** | (a) Yes, 5-9 PM shifts (b) No, daytime only for safety (c) Team Lead + 1 agent only, limited evening test | (c) Limited test in W4 with Team Lead + 1 agent only. Safety first. Evaluate before scaling. | W4D2 | Charles + Team Lead | Pending |
+   711→| DC07 | **Go/No-Go decision authority** | (a) Charles alone (b) Charles + advisor consultation (c) Board/investor approval needed | (a) Charles alone, with Team Lead input and advisor consultation (Yannick Lefang) for perspective. | W6D4 | Charles | Pending |
+   712→
+   713→---
+   714→
+   715→## 7. Governance Cadence
+   716→
+   717→### 7.1 Daily Standups (Field Team)
+   718→
+   719→| Attribute | Detail |
+   720→|---|---|
+   721→| **Frequency** | Daily, Monday-Friday |
+   722→| **Time** | 8:00 AM WAT (7:00 AM CET) |
+   723→| **Duration** | 15 minutes maximum |
+   724→| **Participants** | Field Team Lead + all Field Agents |
+   725→| **Format** | WhatsApp voice call or in-person (if agents start from same location) |
+   726→| **Agenda** | (1) Yesterday: how many submissions? Any issues? (2) Today: which zone/vertical? (3) Blockers: anything preventing work? |
+   727→| **Output** | Team Lead sends daily standup summary to Charles via WhatsApp by 8:30 AM WAT |
+   728→
+   729→**Daily Standup Summary Template (WhatsApp message from Team Lead to Charles):**
+   730→
+   731→```
+   732→ADL Daily - [Date]
+   733→Agents active: [#/3]
+   734→Yesterday total: [## submissions]
+   735→  - Agent 1: ## (Zone [X])
+   736→  - Agent 2: ## (Zone [X])
+   737→  - Agent 3: ## (Zone [X])
+   738→  - Team Lead: ## (Zone [X])
+   739→Quality issues: [none / describe]
+   740→Sync issues: [none / describe]
+   741→Today's plan: [zones/verticals]
+   742→Blockers: [none / describe]
+   743→```
+   744→
+   745→### 7.2 Weekly Reviews (Full Team)
+   746→
+   747→| Attribute | Detail |
+   748→|---|---|
+   749→| **Frequency** | Weekly, Friday afternoon |
+   750→| **Time** | 4:00 PM WAT (3:00 PM CET) |
+   751→| **Duration** | 45-60 minutes |
+   752→| **Participants** | Charles (CEO) + Field Team Lead + Field Agents (optional) |
+   753→| **Format** | Video call (Google Meet or WhatsApp video) |
+   754→| **Agenda** | (1) Week metrics review (dashboard from 4.5) (2) Quality deep-dive (audit results, fraud flags) (3) Agent feedback (4) Process improvements (5) Next week plan |
+   755→| **Output** | Charles publishes weekly report to shared folder within 24 hours |
+   756→
+   757→**Weekly Review Agenda (detailed):**
+   758→
+   759→```
+   760→1. METRICS (10 min)
+   761→   - POIs this week: ## (cumulative: ##)
+   762→   - Coverage % by vertical
+   763→   - Agent productivity trends
+   764→   - Quality score trend
+   765→
+   766→2. QUALITY (10 min)
+   767→   - Fraud flags this week: ## (## confirmed)
+   768→   - Audit results (if audit week)
+   769→   - Specific quality issues to address
+   770→
+   771→3. AGENT FEEDBACK (10 min)
+   772→   - What worked well?
+   773→   - What was difficult?
+   774→   - Equipment/tool issues?
+   775→   - Safety concerns?
+   776→
+   777→4. PROCESS (10 min)
+   778→   - What should we change next week?
+   779→   - Any protocol adjustments?
+   780→   - Training needs?
+   781→
+   782→5. NEXT WEEK PLAN (10 min)
+   783→   - Zone assignments
+   784→   - Vertical focus
+   785→   - Special activities (audits, night capture, etc.)
+   786→   - Outreach activities (Charles)
+   787→```
+   788→
+   789→### 7.3 Milestone Reviews
+   790→
+   791→| Milestone | When | Participants | Purpose |
+   792→|---|---|---|---|
+   793→| **M1: Infrastructure Ready** | W1D5 (April 18) | Charles + Team Lead | Verify all tech deployments work; confirm team is ready |
+   794→| **M2: Baseline Complete** | W2D5 (April 25) | Charles + Team Lead | Review baseline coverage; assess data quality; freeze S1 |
+   795→| **M3: First Delta Published** | W3D5 (May 2) | Charles + Team Lead | Validate delta computation; review first data sample |
+   796→| **M4: First Client Meeting** | W5D4 (May 15, target) | Charles | Assess client reception; gather prospect feedback |
+   797→| **M5: Go/No-Go Decision** | W6D4 (May 21) | Charles (+ advisor) | Evaluate pilot against Go/No-Go framework |
+   798→
+   799→### 7.4 Escalation Procedures
+   800→
+   801→```
+   802→ESCALATION LEVELS
+   803→=================
+   804→
+   805→Level 1: FIELD (Team Lead resolves)
+   806→  - Agent questions about data capture
+   807→  - Minor equipment issues (power bank dead, SIM data used up)
+   808→  - Zone access issues (road blocked, area inaccessible)
+   809→  - Agent interpersonal issues
+   810→  Response time: Same day
+   811→
+   812→Level 2: PLATFORM (Charles resolves)
+   813→  - Sync failures affecting multiple agents
+   814→  - App crashes or bugs
+   815→  - Fraud flag disputes (agent claims false positive)
+   816→  - Database issues
+   817→  Response time: <12 hours (next available CET evening)
+   818→
+   819→Level 3: OPERATIONAL (Charles + Team Lead jointly)
+   820→  - Agent dismissal decision
+   821→  - Safety incident in the field
+   822→  - Community complaint about data collection
+   823→  - Equipment theft/loss
+   824→  Response time: <24 hours
+   825→
+   826→Level 4: STRATEGIC (Charles decision)
+   827→  - Pilot scope change (add/remove verticals)
+   828→  - Budget reallocation
+   829→  - Client pricing decisions
+   830→  - Go/No-Go decision
+   831→  Response time: <48 hours
+   832→
+   833→ESCALATION CHANNEL: WhatsApp (primary), Email (secondary for documentation)
+   834→EMERGENCY: Phone call to Charles regardless of time zone
+   835→```
+   836→
+   837→### 7.5 Reporting Templates
+   838→
+   839→**Weekly Report Template (Charles produces after weekly review):**
+   840→
+   841→```
+   842→========================================
+   843→ADL BONAMOUSSADI PILOT - WEEK [N] REPORT
+   844→Period: [Date] to [Date]
+   845→========================================
+   846→
+   847→EXECUTIVE SUMMARY
+   848→[2-3 sentences on week's highlights and concerns]
+   849→
+   850→DATA COLLECTION
+   851→  Total POIs (cumulative):     ### (target: ###)
+   852→  New POIs this week:          ###
+   853→  Enrichments this week:       ###
+   854→  Coverage by vertical:
+   855→    Roads:       ##/## (##%)
+   856→    Mobile Money: ##/## (##%)
+   857→    Fuel:        ##/## (##%)
+   858→    Pharmacy:    ##/## (##%)
+   859→    Alcohol:     ##/## (##%)
+   860→    Billboards:  ##/## (##%)
+   861→    Census:      ##/## (##%)
+   862→
+   863→QUALITY
+   864→  Submission quality score:    ##%
+   865→  Fraud flag rate:             ##%
+   866→  Audit accuracy (if done):    ##%
+   867→  GPS <30m rate:               ##%
+   868→
+   869→OPERATIONS
+   870→  Agent productivity (avg/day): ##
+   871→  Sync success rate:            ##%
+   872→  Review backlog:               ###
+   873→  Agent attendance:             ##%
+   874→
+   875→COMMERCIAL (W5-W6 only)
+   876→  Outreach sent:               ##
+   877→  Meetings scheduled:          ##
+   878→  Pipeline value:              CFA ##M
+   879→
+   880→ISSUES & RISKS
+   881→  [List any new issues or escalated risks]
+   882→
+   883→ACTIONS FOR NEXT WEEK
+   884→  [List planned activities]
+   885→
+   886→BUDGET
+   887→  Spent this week:             CFA ###,###
+   888→  Cumulative spend:            CFA ###,###
+   889→  Remaining budget:            CFA ###,###
+   890→========================================
+   891→```
+   892→
+   893→---
+   894→
+   895→## 8. Go/No-Go Decision Framework
+   896→
+   897→### 8.1 Decision Date: W6D4 (May 21, 2026)
+   898→
+   899→The Go/No-Go decision determines whether ADL proceeds to Phase 2 (expanded collection, first paid customers) or pauses/pivots.
+   900→
+   901→### 8.2 Minimum Success Criteria for "GO"
+   902→
+   903→ALL of the following must be met to proceed:
+   904→
+   905→| # | Criterion | Threshold | Rationale |
+   906→|---|---|---|---|
+   907→| 1 | **Total POIs captured** | >= 500 | Minimum dataset size to demonstrate value across verticals |
+   908→| 2 | **P0 vertical coverage** (Roads + MoMo) | >= 70% of estimated POIs | Core product verticals must be substantially complete |
+   909→| 3 | **Audit accuracy** | >= 80% | Data must be trustworthy; below 80% = unreliable product |
+   910→| 4 | **Deltas computed** | >= 3 weekly deltas (D1, D2, D3) | Must prove the system can track change over time |
+   911→| 5 | **Agent team functional** | >= 2 agents active at pilot end | Must have retained enough team to continue operations |
+   912→| 6 | **Client outreach initiated** | >= 5 prospects contacted | Must have started commercial validation |
+   913→| 7 | **Platform stability** | Zero data loss incidents | Data integrity is non-negotiable for a data company |
+   914→
+   915→### 8.3 Decision Matrix
+   916→
+   917→| Outcome | Criteria Met | Commercial Signal | Action |
+   918→|---|---|---|---|
+   919→| **STRONG GO** | All 7 criteria met + >=1 client meeting completed + prospect expresses purchase intent | At least 1 prospect willing to pay or sign LOI | Proceed to Phase 2: expand to full Bonamoussadi + adjacent neighborhoods; hire 2 more agents; target first paid contract within 30 days |
+   920→| **CONDITIONAL GO** | All 7 criteria met + outreach sent but no meeting yet OR meeting held but no clear purchase intent | Prospects engaged but not yet converting | Proceed to Phase 2 with reduced scope: maintain current team; focus on top 3 verticals only; intensify commercial outreach for 30 more days; set new Go/No-Go at Week 10 |
+   921→| **PIVOT** | 5-6 of 7 criteria met OR audit accuracy 70-80% OR agent retention issues | Commercial interest exists but data quality or operations need improvement | Pause field collection for 2 weeks; fix identified issues; retrain agents; restart with improved processes; re-evaluate at Week 10 |
+   922→| **STOP** | <5 criteria met OR audit accuracy <70% OR data loss incident OR zero commercial interest | No prospects engaged; data quality fundamentally poor | Stop pilot; document lessons learned; reassess product-market fit; consider different pilot geography or vertical focus |
+   923→
+   924→### 8.4 What "Good" Looks Like vs. "Not Good Enough"
+   925→
+   926→| Dimension | "Good" (Strong GO) | "Acceptable" (Conditional GO) | "Not Good Enough" (Pivot/Stop) |
+   927→|---|---|---|---|
+   928→| **Data Volume** | 700+ POIs, all verticals represented | 500-700 POIs, 5+ verticals | <500 POIs or 3+ verticals missing |
+   929→| **Data Quality** | >90% audit accuracy, <5% fraud rate | 80-90% accuracy, 5-10% fraud | <80% accuracy or >10% confirmed fraud |
+   930→| **Agent Performance** | 3/3 agents active, >35 submissions/day avg | 2/3 agents active, >25 submissions/day | <2 agents active or <20 submissions/day |
+   931→| **Delta System** | Deltas clearly show real-world changes; z-scores flag genuine anomalies | Deltas compute correctly but changes are minimal (may be a data issue vs. real stasis) | Deltas compute with errors or show no meaningful patterns |
+   932→| **Commercial** | 1+ meeting with real data shown; prospect says "I would pay for this" | Outreach sent; 1+ prospect replied positively but no meeting yet | Zero responses to outreach; or responses are "not interested" |
+   933→| **Technical** | Platform stable; sync >99%; no data loss; all fraud checks operational | Minor sync issues (<5% failure); 1-2 non-critical bugs | Sync failures >5%; data loss event; critical bugs |
+   934→| **Team** | Team Lead effective; agents motivated; clear communication | Team Lead adequate; some agent motivation issues; communication gaps | Team Lead underperforming; agents disengaged; communication broken |
+   935→| **Budget** | Spent within 90-100% of plan | Spent within 100-115% of plan (within contingency) | Spent >115% of plan (exceeded contingency) |
+   936→
+   937→### 8.5 Go/No-Go Report Template
+   938→
+   939→```
+   940→============================================
+   941→ADL BONAMOUSSADI PILOT - GO/NO-GO ASSESSMENT
+   942→Date: [May 21, 2026]
+   943→Author: Charles Mahouve, CEO
+   944→============================================
+   945→
+   946→RECOMMENDATION: [STRONG GO / CONDITIONAL GO / PIVOT / STOP]
+   947→
+   948→CRITERIA ASSESSMENT:
+   949→  1. Total POIs:           ### (threshold: 500) [PASS/FAIL]
+   950→  2. P0 coverage:          ##% (threshold: 70%) [PASS/FAIL]
+   951→  3. Audit accuracy:       ##% (threshold: 80%) [PASS/FAIL]
+   952→  4. Deltas computed:      #/3 (threshold: 3)   [PASS/FAIL]
+   953→  5. Agent team:           #/2 (threshold: 2)   [PASS/FAIL]
+   954→  6. Outreach:             #/5 (threshold: 5)   [PASS/FAIL]
+   955→  7. Platform stability:   [Pass/Fail]          [PASS/FAIL]
+   956→
+   957→  Criteria met: #/7
+   958→
+   959→COMMERCIAL PIPELINE:
+   960→  Prospects contacted:     ##
+   961→  Meetings completed:      ##
+   962→  Pipeline value:          CFA ##M
+   963→  Purchase intent signals: [describe]
+   964→
+   965→FINANCIAL SUMMARY:
+   966→  Total spend:             CFA ###,###
+   967→  Budget utilization:      ##%
+   968→  Remaining contingency:   CFA ###,###
+   969→
+   970→KEY STRENGTHS:
+   971→  1. [strength]
+   972→  2. [strength]
+   973→  3. [strength]
+   974→
+   975→KEY WEAKNESSES:
+   976→  1. [weakness]
+   977→  2. [weakness]
+   978→  3. [weakness]
+   979→
+   980→PHASE 2 PLAN (if GO):
+   981→  Duration:                [3 months]
+   982→  Budget:                  CFA ###,###
+   983→  Team expansion:          [details]
+   984→  Geographic expansion:    [details]
+   985→  Revenue target:          CFA ##M/month by [date]
+   986→
+   987→LESSONS LEARNED:
+   988→  1. [lesson]
+   989→  2. [lesson]
+   990→  3. [lesson]
+   991→
+   992→============================================
+   993→```
+   994→
+   995→---
+   996→
+   997→## 9. Milestones
+   998→
+   999→### M1: Infrastructure Ready
+  1000→
+  1001→| Attribute | Detail |
+  1002→|---|---|
+  1003→| **Target Date** | W1D5 (Friday, April 18, 2026) |
+  1004→| **Owner** | Charles (CEO) |
+  1005→| **Definition** | All technical systems deployed and functional for pilot start |
+  1006→| **Acceptance Criteria** | (1) All 7 verticals selectable in PWA (2) RBAC roles deployed (3) GPS integrity module collecting data (4) Velocity + photo hash fraud checks operational (5) Consent flow live (6) Database monitoring active (7) All agent accounts created and tested (8) Test day completed with >80% submission pass rate |
+  1007→| **Predecessor** | None (first milestone) |
+  1008→| **Risk** | Medium -- depends on deployment speed. All code changes are in Charles's control. |
+  1009→
+  1010→### M2: Baseline Complete
+  1011→
+  1012→| Attribute | Detail |
+  1013→|---|---|
+  1014→| **Target Date** | W2D5 (Friday, April 25, 2026) |
+  1015→| **Owner** | Field Team Lead |
+  1016→| **Definition** | First full survey of Bonamoussadi across all 7 verticals; Snapshot S1 frozen |
+  1017→| **Acceptance Criteria** | (1) >= 400 unique POIs in database (2) All 7 verticals represented (3) All 4 zones covered (4) GPS accuracy <50m for >90% of submissions (5) Photo present for >95% of submissions (6) Snapshot S1 successfully frozen (7) Approval rate >70% (8) No data loss events |
+  1018→| **Predecessor** | M1 (Infrastructure Ready) |
+  1019→| **Risk** | Medium -- depends on agent productivity and training quality |
+  1020→
+  1021→### M3: First Delta Published
+  1022→
+  1023→| Attribute | Detail |
+  1024→|---|---|
+  1025→| **Target Date** | W3D5 (Friday, May 2, 2026) |
+  1026→| **Owner** | Charles (CEO) |
+  1027→| **Definition** | Delta D1 (S2 - S1) computed and reviewed; first data sample document created |
+  1028→| **Acceptance Criteria** | (1) Snapshot S2 frozen (2) Delta D1 computed without errors (3) Delta shows at least some changes (new POIs, enrichments, status changes) (4) Z-score anomaly detection functioning (5) Data sample document created with real Bonamoussadi data (6) First spot-check audit completed with >80% accuracy (7) Data sample suitable for showing to prospects |
+  1029→| **Predecessor** | M2 (Baseline Complete) |
+  1030→| **Risk** | Low -- if M2 is achieved, M3 is largely automated (delta computation is code) |
+  1031→
+  1032→### M4: First Client Meeting with Real Data
+  1033→
+  1034→| Attribute | Detail |
+  1035→|---|---|
+  1036→| **Target Date** | W5D4 (Thursday, May 15, 2026) -- target, may slip to W6 |
+  1037→| **Owner** | Charles (CEO) |
+  1038→| **Definition** | At least one meeting with a prospective client where real Bonamoussadi data is presented |
+  1039→| **Acceptance Criteria** | (1) Meeting held with decision-maker at a target account (2) Real data (not mockups) presented: map, POI counts, delta examples (3) Prospect feedback captured in writing (4) Clear next step agreed (follow-up meeting, trial request, or explicit "no") (5) If no meeting by W5D4, at least 5 outreach messages sent with data samples |
+  1040→| **Predecessor** | M3 (First Delta Published) -- need data to show |
+  1041→| **Risk** | High -- depends on prospect responsiveness, which is outside ADL's control. Mitigation: high-volume outreach (10+ messages) to increase probability. |
+  1042→
+  1043→### M5: Go/No-Go Decision
+  1044→
+  1045→| Attribute | Detail |
+  1046→|---|---|
+  1047→| **Target Date** | W6D4 (Wednesday, May 21, 2026) |
+  1048→| **Owner** | Charles (CEO) |
+  1049→| **Definition** | Formal decision on whether to continue to Phase 2 |
+  1050→| **Acceptance Criteria** | (1) All 7 minimum success criteria evaluated against thresholds (2) Go/No-Go report completed using template from Section 8.5 (3) Decision documented with supporting data (4) If GO: Phase 2 plan drafted (5) If NOT GO: lessons learned documented (6) Team informed of decision (7) Agent retention conversations completed (if GO) |
+  1051→| **Predecessor** | All prior milestones (M1-M4 inform the decision) |
+  1052→| **Risk** | Low -- this is a decision point, not an execution task. Risk is in the quality of data informing the decision. |
+  1053→
+  1054→### Milestone Timeline Summary
+  1055→
+  1056→```
+  1057→Week 1                 Week 2                 Week 3                 Week 4                 Week 5                 Week 6
+  1058→|---April 14-----------|---April 21-----------|---April 28-----------|---May 5--------------|---May 12-------------|---May 19------------|
+  1059→                   [M1]                   [M2]                   [M3]                                        [M4]                  [M5]
+  1060→              Infrastructure          Baseline              First Delta                              First Client           Go/No-Go
+  1061→                  Ready               Complete              Published                                 Meeting               Decision
+  1062→```
+  1063→
+  1064→---
+  1065→
+  1066→## Summary
+  1067→
+  1068→This execution plan brings together the work of 8 prior teammates into a concrete, actionable 6-week pilot:
+  1069→
+  1070→1. **Total budget: CFA 2,092,168 (~$3,402 USD)** -- lean enough to self-fund, comprehensive enough to generate real results.
+  1071→
+  1072→2. **Team of 4**: 1 Field Team Lead (CFA 200K/month) + 3 Field Agents (CFA 120-150K/month each) managed remotely by Charles from Lyon.
+  1073→
+  1074→3. **Target: 700+ POIs** across 7 verticals in Bonamoussadi, with 5 weekly snapshots and 4 delta computations demonstrating the ability to track change over time.
+  1075→
+  1076→4. **Commercial validation**: 10+ outreach messages to target accounts (Yango, SABC, MTN, Orange, TotalEnergies, AGL, Acmar Media) with real data samples, targeting 1+ client meeting by Week 5.
+  1077→
+  1078→5. **Clear Go/No-Go framework**: 7 minimum criteria, 4 decision outcomes (Strong Go, Conditional Go, Pivot, Stop), all measurable and data-driven.
+  1079→
+  1080→6. **Critical path**: Team Lead hire (W1D1-D3) is the single biggest risk to timeline. All technical work is in Charles's control and can be done in parallel.
+  1081→
+  1082→The pilot is designed to answer one question: **Can ADL collect reliable, ground-truth data in Bonamoussadi at a cost and quality level that creates a product worth paying for?** By Week 6, the data will provide the answer.
+  1083→
+  1084→---
+  1085→
+  1086→## Sources
+  1087→
+  1088→This document synthesizes findings from:
+  1089→- 01-data-analyst-local-context.md (Teammate 1)
+  1090→- 02-system-design-collection-workflow.md (Teammate 2)
+  1091→- 03-cloud-architect-technical-architecture.md (Teammate 3)
+  1092→- 04-cloud-engineer-implementation.md (Teammate 4)
+  1093→- 05-cybersecurity-security-privacy.md (Teammate 5)
+  1094→- 06-fraud-specialist-anti-fraud.md (Teammate 6)
+  1095→- 07-marketing-commercial-strategy.md (Teammate 7)
+  1096→- 08-ui-ux-design-research.md (Teammate 8)
+  1097→

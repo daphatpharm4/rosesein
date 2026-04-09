@@ -1,0 +1,21 @@
+Create an agent team to research and propose the best data acquisition strategy for Cameroon (Bonamoussadi) for these verticals: billboards, alcohol, census, fuel, mobile money, pharmacy, and transport roads (including blocked roads).
+
+Teammate 1 (Data Analyst) researches the local context: existing data sources, field realities, update frequency, and data quality risks by vertical.
+Teammate 2 (System Design Expert) designs the end-to-end collection workflow: data model, entity IDs, baseline vs snapshot logic, and delta computation rules.
+Teammate 3 (Cloud Architect) proposes the target technical architecture (offline-first mobile capture, storage, sync, APIs, cost/reliability tradeoffs).
+Teammate 4 (Cloud Engineer) translates architecture into practical implementation steps: tooling, deployment approach, observability, and runbooks.
+Teammate 5 (Cybersecurity Expert) defines security/privacy controls, consent and compliance requirements, and incident response for field data operations.
+Teammate 6 (Fraud Specialist) designs anti-fraud controls (GPS spoofing checks, duplicate detection, timestamp/photo validation, confidence scoring).
+Teammate 7 (Marketing Genius) identifies target paying customers per vertical, strongest use cases, and how consistent deltas convert into commercial value.
+Teammate 8 ( UI UX designer ) research the best UI layout for the app to make it at the same time simple to use and eye catching
+Teammate 9 (Service Delivery Manager / Project Leader) creates the execution plan: owners, milestones, dependencies, RAID log, and governance cadence.
+The lead synthesizes all outputs into one final strategy. Each teammate waits for the previous one to finish.
+Final output must include:
+1) Vertical-by-vertical matrix: data needed, actors, products/services, likely problems, data gaps, and delta method
+2) Recommended collection mix per vertical (field ops, satellite, partner data, public data, competitor tracking)
+3) 6-week pilot plan for Bonamoussadi with budget, team roles, and KPIs
+4) Priority company/org contact list (local + international) per vertical
+5) Risk register and mitigation plan
+6) 80/20 focus: define the top 20% of data points that produce 80% of client value
+7) Clear validation SOP: capture -> verify -> score confidence -> publish delta
+create a dedicated folder called research and put all delivarbles inside 

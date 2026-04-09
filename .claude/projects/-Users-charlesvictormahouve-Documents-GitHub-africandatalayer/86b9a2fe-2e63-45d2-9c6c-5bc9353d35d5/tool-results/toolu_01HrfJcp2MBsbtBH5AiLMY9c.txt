@@ -1,0 +1,1645 @@
+   300→  enrichableFields: ["condition", "isBlocked", "blockageType", "surfaceType",
+   301→                     "passableBy", "trafficLevel", "hasStreetLight"],
+   302→  createRequiredFields: ["roadName", "condition"],
+   303→  normalizeDetails: normalizeTransportRoad,
+   304→}
+   305→```
+   306→
+   307→#### Census Proxy (New Vertical)
+   308→
+   309→```typescript
+   310→interface CensusProxyDetails extends UniversalDetails {
+   311→  buildingType?: string;            // 'residential' | 'commercial' | 'mixed' | 'industrial' | 'institutional' | 'religious'
+   312→  storeyCount?: number;             // Number of floors
+   313→  occupancyStatus?: string;         // 'occupied' | 'partially_occupied' | 'vacant' | 'under_construction'
+   314→  estimatedUnits?: number;          // Estimated residential units or commercial spaces
+   315→  hasElectricity?: boolean;         // Visible power connection
+   316→  hasWater?: boolean;               // Visible water tank or piped water
+   317→  constructionMaterial?: string;    // 'concrete' | 'brick' | 'wood' | 'metal_sheet' | 'mixed'
+   318→  roofMaterial?: string;            // 'metal_sheet' | 'concrete' | 'tile' | 'thatch'
+   319→  hasCommercialGround?: boolean;    // Ground floor is commercial
+   320→  commercialTypes?: string[];       // Types of businesses on ground floor
+   321→  nearbyInfrastructure?: string[];  // ['school', 'clinic', 'market', 'church', 'mosque']
+   322→}
+   323→```
+   324→
+   325→Vertical config:
+   326→```typescript
+   327→{
+   328→  id: "census_proxy",
+   329→  labelEn: "Building / Census Point",
+   330→  labelFr: "Batiment / Point de recensement",
+   331→  pluralEn: "Buildings",
+   332→  pluralFr: "Batiments",
+   333→  icon: "building-2",
+   334→  color: "#4a5568",
+   335→  bgColor: "#e2e8f0",
+   336→  enrichableFields: ["occupancyStatus", "storeyCount", "estimatedUnits",
+   337→                     "hasElectricity", "constructionMaterial", "hasCommercialGround"],
+   338→  createRequiredFields: ["buildingType", "occupancyStatus"],
+   339→  normalizeDetails: normalizeCensusProxy,
+   340→}
+   341→```
+   342→
+   343→### 1.5 Relationship Model Between Entities
+   344→
+   345→Entities are not linked by foreign keys. Instead, relationships are expressed through:
+   346→
+   347→```
+   348→RELATIONSHIP MODEL
+   349→==================
+   350→
+   351→1. SPATIAL PROXIMITY (implicit)
+   352→   - Entities within 25m of each other are "co-located"
+   353→   - Used for: fuel station + mobile money agent, building + ground-floor businesses
+   354→   - Computed at query time via haversine distance
+   355→
+   356→2. SAME-POINT ENRICHMENT (explicit, already implemented)
+   357→   - Multiple events with the same point_id form one projected entity
+   358→   - ENRICH_EVENT adds data to a CREATE_EVENT
+   359→
+   360→3. CROSS-VERTICAL REFERENCE (new, via details JSONB)
+   361→   - A census_proxy building can reference its ground-floor businesses:
+   362→     details.relatedPointIds = ["point-id-of-pharmacy", "point-id-of-bar"]
+   363→   - A fuel_station can reference a co-located mobile_money agent:
+   364→     details.coLocatedPointIds = ["point-id-of-momo-kiosk"]
+   365→   - These are advisory references, not enforced foreign keys
+   366→
+   367→4. ROAD SEGMENT ADJACENCY (new, for transport_road)
+   368→   - Road segments reference connected segments:
+   369→     details.connectedSegmentIds = ["point-id-segment-north", "point-id-segment-south"]
+   370→   - Enables basic graph traversal for route analysis
+   371→```
+   372→
+   373→```
+   374→                    ┌─────────────────────┐
+   375→                    │   census_proxy      │
+   376→                    │   (building)        │
+   377→                    │                     │
+   378→                    │ relatedPointIds: [  │
+   379→                    │   "pharmacy-123",   │
+   380→                    │   "momo-456"        │
+   381→                    │ ]                   │
+   382→                    └──────┬──────────────┘
+   383→                           │ spatial proximity
+   384→                    ┌──────┴──────────────┐
+   385→              ┌─────┤  Ground Floor       ├─────┐
+   386→              │     └─────────────────────┘     │
+   387→     ┌────────▼──────┐              ┌───────────▼────┐
+   388→     │  pharmacy      │              │  mobile_money   │
+   389→     │  "pharmacy-123"│              │  "momo-456"     │
+   390→     └────────────────┘              └─────────────────┘
+   391→
+   392→     ┌────────────────┐    connectedSegmentIds    ┌────────────────┐
+   393→     │ transport_road  │◄────────────────────────►│ transport_road  │
+   394→     │ segment-A       │                          │ segment-B       │
+   395→     └────────────────┘                          └────────────────┘
+   396→```
+   397→
+   398→### 1.6 Complete Schema Diagram
+   399→
+   400→```
+   401→┌─────────────────────────────────────────────────────────────────────────┐
+   402→│                         point_events (immutable log)                    │
+   403→│                                                                         │
+   404→│  id (uuid PK) | point_id | event_type | user_id | category            │
+   405→│  latitude | longitude | details (jsonb) | photo_url | created_at       │
+   406→│  source | external_id                                                   │
+   407→│                                                                         │
+   408→│  Indexes: created_at DESC, (point_id, created_at DESC),                │
+   409→│           (user_id, created_at DESC), external_id                      │
+   410→└──────────────────────────────┬──────────────────────────────────────────┘
+   411→                               │
+   412→                               │ projectPointsFromEvents()
+   413→                               ▼
+   414→┌─────────────────────────────────────────────────────────────────────────┐
+   415→│                    ProjectedPoint (in-memory, computed)                  │
+   416→│                                                                         │
+   417→│  Merged view of all events for a given point_id.                       │
+   418→│  Latest event wins for scalar fields; arrays/objects deep-merge.       │
+   419→└──────────────────────────────┬──────────────────────────────────────────┘
+   420→                               │
+   421→                               │ runWeeklySnapshot()
+   422→                               ▼
+   423→┌──────────────────────────────────────────────────────────────┐
+   424→│                  snapshots (frozen weekly state)              │
+   425→│                                                              │
+   426→│  id | snapshot_date | vertical_id | point_id | category     │
+   427→│  site_name | latitude | longitude | details | gaps          │
+   428→│  events_count | photo_url | source | external_id            │
+   429→│                                                              │
+   430→│  UNIQUE(snapshot_date, point_id)                             │
+   431→└──────────────────────────────┬───────────────────────────────┘
+   432→                               │
+   433→                               │ computeDeltas()
+   434→                               ▼
+   435→┌──────────────────────────────────────────────────────────────┐
+   436→│              snapshot_deltas (change records)                 │
+   437→│                                                              │
+   438→│  id | snapshot_date | baseline_snapshot_date | vertical_id   │
+   439→│  point_id | delta_type | delta_field                         │
+   440→│  previous_value | current_value | delta_magnitude            │
+   441→│  delta_direction | delta_summary                             │
+   442→└──────────────────────────────┬───────────────────────────────┘
+   443→                               │
+   444→                               │ aggregate per vertical
+   445→                               ▼
+   446→┌──────────────────────────────────────────────────────────────┐
+   447→│           snapshot_stats (vertical-level aggregates)          │
+   448→│                                                              │
+   449→│  id | snapshot_date | vertical_id | total_points             │
+   450→│  completed_points | completion_rate | new_count              │
+   451→│  removed_count | changed_count | unchanged_count             │
+   452→│  avg_price | week_over_week_growth | moving_avg_4w           │
+   453→│  z_score_total_points | z_score_new_count                    │
+   454→│  z_score_removed_count | anomaly_flags                       │
+   455→│                                                              │
+   456→│  UNIQUE(snapshot_date, vertical_id)                          │
+   457→└──────────────────────────────────────────────────────────────┘
+   458→
+   459→┌──────────────────────────────────────────────────────────────┐
+   460→│                user_profiles (contributor accounts)           │
+   461→│                                                              │
+   462→│  id (text PK) | email | name | phone | image | occupation   │
+   463→│  xp | password_hash | is_admin | map_scope                  │
+   464→│  created_at | updated_at                                     │
+   465→└──────────────────────────────────────────────────────────────┘
+   466→```
+   467→
+   468→### 1.7 New Table: Collection Assignments
+   469→
+   470→To support the field workflow described in Section 5, add an assignments table:
+   471→
+   472→```sql
+   473→CREATE TABLE IF NOT EXISTS collection_assignments (
+   474→  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   475→  agent_user_id text NOT NULL REFERENCES user_profiles(id),
+   476→  zone_id text NOT NULL,                    -- e.g., 'bona-zone-A', 'bona-zone-B'
+   477→  zone_label text NOT NULL,                 -- Human-readable zone name
+   478→  zone_bounds jsonb NOT NULL,               -- { south, west, north, east }
+   479→  assigned_verticals text[] NOT NULL,       -- ['pharmacy', 'mobile_money']
+   480→  assigned_date date NOT NULL DEFAULT CURRENT_DATE,
+   481→  due_date date NOT NULL,
+   482→  status text NOT NULL DEFAULT 'pending'
+   483→    CHECK (status IN ('pending', 'in_progress', 'completed', 'expired')),
+   484→  points_expected integer NOT NULL DEFAULT 0,
+   485→  points_submitted integer NOT NULL DEFAULT 0,
+   486→  completion_rate numeric GENERATED ALWAYS AS (
+   487→    CASE WHEN points_expected > 0
+   488→      THEN ROUND((points_submitted::numeric / points_expected) * 100, 1)
+   489→      ELSE 0
+   490→    END
+   491→  ) STORED,
+   492→  notes text,
+   493→  created_at timestamptz NOT NULL DEFAULT now(),
+   494→  updated_at timestamptz NOT NULL DEFAULT now()
+   495→);
+   496→
+   497→CREATE INDEX IF NOT EXISTS idx_assignments_agent_status
+   498→  ON collection_assignments (agent_user_id, status);
+   499→CREATE INDEX IF NOT EXISTS idx_assignments_zone_date
+   500→  ON collection_assignments (zone_id, assigned_date DESC);
+   501→```
+   502→
+   503→---
+   504→
+   505→## 2. Entity ID Strategy
+   506→
+   507→### 2.1 ID Generation Scheme
+   508→
+   509→The current system uses two ID patterns:
+   510→- **Event IDs:** `crypto.randomUUID()` -- random UUIDs (correct for immutable event log)
+   511→- **Point IDs:** Either `crypto.randomUUID()` for field-created entities OR `seed-point-osm-overpass-{osmId}` for imported entities
+   512→
+   513→The proposed strategy formalizes this into a **composite, deterministic-when-possible** approach:
+   514→
+   515→```
+   516→POINT ID GENERATION RULES
+   517→==========================
+   518→
+   519→1. IMPORTED ENTITIES (from external sources)
+   520→   Format: "ext-{source}-{externalId}"
+   521→   Examples:
+   522→     ext-osm-4382447689
+   523→     ext-google-ChIJ...
+   524→     ext-csv-row-042
+   525→
+   526→   Rationale: Deterministic. Same external entity always produces
+   527→   same point_id, enabling dedup across import runs.
+   528→
+   529→2. FIELD-CREATED ENTITIES (new entities discovered by agents)
+   530→   Format: "{category}-{geohash6}-{shortUuid}"
+   531→   Examples:
+   532→     pharmacy-s16gdp-a1b2c3d4
+   533→     mobile_money-s16gdq-e5f6g7h8
+   534→
+   535→   Where:
+   536→     - category = vertical ID
+   537→     - geohash6 = 6-character geohash of GPS coordinates (~1.2km precision)
+   538→     - shortUuid = first 8 characters of a UUIDv4
+   539→
+   540→   Rationale: Partially deterministic (category + location encoded),
+   541→   but with random suffix to avoid collision. The geohash enables
+   542→   spatial clustering of IDs for dedup candidates.
+   543→
+   544→3. LEGACY COMPATIBILITY
+   545→   Existing point_ids (seed-point-*, random UUIDs) remain valid.
+   546→   The system must accept any non-empty string as a point_id.
+   547→```
+   548→
+   549→Implementation (extending existing `identifier.ts`):
+   550→
+   551→```typescript
+   552→import { encode as geohashEncode } from "ngeohash";
+   553→
+   554→export function generatePointId(
+   555→  category: string,
+   556→  latitude: number,
+   557→  longitude: number,
+   558→): string {
+   559→  const geohash = geohashEncode(latitude, longitude, 6);
+   560→  const shortUuid = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+   561→  return `${category}-${geohash}-${shortUuid}`;
+   562→}
+   563→
+   564→export function generateImportPointId(source: string, externalId: string): string {
+   565→  return `ext-${source}-${externalId}`;
+   566→}
+   567→
+   568→// Extract geohash from a field-created point ID (for spatial dedup)
+   569→export function extractGeohash(pointId: string): string | null {
+   570→  const parts = pointId.split("-");
+   571→  if (parts.length < 3) return null;
+   572→  const geohash = parts[parts.length - 2];
+   573→  if (!geohash || geohash.length !== 6) return null;
+   574→  return geohash;
+   575→}
+   576→```
+   577→
+   578→### 2.2 Handling Informal Businesses With No Official ID
+   579→
+   580→Informal businesses (unlicensed bars, street vendors, mobile money kiosks without signage) are the hardest to identify. The strategy:
+   581→
+   582→```
+   583→INFORMAL ENTITY IDENTIFICATION
+   584→================================
+   585→
+   586→Problem: An informal alcohol vendor at a street corner has no name,
+   587→no license, no signage. How do we create a stable identity?
+   588→
+   589→Solution: LOCATION + CATEGORY + DESCRIPTORS = identity
+   590→
+   591→1. The point_id is generated from GPS + category + random suffix
+   592→   (as above). The GPS coordinates ARE the primary identifier.
+   593→
+   594→2. The "name" field for informal entities uses a descriptive pattern:
+   595→   "[Category] near [landmark]"
+   596→   Examples:
+   597→     "Informal bar near Carrefour Bonamoussadi"
+   598→     "Mobile money agent opposite Pharmacie Makepe"
+   599→     "Fuel vendor (jerry cans) at Bonamoussadi junction"
+   600→
+   601→3. The isFormal field (present on all business verticals) is set to false.
+   602→
+   603→4. Photo evidence is the primary verification. The photo of the
+   604→   location serves as a fingerprint for the entity.
+   605→
+   606→5. For subsequent visits, agents find existing entities via:
+   607→   a. Map-based proximity search (see entities within 25m)
+   608→   b. Visual matching against stored photos
+   609→   c. Descriptive name matching
+   610→```
+   611→
+   612→### 2.3 Deduplication Strategy
+   613→
+   614→Deduplication operates at three levels:
+   615→
+   616→```
+   617→DEDUP LEVEL 1: IMPORT-TIME (before insertion)
+   618→=============================================
+   619→- Check external_id against existing events:
+   620→  SELECT 1 FROM point_events WHERE external_id = $1 LIMIT 1
+   621→- If match found, skip import (already implemented in buildCombinedEvents)
+   622→- This prevents OSM re-imports from creating duplicate entities
+   623→
+   624→DEDUP LEVEL 2: SUBMISSION-TIME (before creating new point)
+   625→==========================================================
+   626→When a field agent submits a CREATE_EVENT:
+   627→
+   628→1. Compute candidate radius: 25m for most verticals, 50m for transport_road
+   629→2. Find existing projected points within radius AND same category:
+   630→
+   631→   SELECT point_id, site_name, latitude, longitude
+   632→   FROM snapshots
+   633→   WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM snapshots)
+   634→     AND category = $1
+   635→     AND earth_distance(
+   636→       ll_to_earth(latitude, longitude),
+   637→       ll_to_earth($2, $3)
+   638→     ) < $4
+   639→
+   640→3. If candidates found:
+   641→   a. Score each candidate using name similarity (Levenshtein) + distance
+   642→   b. If best score > 0.7 similarity AND < 25m distance:
+   643→      - Prompt agent: "This looks like [existing entity name]. Enrich it?"
+   644→      - If agent confirms: convert to ENRICH_EVENT for that point_id
+   645→      - If agent says "No, this is different": create new entity
+   646→
+   647→DEDUP LEVEL 3: ADMIN REVIEW (post-submission)
+   648→==============================================
+   649→Admin queue includes a "potential duplicates" flag:
+   650→- System identifies pairs of points with same category, < 50m apart
+   651→- Admin can merge: all events from point B re-assigned to point A
+   652→- Merge is a new event_type: 'MERGE_EVENT' (point B -> point A)
+   653→```
+   654→
+   655→```
+   656→DEDUP FLOW DIAGRAM
+   657→
+   658→  Agent submits CREATE_EVENT
+   659→          │
+   660→          ▼
+   661→  ┌───────────────────┐
+   662→  │ Check external_id │──── match found ────► SKIP (already exists)
+   663→  └───────┬───────────┘
+   664→          │ no match
+   665→          ▼
+   666→  ┌───────────────────┐
+   667→  │ Spatial search     │
+   668→  │ same category      │
+   669→  │ within 25m radius  │
+   670→  └───────┬───────────┘
+   671→          │
+   672→    ┌─────┴─────┐
+   673→    │           │
+   674→  no match    candidates found
+   675→    │           │
+   676→    ▼           ▼
+   677→  CREATE    ┌─────────────────┐
+   678→  new       │ Show to agent:  │
+   679→  entity    │ "Is this the    │
+   680→            │  same as X?"    │
+   681→            └───┬─────────┬───┘
+   682→                │         │
+   683→              "Yes"     "No"
+   684→                │         │
+   685→                ▼         ▼
+   686→            ENRICH     CREATE
+   687→            existing   new entity
+   688→            entity
+   689→```
+   690→
+   691→### 2.4 Entity Lifecycle
+   692→
+   693→```
+   694→ENTITY STATE MACHINE
+   695→=====================
+   696→
+   697→  ┌──────────┐   first CREATE_EVENT    ┌──────────┐
+   698→  │          │─────────────────────────►│          │
+   699→  │ (none)   │                          │  ACTIVE  │
+   700→  │          │                          │          │
+   701→  └──────────┘                          └────┬─────┘
+   702→                                             │
+   703→                              ┌──────────────┼──────────────┐
+   704→                              │              │              │
+   705→                        ENRICH_EVENT    no events for    CLOSE_EVENT
+   706→                        (updates data)  N weeks          (explicit)
+   707→                              │              │              │
+   708→                              ▼              ▼              ▼
+   709→                         ┌──────────┐  ┌──────────┐  ┌──────────┐
+   710→                         │  ACTIVE  │  │ DORMANT  │  │  CLOSED  │
+   711→                         │(enriched)│  │          │  │          │
+   712→                         └──────────┘  └────┬─────┘  └──────────┘
+   713→                                            │
+   714→                                    agent re-verifies
+   715→                                    (new ENRICH_EVENT)
+   716→                                            │
+   717→                                            ▼
+   718→                                       ┌──────────┐
+   719→                                       │  ACTIVE  │
+   720→                                       │(revived) │
+   721→                                       └──────────┘
+   722→
+   723→State Determination Rules (computed, not stored):
+   724→- ACTIVE:  Has events within the last 8 weeks
+   725→- DORMANT: Last event is 8-16 weeks old, no CLOSE_EVENT
+   726→- CLOSED:  Has a CLOSE_EVENT, or last event > 16 weeks old
+   727→           and not re-verified
+   728→
+   729→The system does NOT store lifecycle state as a column.
+   730→It is computed from the event timeline during projection.
+   731→```
+   732→
+   733→Implementation logic for the projection engine:
+   734→
+   735→```typescript
+   736→type EntityLifecycle = "active" | "dormant" | "closed";
+   737→
+   738→const DORMANT_THRESHOLD_WEEKS = 8;
+   739→const CLOSED_THRESHOLD_WEEKS = 16;
+   740→
+   741→function computeLifecycle(point: ProjectedPoint, referenceDate: Date): EntityLifecycle {
+   742→  const lastEvent = new Date(point.updatedAt);
+   743→  const weeksSinceLastEvent = (referenceDate.getTime() - lastEvent.getTime())
+   744→    / (7 * 24 * 60 * 60 * 1000);
+   745→
+   746→  // Check for explicit close event (stored in details)
+   747→  if (point.details.isClosed === true) return "closed";
+   748→
+   749→  if (weeksSinceLastEvent > CLOSED_THRESHOLD_WEEKS) return "closed";
+   750→  if (weeksSinceLastEvent > DORMANT_THRESHOLD_WEEKS) return "dormant";
+   751→  return "active";
+   752→}
+   753→```
+   754→
+   755→---
+   756→
+   757→## 3. Baseline vs Snapshot Logic
+   758→
+   759→### 3.1 Terminology
+   760→
+   761→```
+   762→DEFINITIONS
+   763→============
+   764→
+   765→BASELINE:   The first complete survey of a zone for a given vertical.
+   766→            All known entities are captured. This establishes the
+   767→            "ground truth" against which future changes are measured.
+   768→
+   769→SNAPSHOT:   A periodic capture of current state. May be full (all
+   770→            entities revisited) or partial (subset visited).
+   771→
+   772→DELTA:      The computed difference between two snapshots. Already
+   773→            implemented in snapshotEngine.ts.
+   774→
+   775→ZONE:       A geofenced area. Currently Bonamoussadi is one zone.
+   776→            Sub-zones (A, B, Makepe) will be defined for route planning.
+   777→```
+   778→
+   779→### 3.2 Baseline Capture Process
+   780→
+   781→The baseline is the first `runWeeklySnapshot()` that meets the completeness threshold:
+   782→
+   783→```
+   784→BASELINE QUALIFICATION CRITERIA
+   785→================================
+   786→
+   787→A snapshot qualifies as "baseline" for a vertical if:
+   788→
+   789→1. Coverage: >= 80% of estimated entities have been captured
+   790→   (estimate comes from Teammate 1's field capture scope)
+   791→
+   792→2. Completeness: >= 60% of captured entities have zero gaps
+   793→   (all enrichable fields filled)
+   794→
+   795→3. Photo evidence: >= 90% of captured entities have a primary photo
+   796→
+   797→4. Zone coverage: Every sub-zone has at least 1 captured entity
+   798→   (prevents clustering all captures in one corner)
+   799→
+   800→Estimated entities per vertical (from Teammate 1 analysis):
+   801→  transport_road:   50-80  road segments
+   802→  mobile_money:    100-200 agent points
+   803→  pharmacy:         10-15  formal + 20-40 informal = 30-55
+   804→  fuel_station:      5-10  stations
+   805→  alcohol_outlet:   80-150 points of sale
+   806→  billboard:        30-60  billboard locations
+   807→  census_proxy:    560+    buildings/businesses
+   808→```
+   809→
+   810→SQL to track baseline designation:
+   811→
+   812→```sql
+   813→-- Add baseline tracking to snapshot_stats
+   814→ALTER TABLE snapshot_stats
+   815→  ADD COLUMN IF NOT EXISTS is_baseline boolean NOT NULL DEFAULT false;
+   816→
+   817→-- A trigger or application logic sets is_baseline = true when
+   818→-- the criteria above are met for the first time per vertical.
+   819→```
+   820→
+   821→### 3.3 Snapshot Schedule
+   822→
+   823→```
+   824→SNAPSHOT CADENCE BY VERTICAL
+   825→==============================
+   826→
+   827→Vertical          | Snapshot Frequency | Rationale
+   828→------------------+--------------------+----------------------------------
+   829→transport_road    | Daily (rainy season) | Road conditions change within hours during
+   830→                  | Weekly (dry season)  | June-Oct rainy season. High commercial value.
+   831→mobile_money      | Weekly              | High agent turnover, weekly churn visible
+   832→pharmacy          | Bi-weekly           | Formal pharmacies are stable; informal turnover
+   833→fuel_station      | Weekly              | Stock-out events are time-sensitive
+   834→alcohol_outlet    | Bi-weekly           | Moderate turnover, some night-only ops
+   835→billboard         | Monthly             | Slow-changing inventory
+   836→census_proxy      | Monthly             | Buildings change slowly
+   837→
+   838→Implementation: The existing runWeeklySnapshot() runs on a single schedule.
+   839→Rather than changing this, the system will:
+   840→1. Run the snapshot engine weekly for ALL verticals
+   841→2. For daily transport_road snapshots, add a separate cron endpoint
+   842→3. Monthly verticals still get weekly snapshots (harmless -- deltas
+   843→   will be "unchanged" most weeks)
+   844→```
+   845→
+   846→### 3.4 Handling Partial Snapshots
+   847→
+   848→When not all entities are visited in a snapshot period, the system must avoid false "removed" deltas.
+   849→
+   850→```
+   851→PARTIAL SNAPSHOT RULES
+   852→=======================
+   853→
+   854→Problem: Agent visits 60 of 100 mobile money kiosks this week.
+   855→The other 40 are NOT removed -- they just weren't visited.
+   856→
+   857→Solution: CARRY-FORWARD with decay
+   858→
+   859→1. The snapshot engine already handles this correctly: it projects
+   860→   ALL events for all time, not just events from the current period.
+   861→   If a kiosk had a CREATE_EVENT 3 weeks ago and no new events,
+   862→   it still appears in the current projection.
+   863→
+   864→2. A point is only marked "removed" in deltas if:
+   865→   a. An explicit CLOSE_EVENT is submitted, OR
+   866→   b. The entity has been in DORMANT state (> 8 weeks with no events)
+   867→      AND an agent physically visited the location and confirmed closure
+   868→
+   869→3. The "completion_rate" in snapshot_stats tracks what percentage
+   870→   of known entities received at least one event this snapshot period:
+   871→
+   872→   completion_rate = (points with events this period) / total_points * 100
+   873→
+   874→4. A snapshot with < 50% completion_rate is flagged as "partial"
+   875→   and its deltas carry a lower confidence weight (see Section 6).
+   876→
+   877→5. For partial snapshots, the delta computation adds a flag:
+   878→
+   879→   delta.isFromPartialSnapshot = completion_rate < 50
+   880→```
+   881→
+   882→### 3.5 Temporal Consistency Rules
+   883→
+   884→```
+   885→TEMPORAL CONSISTENCY
+   886→=====================
+   887→
+   888→Rule 1: EVENT ORDERING
+   889→  Events are always ordered by created_at timestamp.
+   890→  If two events have the same timestamp, the one with the later
+   891→  insertion (higher UUID in v7 format, or later DB insert order) wins.
+   892→
+   893→Rule 2: NO FUTURE EVENTS
+   894→  The system rejects events with created_at > now() + 1 hour.
+   895→  (1-hour tolerance for timezone/clock drift on mobile devices.)
+   896→
+   897→Rule 3: NO RETROACTIVE EVENTS
+   898→  Events older than 72 hours are flagged for admin review.
+   899→  This catches delayed offline-queue syncs.
+   900→  Events older than 7 days are rejected outright.
+   901→
+   902→Rule 4: SNAPSHOT IMMUTABILITY
+   903→  Once a snapshot is written for a given (snapshot_date, point_id),
+   904→  it is never updated (ON CONFLICT DO NOTHING, already implemented).
+   905→  Corrections create new events that appear in the NEXT snapshot.
+   906→
+   907→Rule 5: DELTA BASELINE CONSISTENCY
+   908→  Deltas always compare against the immediately previous snapshot.
+   909→  The system does not skip snapshots even if they were partial.
+   910→  This ensures a continuous chain:
+   911→    snapshot_1 -> delta_1_2 -> snapshot_2 -> delta_2_3 -> snapshot_3 -> ...
+   912→
+   913→Rule 6: TIMEZONE HANDLING
+   914→  All timestamps are stored in UTC (timestamptz).
+   915→  Cameroon is UTC+1 (WAT). The snapshot_date uses the UTC date.
+   916→  A snapshot for "2026-03-03" covers events through 2026-03-03T23:59:59Z.
+   917→```
+   918→
+   919→---
+   920→
+   921→## 4. Delta Computation Rules
+   922→
+   923→### 4.1 Current Implementation
+   924→
+   925→The existing `computeDeltas()` in `snapshotEngine.ts` already handles:
+   926→- New points (in current but not previous snapshot)
+   927→- Removed points (in previous but not current)
+   928→- Changed points (field-by-field comparison of `details` JSONB)
+   929→- Unchanged points
+   930→- Numeric delta magnitude and direction for number fields
+   931→
+   932→### 4.2 Meaningful Delta Definitions Per Vertical
+   933→
+   934→Not all field changes are equally meaningful. The following defines **publishable deltas** -- changes worth reporting to data consumers.
+   935→
+   936→```
+   937→DELTA SIGNIFICANCE RULES
+   938→==========================
+   939→
+   940→For each vertical, fields are classified as:
+   941→
+   942→  HIGH:   Change triggers immediate delta publication
+   943→  MEDIUM: Change included in weekly rollup
+   944→  LOW:    Change recorded but not surfaced in reports
+   945→
+   946→───────────────────────────────────────────────────────
+   947→PHARMACY
+   948→───────────────────────────────────────────────────────
+   949→  HIGH:   isOpenNow (closed -> open, open -> closed)
+   950→          isOnDuty (pharmacie de garde status change)
+   951→          Entity lifecycle (new, closed)
+   952→  MEDIUM: openingHours, isLicensed, availability
+   953→  LOW:    phone, website, name spelling correction
+   954→
+   955→───────────────────────────────────────────────────────
+   956→FUEL STATION
+   957→───────────────────────────────────────────────────────
+   958→  HIGH:   hasFuelAvailable (stock-out event)
+   959→          pricesByFuel (any price change >= 5 XAF)
+   960→          Entity lifecycle (new, closed)
+   961→  MEDIUM: fuelTypes (new fuel type added/removed)
+   962→          queueLength, quality
+   963→  LOW:    paymentMethods, openingHours, operator
+   964→
+   965→───────────────────────────────────────────────────────
+   966→MOBILE MONEY
+   967→───────────────────────────────────────────────────────
+   968→  HIGH:   providers (provider added/removed)
+   969→          hasMin50000XafAvailable (liquidity change)
+   970→          isActive (agent went active/dormant)
+   971→          Entity lifecycle (new, closed)
+   972→  MEDIUM: agentType, merchantIdByProvider
+   973→  LOW:    openingHours, paymentMethods
+   974→
+   975→───────────────────────────────────────────────────────
+   976→ALCOHOL OUTLET
+   977→───────────────────────────────────────────────────────
+   978→  HIGH:   Entity lifecycle (new, closed)
+   979→          isFormal (formalization/informalization)
+   980→  MEDIUM: outletType, brandsAvailable, priceRange
+   981→          operatingPeriod
+   982→  LOW:    servesFood, hasSeating, paymentMethods
+   983→
+   984→───────────────────────────────────────────────────────
+   985→BILLBOARD
+   986→───────────────────────────────────────────────────────
+   987→  HIGH:   isOccupied (vacant -> occupied, occupied -> vacant)
+   988→          advertiserBrand (new advertiser)
+   989→          Entity lifecycle (new, removed)
+   990→          condition (good -> damaged/destroyed)
+   991→  MEDIUM: advertiserCategory, billboardType
+   992→  LOW:    isLit, facing, size
+   993→
+   994→───────────────────────────────────────────────────────
+   995→TRANSPORT ROAD
+   996→───────────────────────────────────────────────────────
+   997→  HIGH:   isBlocked (blocked -> clear, clear -> blocked)
+   998→          condition (any change)
+   999→          blockageType, blockageSeverity
+  1000→          Entity lifecycle (new road segment)
+  1001→  MEDIUM: surfaceType, passableBy, trafficLevel
+  1002→  LOW:    hasStreetLight, hasSidewalk, estimatedWidth
+  1003→
+  1004→───────────────────────────────────────────────────────
+  1005→CENSUS PROXY
+  1006→───────────────────────────────────────────────────────
+  1007→  HIGH:   occupancyStatus (occupied -> vacant, new construction)
+  1008→          Entity lifecycle (new building, demolished)
+  1009→  MEDIUM: storeyCount (building expanded/reduced)
+  1010→          estimatedUnits, hasCommercialGround
+  1011→  LOW:    constructionMaterial, roofMaterial, hasElectricity
+  1012→```
+  1013→
+  1014→### 4.3 Delta Categories
+  1015→
+  1016→Extending the existing `DeltaType` with sub-categories:
+  1017→
+  1018→```typescript
+  1019→// Existing (keep)
+  1020→type DeltaType = "new" | "removed" | "changed" | "unchanged";
+  1021→
+  1022→// New: delta significance classification
+  1023→type DeltaSignificance = "high" | "medium" | "low";
+  1024→
+  1025→// New: enriched delta with significance
+  1026→interface EnrichedDelta extends SnapshotDelta {
+  1027→  significance: DeltaSignificance;
+  1028→  isPublishable: boolean;       // significance === "high" || "medium"
+  1029→  isFromPartialSnapshot: boolean;
+  1030→}
+  1031→
+  1032→// Configuration per vertical
+  1033→const DELTA_SIGNIFICANCE: Record<string, Record<string, DeltaSignificance>> = {
+  1034→  pharmacy: {
+  1035→    isOpenNow: "high",
+  1036→    isOnDuty: "high",
+  1037→    openingHours: "medium",
+  1038→    isLicensed: "medium",
+  1039→    phone: "low",
+  1040→    name: "low",
+  1041→  },
+  1042→  fuel_station: {
+  1043→    hasFuelAvailable: "high",
+  1044→    pricesByFuel: "high",
+  1045→    fuelPrice: "high",
+  1046→    fuelTypes: "medium",
+  1047→    queueLength: "medium",
+  1048→    paymentMethods: "low",
+  1049→  },
+  1050→  // ... (full map per vertical as defined above)
+  1051→};
+  1052→
+  1053→function classifyDelta(delta: SnapshotDelta): DeltaSignificance {
+  1054→  // New/removed entities are always HIGH
+  1055→  if (delta.deltaType === "new" || delta.deltaType === "removed") return "high";
+  1056→  if (delta.deltaType === "unchanged") return "low";
+  1057→
+  1058→  // For changed fields, look up the significance map
+  1059→  const verticalMap = DELTA_SIGNIFICANCE[delta.verticalId];
+  1060→  if (!verticalMap || !delta.deltaField) return "medium";
+  1061→  return verticalMap[delta.deltaField] ?? "medium";
+  1062→}
+  1063→```
+  1064→
+  1065→### 4.4 Confidence Thresholds for Publishing
+  1066→
+  1067→```
+  1068→DELTA PUBLICATION RULES
+  1069→========================
+  1070→
+  1071→A delta is published (sent to API consumers, shown in dashboard) if:
+  1072→
+  1073→1. The entity's confidence score >= 40 (see Section 6)
+  1074→   AND
+  1075→2. The delta significance is HIGH or MEDIUM
+  1076→   AND
+  1077→3. At least ONE of:
+  1078→   a. The entity has a photo from the current snapshot period
+  1079→   b. The entity has been verified by 2+ independent agents
+  1080→   c. The delta is from an entity with eventsCount >= 3
+  1081→
+  1082→Exception: For transport_road blockage events (isBlocked = true),
+  1083→publish immediately regardless of confidence score if the agent
+  1084→has a photo. Road blockages are time-critical.
+  1085→
+  1086→Unpublished deltas are still recorded in snapshot_deltas but flagged:
+  1087→  delta.isPublished = false
+  1088→```
+  1089→
+  1090→### 4.5 Delta Aggregation for Reporting
+  1091→
+  1092→```
+  1093→AGGREGATION TIERS
+  1094→==================
+  1095→
+  1096→DAILY ROLLUP (transport_road only during rainy season):
+  1097→  - Count of blocked/unblocked road segments
+  1098→  - New blockage events
+  1099→  - Blockages resolved
+  1100→
+  1101→WEEKLY ROLLUP (all verticals):
+  1102→  - This is the primary reporting cadence
+  1103→  - Already implemented via snapshot_stats table
+  1104→  - Metrics: total_points, new_count, removed_count, changed_count
+  1105→  - Statistical: week_over_week_growth, moving_avg_4w, z-scores, anomalies
+  1106→
+  1107→MONTHLY ROLLUP (for commercial reports):
+  1108→  Computed by aggregating 4 weekly snapshot_stats:
+  1109→
+  1110→  monthly_stats = {
+  1111→    vertical_id,
+  1112→    month,
+  1113→    avg_total_points:     AVG(total_points) over 4 weeks,
+  1114→    total_new:            SUM(new_count),
+  1115→    total_removed:        SUM(removed_count),
+  1116→    total_changed:        SUM(changed_count),
+  1117→    net_growth:           SUM(new_count) - SUM(removed_count),
+  1118→    churn_rate:           SUM(removed_count) / AVG(total_points) * 100,
+  1119→    avg_completion_rate:  AVG(completion_rate),
+  1120→    price_trend:          [weekly avg_price values for trend line],
+  1121→  }
+  1122→```
+  1123→
+  1124→SQL for monthly rollup (to be run as a scheduled job):
+  1125→
+  1126→```sql
+  1127→CREATE TABLE IF NOT EXISTS monthly_stats (
+  1128→  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  1129→  month date NOT NULL,              -- First day of month
+  1130→  vertical_id text NOT NULL,
+  1131→  avg_total_points numeric,
+  1132→  total_new integer DEFAULT 0,
+  1133→  total_removed integer DEFAULT 0,
+  1134→  total_changed integer DEFAULT 0,
+  1135→  net_growth integer DEFAULT 0,
+  1136→  churn_rate numeric,
+  1137→  avg_completion_rate numeric,
+  1138→  UNIQUE(month, vertical_id)
+  1139→);
+  1140→
+  1141→INSERT INTO monthly_stats (month, vertical_id, avg_total_points, total_new,
+  1142→  total_removed, total_changed, net_growth, churn_rate, avg_completion_rate)
+  1143→SELECT
+  1144→  date_trunc('month', snapshot_date)::date AS month,
+  1145→  vertical_id,
+  1146→  ROUND(AVG(total_points), 1),
+  1147→  SUM(new_count),
+  1148→  SUM(removed_count),
+  1149→  SUM(changed_count),
+  1150→  SUM(new_count) - SUM(removed_count),
+  1151→  CASE WHEN AVG(total_points) > 0
+  1152→    THEN ROUND(SUM(removed_count)::numeric / AVG(total_points) * 100, 2)
+  1153→    ELSE 0
+  1154→  END,
+  1155→  ROUND(AVG(completion_rate), 1)
+  1156→FROM snapshot_stats
+  1157→WHERE snapshot_date >= date_trunc('month', CURRENT_DATE - interval '1 month')
+  1158→  AND snapshot_date < date_trunc('month', CURRENT_DATE)
+  1159→GROUP BY date_trunc('month', snapshot_date), vertical_id
+  1160→ON CONFLICT (month, vertical_id) DO UPDATE SET
+  1161→  avg_total_points = EXCLUDED.avg_total_points,
+  1162→  total_new = EXCLUDED.total_new,
+  1163→  total_removed = EXCLUDED.total_removed,
+  1164→  total_changed = EXCLUDED.total_changed,
+  1165→  net_growth = EXCLUDED.net_growth,
+  1166→  churn_rate = EXCLUDED.churn_rate,
+  1167→  avg_completion_rate = EXCLUDED.avg_completion_rate;
+  1168→```
+  1169→
+  1170→---
+  1171→
+  1172→## 5. Collection Workflow
+  1173→
+  1174→### 5.1 Zone Decomposition
+  1175→
+  1176→Bonamoussadi is divided into sub-zones for route planning:
+  1177→
+  1178→```
+  1179→BONAMOUSSADI SUB-ZONES
+  1180→========================
+  1181→
+  1182→Zone boundaries (approximate, within Bonamoussadi bounding box):
+  1183→  Bonamoussadi bounds: S=4.0755, W=9.7185, N=4.0999, E=9.7602
+  1184→
+  1185→  Zone A (West):     S=4.0755, W=9.7185, N=4.0999, E=9.7350
+  1186→  Zone B (Central):  S=4.0755, W=9.7350, N=4.0999, E=9.7480
+  1187→  Zone C (East):     S=4.0755, W=9.7480, N=4.0999, E=9.7602
+  1188→
+  1189→  ┌────────────────────────────────────────────────────────┐
+  1190→  │                    Bonamoussadi                         │
+  1191→  │                                                        │
+  1192→  │    ┌──────────────┬──────────────┬──────────────┐      │
+  1193→  │    │              │              │              │      │
+  1194→  │    │   Zone A     │   Zone B     │   Zone C     │      │
+  1195→  │    │   (West)     │  (Central)   │   (East)     │      │
+  1196→  │    │              │              │              │      │
+  1197→  │    │ ~190 POIs    │ ~210 POIs    │ ~160 POIs    │      │
+  1198→  │    │              │              │              │      │
+  1199→  │    └──────────────┴──────────────┴──────────────┘      │
+  1200→  │                                                        │
+  1201→  └────────────────────────────────────────────────────────┘
+  1202→
+  1203→  Estimated entities per zone (all verticals combined):
+  1204→    Zone A: ~190 (includes Carrefour Bonamoussadi junction, TOTAL stations)
+  1205→    Zone B: ~210 (densest commercial corridor, most mobile money kiosks)
+  1206→    Zone C: ~160 (includes Makepe, Tradex station, university area)
+  1207→```
+  1208→
+  1209→### 5.2 Route Planning and Assignment
+  1210→
+  1211→```
+  1212→ASSIGNMENT WORKFLOW
+  1213→====================
+  1214→
+  1215→1. PLANNING (Admin, weekly on Monday)
+  1216→   ┌─────────────────────────────────────────────┐
+  1217→   │ Admin Dashboard: Assignment Planning View    │
+  1218→   │                                              │
+  1219→   │ This week's assignments:                     │
+  1220→   │                                              │
+  1221→   │ Agent: Kouam J.                              │
+  1222→   │   Zone: B (Central)                          │
+  1223→   │   Verticals: pharmacy, mobile_money          │
+  1224→   │   Expected points: 45                        │
+  1225→   │   Due: Friday March 6                        │
+  1226→   │                                              │
+  1227→   │ Agent: Ngassa M.                             │
+  1228→   │   Zone: A (West)                             │
+  1229→   │   Verticals: fuel_station, alcohol_outlet    │
+  1230→   │   Expected points: 30                        │
+  1231→   │   Due: Friday March 6                        │
+  1232→   │                                              │
+  1233→   │ Agent: Tabi P.                               │
+  1234→   │   Zone: C (East)                             │
+  1235→   │   Verticals: billboard, transport_road       │
+  1236→   │   Expected points: 35                        │
+  1237→   │   Due: Friday March 6                        │
+  1238→   │                                              │
+  1239→   │ [+ Add Assignment]                           │
+  1240→   └─────────────────────────────────────────────┘
+  1241→
+  1242→2. DISTRIBUTION
+  1243→   - Assignments pushed to agent's mobile app
+  1244→   - Agent sees their zone on the map with:
+  1245→     a. Existing entities to VERIFY (blue markers)
+  1246→     b. Approximate locations of expected new entities (grey markers, from OSM/satellite)
+  1247→     c. Zone boundary highlighted
+  1248→   - Agent can plan their walking route
+  1249→
+  1250→3. ROTATION
+  1251→   - Each agent covers a different zone each week
+  1252→   - This provides cross-verification (Agent B verifies Agent A's data)
+  1253→   - Rotation schedule:
+  1254→     Week 1: Agent 1 -> Zone A,  Agent 2 -> Zone B,  Agent 3 -> Zone C
+  1255→     Week 2: Agent 1 -> Zone B,  Agent 2 -> Zone C,  Agent 3 -> Zone A
+  1256→     Week 3: Agent 1 -> Zone C,  Agent 2 -> Zone A,  Agent 3 -> Zone B
+  1257→     Week 4: Repeat cycle
+  1258→```
+  1259→
+  1260→### 5.3 On-Site Capture Protocol Per Vertical
+  1261→
+  1262→```
+  1263→═══════════════════════════════════════════════════════
+  1264→PROTOCOL: PHARMACY
+  1265→═══════════════════════════════════════════════════════
+  1266→
+  1267→Step 1: APPROACH
+  1268→  - Walk to pharmacy location
+  1269→  - If new entity: confirm it is a pharmacy (green cross, signage)
+  1270→  - If existing entity: locate on map, tap to open
+  1271→
+  1272→Step 2: PHOTO EVIDENCE
+  1273→  - Primary photo: Storefront showing name/signage (REQUIRED)
+  1274→  - Secondary photo: Interior or additional signage (OPTIONAL)
+  1275→  - GPS must be enabled; photo EXIF captures location
+  1276→
+  1277→Step 3: DATA CAPTURE
+  1278→  ┌─────────────────────────────────────┐
+  1279→  │ Create Pharmacy                     │
+  1280→  │                                     │
+  1281→  │ Name: [Pharmacie de Bonamoussadi ]  │
+  1282→  │                                     │
+  1283→  │ Is Open Now?  [Yes] / [No]         │
+  1284→  │                                     │
+  1285→  │ Is On-Duty (Pharmacie de Garde)?   │
+  1286→  │   [Yes] / [No] / [Don't Know]     │
+  1287→  │                                     │
+  1288→  │ Is Licensed (visible signage)?     │
+  1289→  │   [Yes] / [No]                     │
+  1290→  │                                     │
+  1291→  │ Opening Hours: [08:00 - 20:00   ]  │
+  1292→  │                                     │
+  1293→  │ Phone: [+237 6XX XXX XXX       ]   │
+  1294→  │                                     │
+  1295→  │ [Submit with Photo]                 │
+  1296→  └─────────────────────────────────────┘
+  1297→
+  1298→Step 4: INFORMAL VENDOR HANDLING
+  1299→  - If informal drug vendor (no green cross, selling on table/street):
+  1300→    Set isFormal = false
+  1301→    Name = "Informal medicine vendor near [landmark]"
+  1302→    Photo should show the merchandise layout
+  1303→
+  1304→Time per entity: ~3 minutes (formal), ~2 minutes (informal)
+  1305→
+  1306→═══════════════════════════════════════════════════════
+  1307→PROTOCOL: FUEL STATION
+  1308→═══════════════════════════════════════════════════════
+  1309→
+  1310→Step 1: APPROACH
+  1311→  - Walk/drive to station
+  1312→  - Note brand (Total, Tradex, OLA Energy, MRS, etc.)
+  1313→
+  1314→Step 2: PHOTO EVIDENCE
+  1315→  - Primary photo: Station entrance with brand signage (REQUIRED)
+  1316→  - Secondary photo: Price board or pump display (REQUIRED for fuel_station)
+  1317→
+  1318→Step 3: DATA CAPTURE
+  1319→  ┌─────────────────────────────────────┐
+  1320→  │ Create Fuel Station                 │
+  1321→  │                                     │
+  1322→  │ Name: [TOTAL Bonamoussadi 1     ]  │
+  1323→  │ Brand: [Total       ]              │
+  1324→  │                                     │
+  1325→  │ Fuel Available? [Yes] / [No]       │
+  1326→  │                                     │
+  1327→  │ Fuel Types:                         │
+  1328→  │   [x] Super  Price: [840] XAF/L   │
+  1329→  │   [x] Diesel Price: [780] XAF/L   │
+  1330→  │   [ ] Gas    Price: [   ] XAF/L   │
+  1331→  │                                     │
+  1332→  │ Queue Length: (None) (Short) (Long) │
+  1333→  │                                     │
+  1334→  │ Services:                           │
+  1335→  │   [ ] Convenience Store             │
+  1336→  │   [ ] Car Wash                      │
+  1337→  │   [ ] ATM                           │
+  1338→  │   [ ] Mobile Money Agent            │
+  1339→  │                                     │
+  1340→  │ [Submit with Photo]                 │
+  1341→  └─────────────────────────────────────┘
+  1342→
+  1343→Step 4: INFORMAL FUEL VENDOR
+  1344→  - Jerry can vendors near stations: isFormal = false
+  1345→  - Name = "Informal fuel vendor near [station name]"
+  1346→  - Photo of jerry cans/bottles
+  1347→
+  1348→Time per entity: ~5 minutes (formal), ~2 minutes (informal)
+  1349→
+  1350→═══════════════════════════════════════════════════════
+  1351→PROTOCOL: MOBILE MONEY
+  1352→═══════════════════════════════════════════════════════
+  1353→
+  1354→Step 1: APPROACH
+  1355→  - Identify kiosk/agent by MTN/Orange branding
+  1356→
+  1357→Step 2: PHOTO EVIDENCE
+  1358→  - Primary photo: Kiosk/booth with visible operator branding (REQUIRED)
+  1359→  - Secondary photo: Agent fee schedule if visible (OPTIONAL)
+  1360→
+  1361→Step 3: DATA CAPTURE
+  1362→  ┌─────────────────────────────────────┐
+  1363→  │ Create Mobile Money Point           │
+  1364→  │                                     │
+  1365→  │ Providers:                          │
+  1366→  │   [x] MTN                           │
+  1367→  │   [x] Orange                        │
+  1368→  │   [ ] CAMTEL                        │
+  1369→  │                                     │
+  1370→  │ Cash Available (>= 50,000 XAF)?    │
+  1371→  │   [Yes] / [No] / [Ask Agent]       │
+  1372→  │                                     │
+  1373→  │ Agent Name/Kiosk Name:             │
+  1374→  │   [Kiosque MoMo Carrefour      ]   │
+  1375→  │                                     │
+  1376→  │ Merchant ID (if visible on sign):  │
+  1377→  │   MTN: [            ]              │
+  1378→  │   Orange: [         ]              │
+  1379→  │                                     │
+  1380→  │ [Submit with Photo]                 │
+  1381→  └─────────────────────────────────────┘
+  1382→
+  1383→Time per entity: ~2 minutes
+  1384→
+  1385→═══════════════════════════════════════════════════════
+  1386→PROTOCOL: ALCOHOL OUTLET
+  1387→═══════════════════════════════════════════════════════
+  1388→
+  1389→Step 1: APPROACH
+  1390→  - Identify bar/outlet (signage, beer branding, seating area)
+  1391→  - Note: many operate evenings only; daytime capture may find them closed
+  1392→
+  1393→Step 2: PHOTO EVIDENCE
+  1394→  - Primary photo: Exterior showing entrance and any signage (REQUIRED)
+  1395→  - If closed at time of visit, photo of closed storefront is acceptable
+  1396→
+  1397→Step 3: DATA CAPTURE
+  1398→  ┌─────────────────────────────────────┐
+  1399→  │ Create Alcohol Outlet               │
+  1400→  │                                     │
+  1401→  │ Name: [Bar Le Diplomate          ]  │
+  1402→  │                                     │
+  1403→  │ Type:                               │
+  1404→  │   (Bar) (Restaurant) (Off-Licence)  │
+  1405→  │   (Street Vendor) (Nightclub)       │
+  1406→  │                                     │
+  1407→  │ Is Licensed (visible)?              │
+  1408→  │   [Yes] / [No]                      │
+  1409→  │                                     │
+  1410→  │ Operating Period:                   │
+  1411→  │   (Day only) (Evening only)         │
+  1412→  │   (Day + Evening) (Night only)      │
+  1413→  │                                     │
+  1414→  │ Brands Visible:                     │
+  1415→  │   [x] 33 Export                     │
+  1416→  │   [x] Castel                        │
+  1417→  │   [ ] Beaufort                      │
+  1418→  │   [ ] Other: [                ]     │
+  1419→  │                                     │
+  1420→  │ [Submit with Photo]                 │
+  1421→  └─────────────────────────────────────┘
+  1422→
+  1423→Time per entity: ~2 minutes (daytime), ~3 minutes (evening with verification)
+  1424→
+  1425→═══════════════════════════════════════════════════════
+  1426→PROTOCOL: BILLBOARD
+  1427→═══════════════════════════════════════════════════════
+  1428→
+  1429→Step 1: APPROACH
+  1430→  - Walk along roads, scan for billboards and signage
+  1431→
+  1432→Step 2: PHOTO EVIDENCE
+  1433→  - Primary photo: Full billboard face showing content (REQUIRED)
+  1434→  - Aim to capture the entire billboard in frame
+  1435→
+  1436→Step 3: DATA CAPTURE
+  1437→  ┌─────────────────────────────────────┐
+  1438→  │ Create Billboard                    │
+  1439→  │                                     │
+  1440→  │ Description: [MTN billboard at   ]  │
+  1441→  │              [Carrefour junction  ]  │
+  1442→  │                                     │
+  1443→  │ Type:                               │
+  1444→  │   (Standard) (Digital) (Wall Paint) │
+  1445→  │   (Street Furniture) (Poster)       │
+  1446→  │   (Informal)                        │
+  1447→  │                                     │
+  1448→  │ Occupied? [Yes] / [No/Blank]       │
+  1449→  │                                     │
+  1450→  │ Advertiser Brand: [MTN           ]  │
+  1451→  │ Category: (Telecom) (Beer)          │
+  1452→  │           (Banking) (FMCG) (Other)  │
+  1453→  │                                     │
+  1454→  │ Condition: (Good) (Damaged)         │
+  1455→  │            (Destroyed)              │
+  1456→  │                                     │
+  1457→  │ Size: (Small) (Medium) (Large)      │
+  1458→  │                                     │
+  1459→  │ [Submit with Photo]                 │
+  1460→  └─────────────────────────────────────┘
+  1461→
+  1462→Time per entity: ~2 minutes
+  1463→
+  1464→═══════════════════════════════════════════════════════
+  1465→PROTOCOL: TRANSPORT ROAD
+  1466→═══════════════════════════════════════════════════════
+  1467→
+  1468→Step 1: APPROACH
+  1469→  - Walk along road segment (typically 100-300m per segment)
+  1470→  - A segment is defined as the stretch between two intersections
+  1471→
+  1472→Step 2: PHOTO EVIDENCE
+  1473→  - Primary photo: Road surface and condition (REQUIRED)
+  1474→  - Secondary photo: Blockage or damage if present (REQUIRED if blocked)
+  1475→  - Photo should be taken facing along the road direction
+  1476→
+  1477→Step 3: DATA CAPTURE
+  1478→  ┌─────────────────────────────────────┐
+  1479→  │ Create Road Segment                 │
+  1480→  │                                     │
+  1481→  │ Road Name: [Rue de l'Harmonie   ]  │
+  1482→  │                                     │
+  1483→  │ Segment Type:                       │
+  1484→  │   (Primary) (Secondary) (Tertiary)  │
+  1485→  │   (Alley) (Footpath)               │
+  1486→  │                                     │
+  1487→  │ Surface: (Asphalt) (Laterite)       │
+  1488→  │          (Gravel) (Earth)           │
+  1489→  │                                     │
+  1490→  │ Condition: (Good) (Fair) (Poor)     │
+  1491→  │            (Impassable)             │
+  1492→  │                                     │
+  1493→  │ Blocked? [Yes] / [No]              │
+  1494→  │ If yes:                             │
+  1495→  │   Blockage: (Flooding) (Construction)│
+  1496→  │             (Accident) (Debris)      │
+  1497→  │             (Market Encroachment)    │
+  1498→  │   Severity: (Partial) (Full)        │
+  1499→  │   Passable by:                      │
+  1500→  │     [x] Pedestrian                  │
+  1501→  │     [x] Moto                        │
+  1502→  │     [ ] Car                         │
+  1503→  │     [ ] Truck                       │
+  1504→  │                                     │
+  1505→  │ [Submit with Photo]                 │
+  1506→  └─────────────────────────────────────┘
+  1507→
+  1508→Time per segment: ~4 minutes
+  1509→
+  1510→═══════════════════════════════════════════════════════
+  1511→PROTOCOL: CENSUS PROXY
+  1512→═══════════════════════════════════════════════════════
+  1513→
+  1514→Step 1: APPROACH
+  1515→  - Walk along street, capture buildings systematically
+  1516→  - One building = one entity (even if multi-story)
+  1517→
+  1518→Step 2: PHOTO EVIDENCE
+  1519→  - Primary photo: Building front facade (REQUIRED)
+  1520→
+  1521→Step 3: DATA CAPTURE
+  1522→  ┌─────────────────────────────────────┐
+  1523→  │ Create Building                     │
+  1524→  │                                     │
+  1525→  │ Building Type:                      │
+  1526→  │   (Residential) (Commercial)        │
+  1527→  │   (Mixed) (Industrial)              │
+  1528→  │   (Institutional) (Religious)       │
+  1529→  │                                     │
+  1530→  │ Occupancy:                          │
+  1531→  │   (Occupied) (Partially Occupied)   │
+  1532→  │   (Vacant) (Under Construction)     │
+  1533→  │                                     │
+  1534→  │ Storeys: [  3  ]                    │
+  1535→  │ Estimated Units: [ 6  ]            │
+  1536→  │                                     │
+  1537→  │ Has Commercial Ground Floor?        │
+  1538→  │   [Yes] / [No]                      │
+  1539→  │ If yes, types:                      │
+  1540→  │   [x] Shop/Retail                   │
+  1541→  │   [ ] Restaurant/Bar                │
+  1542→  │   [ ] Office                        │
+  1543→  │   [ ] Pharmacy/Clinic               │
+  1544→  │                                     │
+  1545→  │ Construction: (Concrete) (Brick)    │
+  1546→  │               (Wood) (Metal Sheet)  │
+  1547→  │                                     │
+  1548→  │ [Submit with Photo]                 │
+  1549→  └─────────────────────────────────────┘
+  1550→
+  1551→Time per building: ~2 minutes
+  1552→```
+  1553→
+  1554→### 5.4 Required Evidence Per Data Point
+  1555→
+  1556→```
+  1557→EVIDENCE REQUIREMENTS
+  1558→======================
+  1559→
+  1560→              Primary   Secondary   GPS      Timestamp  Geofence
+  1561→Vertical      Photo     Photo       Required Required   Check
+  1562→─────────────────────────────────────────────────────────────────
+  1563→pharmacy      YES       optional    YES      YES        YES
+  1564→fuel_station  YES       YES*        YES      YES        YES
+  1565→mobile_money  YES       optional    YES      YES        YES
+  1566→alcohol       YES       optional    YES      YES        YES
+  1567→billboard     YES       optional    YES      YES        YES
+  1568→transport     YES       YES*        YES      YES        YES
+  1569→census_proxy  YES       optional    YES      YES        YES
+  1570→
+  1571→* = Required for fuel_station (price board) and transport_road (if blocked)
+  1572→
+  1573→GPS ACCURACY REQUIREMENT:
+  1574→  - Horizontal accuracy must be <= 50 meters
+  1575→  - If GPS accuracy > 50m, submission is accepted but flagged for review
+  1576→  - EXIF GPS from photo is cross-referenced with device GPS (already implemented)
+  1577→
+  1578→TIMESTAMP REQUIREMENTS:
+  1579→  - Photo EXIF timestamp must be within 24 hours of submission time
+  1580→  - If no EXIF timestamp, device timestamp is used
+  1581→  - Submissions older than 72 hours flagged for admin review
+  1582→
+  1583→GEOFENCE:
+  1584→  - Must be within Bonamoussadi bounds (already enforced)
+  1585→  - Future: per-zone assignment geofence check
+  1586→```
+  1587→
+  1588→### 5.5 Review and Validation Pipeline
+  1589→
+  1590→```
+  1591→VALIDATION PIPELINE
+  1592→====================
+  1593→
+  1594→  Field Agent submits
+  1595→         │
+  1596→         ▼
+  1597→  ┌──────────────────────┐
+  1598→  │ AUTOMATED CHECKS     │
+  1599→  │                      │
+  1600→  │ 1. Photo present?    │──── no ────► REJECT (400)
+  1601→  │ 2. GPS valid?        │──── no ────► REJECT (400)
+  1602→  │ 3. In geofence?      │──── no ────► REJECT (400)
+  1603→  │ 4. Required fields?  │──── no ────► REJECT (400)
+  1604→  │ 5. Category valid?   │──── no ────► REJECT (400)
+  1605→  │ 6. Photo GPS match?  │──── no ────► REJECT (400)
+  1606→  │ 7. Duplicate check   │──── match ──► PROMPT (enrich?)
+  1607→  └──────┬───────────────┘
+  1608→         │ passes
+  1609→         ▼
+  1610→  ┌──────────────────────┐
+  1611→  │ FRAUD CHECKS         │
+  1612→  │ (already implemented)│
+  1613→  │                      │
+  1614→  │ 1. EXIF GPS vs       │
+  1615→  │    submission GPS     │
+  1616→  │ 2. IP location vs    │
+  1617→  │    submission GPS     │
+  1618→  │ 3. Device fingerprint│
+  1619→  │                      │
+  1620→  │ Result: fraud score  │
+  1621→  └──────┬───────────────┘
+  1622→         │
+  1623→         ▼
+  1624→  ┌──────────────────────┐
+  1625→  │ CONFIDENCE SCORING   │
+  1626→  │ (see Section 6)      │
+  1627→  │                      │
+  1628→  │ Compute initial      │
+  1629→  │ confidence score     │
+  1630→  └──────┬───────────────┘
+  1631→         │
+  1632→         ▼
+  1633→  ┌──────────────────────┐
+  1634→  │ TRIAGE               │
+  1635→  │                      │
+  1636→  │ Score >= 70?         │──── yes ──► AUTO-PUBLISH
+  1637→  │ Score 40-69?         │──── yes ──► QUEUE FOR REVIEW
+  1638→  │ Score < 40?          │──── yes ──► FLAG FOR INVESTIGATION
+  1639→  └──────────────────────┘
+  1640→
+  1641→ADMIN REVIEW QUEUE (already exists in AdminQueue.tsx)
+  1642→  - Admin sees submissions ordered by confidence score (lowest first)
+  1643→  - For each submission:
+  1644→    a. View photo evidence
+  1645→    b. View GPS location on map
+  1646→    c. View fraud check details
+  1647→    d. Actions: APPROVE / REJECT / REQUEST RE-VISIT
+  1648→  - APPROVE: sets reviewerApproved = true (boosts confidence score)
+  1649→  - REJECT: creates a REJECTION_EVENT that suppresses the data point
+  1650→  - REQUEST RE-VISIT: notifies the agent to return and re-capture
+  1651→
+  1652→REVIEW SLA:
+  1653→  - HIGH significance deltas: reviewed within 24 hours
+  1654→  - MEDIUM: reviewed within 72 hours
+  1655→  - Unreviewed submissions auto-publish after 7 days if score >= 50
+  1656→```
+  1657→
+  1658→---
+  1659→
+  1660→## 6. Data Quality Scoring
+  1661→
+  1662→### 6.1 Confidence Score System
+  1663→
+  1664→The confidence score is a 0-100 integer that expresses how reliable a data point is. It is computed from multiple factors and stored in `details.confidenceScore`.
+  1665→
+  1666→### 6.2 Scoring Factors
+  1667→
+  1668→```
+  1669→CONFIDENCE SCORE FACTORS
+  1670→=========================
+  1671→
+  1672→Factor                    Weight    Range    Description
+  1673→───────────────────────────────────────────────────────────────
+  1674→recency                   25%       0-25     How recent is the last observation?
+  1675→sourceCount               20%       0-20     How many independent events contribute?
+  1676→photoEvidence             20%       0-20     Quality of photographic evidence
+  1677→gpsAccuracy               15%       0-15     GPS precision and cross-validation
+  1678→reviewerApproval          10%       0-10     Has an admin approved this data?
+  1679→fieldCompleteness         10%       0-10     What % of enrichable fields are filled?
+  1680→───────────────────────────────────────────────────────────────
+  1681→TOTAL                    100%       0-100
+  1682→```
+  1683→
+  1684→### 6.3 Score Computation Formula
+  1685→
+  1686→```typescript
+  1687→interface ConfidenceFactors {
+  1688→  recency: number;           // 0-25
+  1689→  sourceCount: number;       // 0-20
+  1690→  photoEvidence: number;     // 0-20
+  1691→  gpsAccuracy: number;       // 0-15
+  1692→  reviewerApproval: number;  // 0-10
+  1693→  fieldCompleteness: number; // 0-10
+  1694→}
+  1695→
+  1696→function computeConfidenceScore(point: ProjectedPoint, referenceDate: Date): number {
+  1697→
+  1698→  // ── RECENCY (0-25) ──────────────────────────────────
+  1699→  const daysSinceUpdate = (referenceDate.getTime() - new Date(point.updatedAt).getTime())
+  1700→    / (24 * 60 * 60 * 1000);
+  1701→
+  1702→  let recency: number;
+  1703→  if (daysSinceUpdate <= 7)       recency = 25;  // This week
+  1704→  else if (daysSinceUpdate <= 14) recency = 22;  // Last week
+  1705→  else if (daysSinceUpdate <= 30) recency = 18;  // This month
+  1706→  else if (daysSinceUpdate <= 60) recency = 12;  // Last month
+  1707→  else if (daysSinceUpdate <= 90) recency = 6;   // 2-3 months ago
+  1708→  else                            recency = 0;   // Stale
+  1709→
+  1710→  // ── SOURCE COUNT (0-20) ─────────────────────────────
+  1711→  // Multiple independent observations increase confidence
+  1712→  const events = point.eventsCount;
+  1713→  let sourceCount: number;
+  1714→  if (events >= 5)       sourceCount = 20;
+  1715→  else if (events >= 3)  sourceCount = 15;
+  1716→  else if (events >= 2)  sourceCount = 10;
+  1717→  else                   sourceCount = 5;   // Single observation
+  1718→
+  1719→  // Bonus: if events come from different users (multi-source)
+  1720→  // This requires checking event user_ids -- simplified here
+  1721→  // as a bonus applied during projection
+  1722→
+  1723→  // ── PHOTO EVIDENCE (0-20) ──────────────────────────
+  1724→  let photoEvidence = 0;
+  1725→  if (point.photoUrl) photoEvidence += 10;           // Has primary photo
+  1726→  if (point.details.hasSecondaryPhoto) photoEvidence += 5;  // Has secondary photo
+  1727→  if (point.details.fraudCheck) {
+  1728→    const fc = point.details.fraudCheck as SubmissionFraudCheck;
+  1729→    if (fc.primaryPhoto?.exifStatus === "ok") photoEvidence += 5; // EXIF validated
+  1730→  }
+  1731→
+  1732→  // ── GPS ACCURACY (0-15) ────────────────────────────
+  1733→  let gpsAccuracy = 5;  // Base: GPS present (required for submission)
+  1734→  if (point.details.fraudCheck) {
+  1735→    const fc = point.details.fraudCheck as SubmissionFraudCheck;
+  1736→    // Photo GPS matches submission GPS
+  1737→    if (fc.primaryPhoto?.submissionGpsMatch === true) gpsAccuracy += 5;
+  1738→    // IP location matches submission GPS
+  1739→    if (fc.primaryPhoto?.ipGpsMatch === true) gpsAccuracy += 5;
+  1740→  }
+  1741→
+  1742→  // ── REVIEWER APPROVAL (0-10) ───────────────────────
+  1743→  let reviewerApproval = 0;
+  1744→  if (point.details.reviewerApproved === true) reviewerApproval = 10;
+  1745→  // Partial credit for not-yet-reviewed
+  1746→  else if (point.eventsCount >= 2) reviewerApproval = 3;
+  1747→
+  1748→  // ── FIELD COMPLETENESS (0-10) ──────────────────────
+  1749→  const totalEnrichable = point.gaps.length +
+  1750→    Object.keys(point.details).filter(k =>
+  1751→      !["fraudCheck","clientDevice","source","externalId","isImported",
+  1752→        "hasPhoto","hasSecondaryPhoto","secondPhotoUrl","confidenceScore",
+  1753→        "lastSeenAt","name","siteName"].includes(k)
+  1754→    ).length;
+  1755→  const filledFields = totalEnrichable > 0
+  1756→    ? (totalEnrichable - point.gaps.length) / totalEnrichable
+  1757→    : 0;
+  1758→  const fieldCompleteness = Math.round(filledFields * 10);
+  1759→
+  1760→  // ── TOTAL ──────────────────────────────────────────
+  1761→  const total = recency + sourceCount + photoEvidence + gpsAccuracy
+  1762→    + reviewerApproval + fieldCompleteness;
+  1763→
+  1764→  return Math.min(100, Math.max(0, total));
+  1765→}
+  1766→```
+  1767→
+  1768→### 6.4 Score Thresholds
+  1769→
+  1770→```
+  1771→CONFIDENCE SCORE THRESHOLDS
+  1772→=============================
+  1773→
+  1774→Score Range    Label              Action
+  1775→──────────────────────────────────────────────────────
+  1776→80-100         HIGH CONFIDENCE    Auto-publish, no review needed
+  1777→60-79          GOOD               Publish, review within 72h
+  1778→40-59          MODERATE           Publish with caveat, review within 48h
+  1779→20-39          LOW                Do not publish, queue for review
+  1780→0-19           VERY LOW           Flag for investigation, may be fraudulent
+  1781→
+  1782→EXAMPLES:
+  1783→
+  1784→Score 85 -- "Pharmacie de Bonamoussadi"
+  1785→  recency=25 (visited yesterday) + sourceCount=15 (3 events from 2 agents)
+  1786→  + photoEvidence=15 (primary + EXIF ok) + gpsAccuracy=15 (all GPS match)
+  1787→  + reviewerApproval=10 (admin approved) + fieldCompleteness=5
+  1788→  = 85 HIGH CONFIDENCE
+  1789→
+  1790→Score 55 -- "Informal bar near junction" (single import)
+  1791→  recency=25 (this week) + sourceCount=5 (1 event)
+  1792→  + photoEvidence=10 (primary photo only, no EXIF) + gpsAccuracy=5 (GPS only)
+  1793→  + reviewerApproval=0 (not reviewed) + fieldCompleteness=10 (all fields filled)
+  1794→  = 55 MODERATE
+  1795→
+  1796→Score 25 -- "Pharmacy 300148855" (OSM import, no field verification)
+  1797→  recency=0 (imported 3+ months ago, never re-verified)
+  1798→  + sourceCount=5 (1 import event) + photoEvidence=0 (no photo)
+  1799→  + gpsAccuracy=5 (GPS from OSM) + reviewerApproval=0
+  1800→  + fieldCompleteness=3 (name only, many gaps)
+  1801→  = 13 VERY LOW -> not published until field-verified
+  1802→```
+  1803→
+  1804→### 6.5 Score Lifecycle
+  1805→
+  1806→```
+  1807→SCORE EVOLUTION OVER TIME
+  1808→==========================
+  1809→
+  1810→Day 0:  Entity created by field agent with photo
+  1811→        Score = ~55 (recency=25, source=5, photo=10, gps=10, review=0, fields=5)
+  1812→
+  1813→Day 2:  Admin approves submission
+  1814→        Score = ~65 (review bonus +10)
+  1815→
+  1816→Day 7:  Second agent verifies entity with ENRICH_EVENT
+  1817→        Score = ~80 (source +5, fields +5)
+  1818→
+  1819→Day 30: No new events, recency decays
+  1820→        Score = ~62 (recency drops from 25 to 18)
+  1821→
+  1822→Day 60: Still no new events
+  1823→        Score = ~50 (recency drops to 12)
+  1824→
+  1825→Day 90: Entity enters DORMANT state
+  1826→        Score = ~38 (recency = 0, entity deprioritized)
+  1827→
+  1828→The score decays naturally with time, ensuring that only
+  1829→recently-verified data maintains high confidence.
+  1830→This drives the collection workflow: agents are directed
+  1831→to re-verify entities whose scores are dropping.
+  1832→```
+  1833→
+  1834→### 6.6 Integration with Existing Codebase
+  1835→
+  1836→The confidence score computation integrates at two points:
+  1837→
+  1838→1. **At submission time** (in `POST /api/submissions`): Compute initial score and store in `details.confidenceScore`
+  1839→
+  1840→2. **At snapshot time** (in `runWeeklySnapshot`): Recompute all scores with current reference date, update in snapshot rows
+  1841→
+  1842→```typescript
+  1843→// In snapshotEngine.ts, extend buildSnapshotRows:
+  1844→function buildSnapshotRows(snapshotDate: string, points: ProjectedPoint[]): SnapshotRow[] {
+  1845→  const referenceDate = new Date(snapshotDate);
+  1846→  return points.map((p) => {
+  1847→    // Recompute confidence score at snapshot time
+  1848→    const freshScore = computeConfidenceScore(p, referenceDate);
+  1849→    const details = { ...p.details, confidenceScore: freshScore };
+  1850→
+  1851→    return {
+  1852→      snapshotDate,
+  1853→      verticalId: p.category,
+  1854→      pointId: p.pointId,
+  1855→      category: p.category,
+  1856→      siteName: (details.siteName as string) ?? (details.name as string) ?? null,
+  1857→      latitude: p.location.latitude,
+  1858→      longitude: p.location.longitude,
+  1859→      details: details as Record<string, unknown>,
+  1860→      gaps: p.gaps,
+  1861→      eventsCount: p.eventsCount,
+  1862→      photoUrl: p.photoUrl ?? null,
+  1863→      source: p.source ?? null,
+  1864→      externalId: p.externalId ?? null,
+  1865→    };
+  1866→  });
+  1867→}
+  1868→```
+  1869→
+  1870→---
+  1871→
+  1872→## Summary: Implementation Priority
+  1873→
+  1874→For the Bonamoussadi pilot, the implementation order should be:
+  1875→
+  1876→```
+  1877→PHASE 1 (Week 1-2): Foundation
+  1878→  1. Add transport_road and census_proxy verticals to VERTICALS config
+  1879→  2. Update category CHECK constraint migration
+  1880→  3. Implement generatePointId() with geohash
+  1881→  4. Implement confidence score computation
+  1882→  5. Create collection_assignments table
+  1883→
+  1884→PHASE 2 (Week 3-4): Collection Workflow
+  1885→  6. Build assignment planning UI (admin)
+  1886→  7. Build agent assignment view (mobile)
+  1887→  8. Implement spatial dedup (25m proximity check)
+  1888→  9. Add per-vertical capture forms in ContributionFlow
+  1889→
+  1890→PHASE 3 (Week 5-6): Delta Enhancement
+  1891→  10. Add delta significance classification
+  1892→  11. Add monthly_stats rollup job
+  1893→  12. Build publishable delta API endpoint
+  1894→  13. Add partial snapshot handling
+  1895→
+  1896→PHASE 4 (Ongoing): Quality Loop
+  1897→  14. Score decay drives re-verification assignments
+  1898→  15. Agent rotation ensures cross-verification
+  1899→  16. Monthly quality reports to identify data gaps
+  1900→```
+  1901→
+  1902→---
+  1903→
+  1904→## Appendix: Key Constants
+  1905→
+  1906→```typescript
+  1907→// Geofencing
+  1908→const BONAMOUSSADI_BOUNDS = { south: 4.0755, west: 9.7185, north: 4.0999, east: 9.7602 };
+  1909→
+  1910→// Deduplication
+  1911→const DEDUP_RADIUS_METERS = 25;        // Default proximity for same-vertical dedup
+  1912→const DEDUP_RADIUS_ROAD_METERS = 50;   // Wider for road segments
+  1913→
+  1914→// Entity lifecycle
+  1915→const DORMANT_THRESHOLD_WEEKS = 8;
+  1916→const CLOSED_THRESHOLD_WEEKS = 16;
+  1917→
+  1918→// Confidence scoring
+  1919→const SCORE_THRESHOLD_AUTO_PUBLISH = 70;
+  1920→const SCORE_THRESHOLD_PUBLISHABLE = 40;
+  1921→const SCORE_THRESHOLD_FLAG = 20;
+  1922→
+  1923→// Temporal rules
+  1924→const MAX_EVENT_AGE_HOURS = 72;        // Flag for review
+  1925→const MAX_EVENT_AGE_REJECT_DAYS = 7;   // Hard reject
+  1926→const MAX_FUTURE_EVENT_HOURS = 1;      // Clock drift tolerance
+  1927→
+  1928→// Snapshot cadence
+  1929→const SNAPSHOT_WEEKLY_DAY = 0;         // Sunday
+  1930→const TRANSPORT_DAILY_RAINY_START = "2026-06-01";
+  1931→const TRANSPORT_DAILY_RAINY_END = "2026-10-31";
+  1932→
+  1933→// Collection targets (Bonamoussadi pilot)
+  1934→const ESTIMATED_ENTITIES = {
+  1935→  transport_road: { min: 50, max: 80 },
+  1936→  mobile_money: { min: 100, max: 200 },
+  1937→  pharmacy: { min: 30, max: 55 },
+  1938→  fuel_station: { min: 5, max: 10 },
+  1939→  alcohol_outlet: { min: 80, max: 150 },
+  1940→  billboard: { min: 30, max: 60 },
+  1941→  census_proxy: { min: 560, max: 800 },
+  1942→};
+  1943→```
+  1944→

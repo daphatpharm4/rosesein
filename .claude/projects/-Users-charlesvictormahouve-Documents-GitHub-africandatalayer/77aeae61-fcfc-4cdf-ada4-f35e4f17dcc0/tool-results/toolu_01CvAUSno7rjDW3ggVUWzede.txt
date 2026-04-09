@@ -1,0 +1,486 @@
+lib/client/auth.ts-8-    name?: string | null;
+lib/client/auth.ts-9-    email?: string | null;
+lib/client/auth.ts-10-    image?: string | null;
+lib/client/auth.ts:11:    isAdmin?: boolean;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/client/auth.ts-12-  };
+lib/client/auth.ts-13-  expires?: string;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/client/auth.ts-14-}
+--
+components/Navigation.tsx-6-  currentScreen: Screen;
+components/Navigation.tsx-7-  onNavigate: (screen: Screen) => void;
+components/Navigation.tsx-8-  isAuthenticated: boolean;
+components/Navigation.tsx:9:  isAdmin?: boolean;
+components/Navigation.tsx-10-  language?: 'en' | 'fr';
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Navigation.tsx-11-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Navigation.tsx-12-
+components/Navigation.tsx:13:const Navigation: React.FC<Props> = ({ currentScreen, onNavigate, isAuthenticated, isAdmin, language = 'en' }) => {
+components/Navigation.tsx-14-  const t = (en: string, fr: string) => (language === 'fr' ? fr : en);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Navigation.tsx-15-  const navItems = [
+components/Navigation.tsx-16-    { id: Screen.HOME, label: t('Explore', 'Explorer'), icon: Map },
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Navigation.tsx-21-    },
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Navigation.tsx-22-    {
+components/Navigation.tsx-23-      id: Screen.ANALYTICS,
+components/Navigation.tsx:24:      label: isAdmin ? t('Impact', 'Impact') : t('Leaderboard', 'Classement'),
+components/Navigation.tsx:25:      icon: isAdmin ? BarChart2 : Medal
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Navigation.tsx-26-    },
+components/Navigation.tsx-27-    { id: isAuthenticated ? Screen.PROFILE : Screen.AUTH, label: isAuthenticated ? t('Profile', 'Profil') : t('Sign In', 'Connexion'), icon: User }
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Navigation.tsx-28-  ];
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-31-  const [selectedPoint, setSelectedPoint] = useState<DataPoint | null>(null);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-32-  const [isOffline, setIsOffline] = useState(false);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-33-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+App.tsx:34:  const [isAdmin, setIsAdmin] = useState(false);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-35-  const [language, setLanguage] = useState<'en' | 'fr'>(() => {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-36-    const saved = localStorage.getItem('adl_language');
+App.tsx-37-    return saved === 'en' ? 'en' : 'fr';
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-143-    const session = await getSession();
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-144-    const hasUser = !!session?.user;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-145-    setIsAuthenticated(hasUser);
+App.tsx:146:    setIsAdmin(Boolean(session?.user?.isAdmin));
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-147-    return hasUser;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-148-  };
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-149-
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-176-          <Home
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-177-            onSelectPoint={(p) => navigateTo(Screen.DETAILS, p)}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-178-            isAuthenticated={isAuthenticated}
+App.tsx:179:            isAdmin={isAdmin}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-180-            onAuth={() => navigateTo(Screen.AUTH)}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-181-            onContribute={() => openContribution('CREATE')}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-182-            onProfile={() => switchTab(Screen.PROFILE)}
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-213-        return (
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-214-          <Analytics
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-215-            onBack={goBack}
+App.tsx:216:            isAdmin={isAdmin}
+App.tsx:217:            onAdmin={isAdmin ? () => navigateTo(Screen.ADMIN) : undefined}
+App.tsx:218:            onDeltaDashboard={isAdmin ? () => navigateTo(Screen.DELTA_DASHBOARD) : undefined}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-219-            language={language}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-220-          />
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-221-        );
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-279-          currentScreen={currentScreen}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-280-          onNavigate={(scr) => switchTab(scr)}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-281-          isAuthenticated={isAuthenticated}
+App.tsx:282:          isAdmin={isAdmin}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-283-          language={language}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-284-        />
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/App.tsx-285-      )}
+--
+shared/types.ts-223-  occupation?: string;
+shared/types.ts-224-  XP: number;
+shared/types.ts-225-  passwordHash?: string;
+shared/types.ts:226:  isAdmin?: boolean;
+shared/types.ts-227-  mapScope?: MapScope;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/shared/types.ts-228-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/shared/types.ts-229-
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-585-  const requestedScope = normalizeMapScope(url.searchParams.get("scope"));
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-586-  const canUseExpandedScope = requestedScope !== "bonamoussadi";
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-587-  if (canUseExpandedScope && !authContext) return errorResponse("Unauthorized", 401);
+api/submissions/index.ts:588:  if (canUseExpandedScope && !authContext.isAdmin) return errorResponse("Forbidden", 403);
+api/submissions/index.ts-589-  const effectiveScope = canUseExpandedScope ? requestedScope : "bonamoussadi";
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-590-  const canUsePublicCache = !authContext && !canUseExpandedScope;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-591-
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-690-  const auth = await requireUser(request);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-691-  if (!auth) return errorResponse("Unauthorized", 401);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-692-  const authContext = toSubmissionAuthContext(auth);
+api/submissions/index.ts:693:  const isAdminUser = authContext?.isAdmin === true;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-694-
+api/submissions/index.ts-695-  let body: SubmissionInput;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-696-  try {
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-782-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-783-  const finalLocation = photoLocation ?? location ?? ipLocation;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-784-  if (!finalLocation) return errorResponse("Missing or invalid location", 400);
+api/submissions/index.ts:785:  if (!isAdminUser && !isWithinBonamoussadi(finalLocation)) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-786-    return errorResponse(
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-787-      `Location outside Bonamoussadi bounds (${BONAMOUSSADI_BOUNDS.south},${BONAMOUSSADI_BOUNDS.west})-(${BONAMOUSSADI_BOUNDS.north},${BONAMOUSSADI_BOUNDS.east})`,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-788-      400,
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-891-    try {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-892-      riskEvaluation = await evaluateSubmissionRisk({
+api/submissions/index.ts-893-        userId: auth.id,
+api/submissions/index.ts:894:        isAdmin: isAdminUser,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-895-        pointId,
+api/submissions/index.ts-896-        eventType: effectiveEventType,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/index.ts-897-        category,
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-235-  if (!auth) return errorResponse("Unauthorized", 401);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-236-  const viewer = toSubmissionAuthContext(auth);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-237-  if (!viewer) return errorResponse("Unauthorized", 401);
+api/submissions/[id].ts:238:  if (!viewer.isAdmin) return errorResponse("Forbidden", 403);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-239-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-240-  const url = new URL(request.url);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-241-  const id = url.pathname.split("/").pop();
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-277-  if (!auth) return errorResponse("Unauthorized", 401);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-278-  const viewer = toSubmissionAuthContext(auth);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-279-  if (!viewer) return errorResponse("Unauthorized", 401);
+api/submissions/[id].ts:280:  if (!viewer.isAdmin) return errorResponse("Forbidden", 403);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-281-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-282-  const url = new URL(request.url);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/submissions/[id].ts-283-  const id = url.pathname.split("/").pop();
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionRisk.ts-55-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionRisk.ts-56-export interface SubmissionRiskInput {
+lib/server/submissionRisk.ts-57-  userId: string;
+lib/server/submissionRisk.ts:58:  isAdmin: boolean;
+lib/server/submissionRisk.ts-59-  pointId: string;
+lib/server/submissionRisk.ts-60-  eventType: PointEventType;
+lib/server/submissionRisk.ts-61-  category: SubmissionCategory;
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionRisk.ts-616-  const riskScore = buildRiskScore(riskComponents);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionRisk.ts-617-  const shouldReview = reviewFlags.size > 0 || riskScore >= REVIEW_RISK_THRESHOLD;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionRisk.ts-618-
+lib/server/submissionRisk.ts:619:  if (input.isAdmin && blockingCodes.size > 0) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionRisk.ts-620-    for (const code of blockingCodes) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionRisk.ts-621-      reviewFlags.add(`admin_bypass_${code}`);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionRisk.ts-622-    }
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-37-  return normalized as CollectionAssignmentStatus;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-38-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-39-
+api/user/index.ts:40:function isAdminToken(token: unknown): boolean {
+api/user/index.ts:41:  return (token as { isAdmin?: unknown } | undefined)?.isAdmin === true;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-42-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-43-
+api/user/index.ts-44-export async function GET(request: Request): Promise<Response> {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-45-  const auth = await requireUser(request);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-46-  if (!auth) return errorResponse("Unauthorized", 401);
+api/user/index.ts:47:  const authIsAdmin = isAdminToken(auth.token);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-48-  const url = new URL(request.url);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-49-  const view = url.searchParams.get("view");
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-50-
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-57-    try {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-58-      const assignments = await listAssignments({
+api/user/index.ts-59-        viewerUserId: auth.id,
+api/user/index.ts:60:        isAdmin: allowAll,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-61-        status,
+api/user/index.ts-62-        agentUserId: allowAll ? requestedAgent : null,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-63-      });
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-79-        getPlannerContext(),
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-80-        listAssignments({
+api/user/index.ts-81-          viewerUserId: auth.id,
+api/user/index.ts:82:          isAdmin: true,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-83-          status,
+api/user/index.ts-84-          agentUserId: requestedAgent,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-85-        }),
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-97-    const profile = await getUserProfile(auth.id);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-98-    if (!profile) return errorResponse("Profile not found", 404);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-99-
+api/user/index.ts:100:    if (authIsAdmin && (!profile.isAdmin || profile.mapScope !== "global")) {
+api/user/index.ts:101:      profile.isAdmin = true;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-102-      profile.mapScope = "global";
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-103-      await upsertUserProfile(auth.id, profile);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-104-    }
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-142-    if (body?.mapScope !== undefined) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-143-      const nextScope = normalizeMapScope(body.mapScope);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-144-      if (!nextScope) return errorResponse("Invalid mapScope", 400);
+api/user/index.ts:145:      if (!profile.isAdmin && nextScope !== "bonamoussadi") {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-146-        return errorResponse("Only admin users can unlock map scope", 403);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-147-      }
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-148-      profile.mapScope = nextScope;
+--
+api/user/index.ts-161-export async function POST(request: Request): Promise<Response> {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-162-  const auth = await requireUser(request);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-163-  if (!auth) return errorResponse("Unauthorized", 401);
+api/user/index.ts:164:  const authIsAdmin = isAdminToken(auth.token);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-165-  if (!authIsAdmin) return errorResponse("Forbidden", 403);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-166-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-167-  const url = new URL(request.url);
+--
+api/user/index.ts-194-export async function PATCH(request: Request): Promise<Response> {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-195-  const auth = await requireUser(request);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-196-  if (!auth) return errorResponse("Unauthorized", 401);
+api/user/index.ts:197:  const authIsAdmin = isAdminToken(auth.token);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-198-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-199-  const url = new URL(request.url);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/api/user/index.ts-200-  const view = url.searchParams.get("view");
+--
+lib/server/storage/postgresStore.ts-81-    occupation: typeof row.occupation === "string" ? row.occupation : "",
+lib/server/storage/postgresStore.ts-82-    XP: parseXp(row.xp),
+lib/server/storage/postgresStore.ts-83-    passwordHash: typeof row.password_hash === "string" ? row.password_hash : undefined,
+lib/server/storage/postgresStore.ts:84:    isAdmin: Boolean(row.is_admin),
+lib/server/storage/postgresStore.ts-85-    mapScope: normalizeMapScope(row.map_scope),
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-86-  };
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-87-}
+--
+lib/server/storage/postgresStore.ts-166-  occupation: string;
+lib/server/storage/postgresStore.ts-167-  xp: number;
+lib/server/storage/postgresStore.ts-168-  passwordHash: string | null;
+lib/server/storage/postgresStore.ts:169:  isAdmin: boolean;
+lib/server/storage/postgresStore.ts-170-  mapScope: MapScope;
+lib/server/storage/postgresStore.ts-171-}): Promise<void> {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-172-  const legacyEmail = params.email ?? normalizeEmail(params.id);
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-198-      params.occupation,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-199-      params.xp,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-200-      params.passwordHash,
+lib/server/storage/postgresStore.ts:201:      params.isAdmin,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-202-      params.mapScope,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-203-    ],
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-204-  );
+--
+lib/server/storage/postgresStore.ts-215-  const occupation = typeof profile.occupation === "string" ? profile.occupation : "";
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-216-  const xp = parseXp(profile.XP);
+lib/server/storage/postgresStore.ts-217-  const passwordHash = typeof profile.passwordHash === "string" && profile.passwordHash.trim() ? profile.passwordHash : null;
+lib/server/storage/postgresStore.ts:218:  const isAdmin = profile.isAdmin === true;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-219-  const mapScope = normalizeMapScope(profile.mapScope);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-220-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-221-  const runWithPhone = async () => {
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-236-          map_scope = excluded.map_scope,
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-237-          updated_at = now()
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-238-      `,
+lib/server/storage/postgresStore.ts:239:      [id, email, phone, name, image, occupation, xp, passwordHash, isAdmin, mapScope],
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-240-    );
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-241-  };
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-242-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-243-  if (phoneColumnState === "missing") {
+lib/server/storage/postgresStore.ts:244:    await upsertUserProfileLegacy({ id, email, name, image, occupation, xp, passwordHash, isAdmin, mapScope });
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-245-    return;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-246-  }
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-247-
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-251-  } catch (error) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-252-    if (!isMissingPhoneColumnError(error)) throw error;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-253-    phoneColumnState = "missing";
+lib/server/storage/postgresStore.ts:254:    await upsertUserProfileLegacy({ id, email, name, image, occupation, xp, passwordHash, isAdmin, mapScope });
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-255-  }
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-256-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/storage/postgresStore.ts-257-
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-39-  const [isLoadingAssignments, setIsLoadingAssignments] = useState(true);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-40-  const [assignmentError, setAssignmentError] = useState('');
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-41-  const [isUpdatingAssignmentId, setIsUpdatingAssignmentId] = useState<string | null>(null);
+components/Screens/Profile.tsx:42:  const normalizeMapScope = (value: unknown, isAdminMode: boolean): MapScope => {
+components/Screens/Profile.tsx:43:    if (isAdminMode) return 'global';
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-44-    if (value === 'cameroon' || value === 'global') return value;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-45-    return 'bonamoussadi';
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-46-  };
+components/Screens/Profile.tsx:47:  const activeMapScope = normalizeMapScope(profile?.mapScope, Boolean(profile?.isAdmin));
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-48-  const isMapUnlocked = activeMapScope !== 'bonamoussadi';
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-49-
+components/Screens/Profile.tsx-50-  const formatHistoryDate = (iso: string) => {
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-288-          </div>
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-289-        </div>
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-290-
+components/Screens/Profile.tsx:291:        {profile?.isAdmin && (
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-292-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-3">
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-293-            <div className="flex items-center justify-between">
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Profile.tsx-294-              <div className="flex flex-col">
+--
+components/Screens/Analytics.tsx-27-  onBack: () => void;
+components/Screens/Analytics.tsx-28-  onAdmin?: () => void;
+components/Screens/Analytics.tsx-29-  onDeltaDashboard?: () => void;
+components/Screens/Analytics.tsx:30:  isAdmin?: boolean;
+components/Screens/Analytics.tsx-31-  language: 'en' | 'fr';
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-32-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-33-
+--
+components/Screens/Analytics.tsx-39-  Low: 'bg-gray-200'
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-40-};
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-41-
+components/Screens/Analytics.tsx:42:const normalizeMapScope = (scope: unknown, isAdminMode: boolean): MapScope => {
+components/Screens/Analytics.tsx:43:  if (isAdminMode) return 'global';
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-44-  if (scope === 'cameroon' || scope === 'global') return scope;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-45-  return 'bonamoussadi';
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-46-};
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-47-
+components/Screens/Analytics.tsx:48:const Analytics: React.FC<Props> = ({ onBack, onAdmin, onDeltaDashboard, isAdmin, language }) => {
+components/Screens/Analytics.tsx:49:  const adminMode = Boolean(isAdmin);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-50-  const [adminName, setAdminName] = useState<string | null>(null);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-51-  const [adminEmail, setAdminEmail] = useState<string | null>(null);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Analytics.tsx-52-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-26-interface Props {
+components/Screens/Home.tsx-27-  onSelectPoint: (point: DataPoint) => void;
+components/Screens/Home.tsx-28-  isAuthenticated: boolean;
+components/Screens/Home.tsx:29:  isAdmin?: boolean;
+components/Screens/Home.tsx-30-  onAuth: () => void;
+components/Screens/Home.tsx-31-  onContribute: () => void;
+components/Screens/Home.tsx-32-  onProfile: () => void;
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-45-const BONAMOUSSADI_MAP_BOUNDS = bonamoussadiLeafletBounds();
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-46-const CAMEROON_MAP_BOUNDS = cameroonLeafletBounds();
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-47-
+components/Screens/Home.tsx:48:const normalizeMapScope = (scope: unknown, isAdminMode: boolean): MapScope => {
+components/Screens/Home.tsx:49:  if (isAdminMode) return 'global';
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-50-  if (scope === 'cameroon' || scope === 'global') return scope;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-51-  return 'bonamoussadi';
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-52-};
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-73-];
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-74-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-75-
+components/Screens/Home.tsx:76:const Home: React.FC<Props> = ({ onSelectPoint, isAuthenticated, isAdmin, onAuth, onContribute, onProfile, language }) => {
+components/Screens/Home.tsx-77-  const [deviceRuntime] = useState(() => ({ lowEnd: detectLowEndDevice() }));
+components/Screens/Home.tsx-78-  const [viewMode, setViewMode] = useState<'map' | 'list'>(() => (deviceRuntime.lowEnd ? 'list' : 'map'));
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-79-  const [activeCategory, setActiveCategory] = useState<Category>(Category.PHARMACY);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-80-  const [isVerticalPickerOpen, setIsVerticalPickerOpen] = useState(false);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-81-  const [points, setPoints] = useState<DataPoint[]>([]);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-82-  const [isLoadingPoints, setIsLoadingPoints] = useState(true);
+components/Screens/Home.tsx:83:  const [mapScope, setMapScope] = useState<MapScope>(() => (isAdmin ? 'global' : 'bonamoussadi'));
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-84-  const isLowEndDevice = deviceRuntime.lowEnd;
+components/Screens/Home.tsx-85-  const t = (en: string, fr: string) => (language === 'fr' ? fr : en);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-86-
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-244-  };
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-245-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-246-  useEffect(() => {
+components/Screens/Home.tsx:247:    if (!isAuthenticated || !isAdmin) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-248-      setMapScope('bonamoussadi');
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-249-      return;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-250-    }
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-251-    setMapScope('global');
+components/Screens/Home.tsx:252:  }, [isAuthenticated, isAdmin]);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-253-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-254-  useEffect(() => {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-255-    const loadPoints = async () => {
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-307-            <div className="flex items-center space-x-2">
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-308-              <BrandLogo size={18} className="shrink-0" />
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-309-              <h2 className="text-lg font-bold text-[#1f2933] leading-tight">{t('African Data Layer', 'African Data Layer')}</h2>
+components/Screens/Home.tsx:310:              {isAdmin && (
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-311-                <span className="px-2 py-0.5 rounded-full bg-[#e7eef4] text-[#0f2b46] text-[9px] font-bold uppercase tracking-widest">
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-312-                  {t('Admin', 'Admin')}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/components/Screens/Home.tsx-313-                </span>
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/collectionAssignments.ts-32-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/collectionAssignments.ts-33-interface ListAssignmentsOptions {
+lib/server/collectionAssignments.ts-34-  viewerUserId: string;
+lib/server/collectionAssignments.ts:35:  isAdmin: boolean;
+lib/server/collectionAssignments.ts-36-  status?: CollectionAssignmentStatus | null;
+lib/server/collectionAssignments.ts-37-  agentUserId?: string | null;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/collectionAssignments.ts-38-}
+--
+lib/server/collectionAssignments.ts-182-  const values: unknown[] = [];
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/collectionAssignments.ts-183-  let idx = 1;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/collectionAssignments.ts-184-
+lib/server/collectionAssignments.ts:185:  if (options.isAdmin) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/collectionAssignments.ts-186-    if (options.agentUserId) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/collectionAssignments.ts-187-      conditions.push(`agent_user_id = $${idx++}`);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/collectionAssignments.ts-188-      values.push(options.agentUserId);
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-34-});
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-35-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-36-test('view=events non-admin only sees own events', () => {
+tests/submissionVisibility.test.ts:37:  const viewer = toSubmissionAuthContext({ id: 'alice@example.com', token: { isAdmin: false } });
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-38-  assert.ok(viewer);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-39-  const visible = filterEventsForViewer(events, viewer!);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-40-  assert.equal(visible.length, 1);
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-42-});
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-43-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-44-test('view=events admin sees all events', () => {
+tests/submissionVisibility.test.ts:45:  const viewer = toSubmissionAuthContext({ id: 'admin@example.com', token: { isAdmin: true } });
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-46-  assert.ok(viewer);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-47-  const visible = filterEventsForViewer(events, viewer!);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-48-  assert.equal(visible.length, events.length);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-49-});
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-50-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-51-test('view=admin_events rejects non-admin users', () => {
+tests/submissionVisibility.test.ts:52:  const viewer = toSubmissionAuthContext({ id: 'alice@example.com', token: { isAdmin: false } });
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-53-  const access = resolveAdminViewAccess(viewer);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-54-  assert.equal(access, 'forbidden');
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-55-});
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-56-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-57-test('single event details are restricted to owner unless admin', () => {
+tests/submissionVisibility.test.ts:58:  const owner = toSubmissionAuthContext({ id: 'alice@example.com', token: { isAdmin: false } });
+tests/submissionVisibility.test.ts:59:  const stranger = toSubmissionAuthContext({ id: 'charlie@example.com', token: { isAdmin: false } });
+tests/submissionVisibility.test.ts:60:  const admin = toSubmissionAuthContext({ id: 'admin@example.com', token: { isAdmin: true } });
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-61-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-62-  assert.ok(owner);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/tests/submissionVisibility.test.ts-63-  assert.ok(stranger);
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-134-        async signIn({ user, account }) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-135-          const email = normalizeEmail(user?.email);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-136-          const adminEmail = normalizeEmail(process.env.ADMIN_EMAIL);
+lib/server/auth/handler.ts:137:          const isAdminAccount = Boolean(email && adminEmail && email === adminEmail);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-138-          const provider = account?.provider ?? "unknown";
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-139-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-140-          if (!email) return true;
+lib/server/auth/handler.ts:141:          if (!isAdminAccount && account?.provider !== "google") return true;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-142-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-143-          try {
+lib/server/auth/handler.ts:144:            if (isAdminAccount) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-145-              const existing = await getUserProfile(email);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-146-              if (existing) {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-147-                let shouldUpdate = false;
+lib/server/auth/handler.ts:148:                if (!existing.isAdmin) {
+lib/server/auth/handler.ts:149:                  existing.isAdmin = true;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-150-                  shouldUpdate = true;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-151-                }
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-152-                if (existing.mapScope !== "global") {
+--
+lib/server/auth/handler.ts-165-                  image: user?.image ?? "",
+lib/server/auth/handler.ts-166-                  occupation: "",
+lib/server/auth/handler.ts-167-                  XP: 0,
+lib/server/auth/handler.ts:168:                  isAdmin: true,
+lib/server/auth/handler.ts-169-                  mapScope: "global",
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-170-                };
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-171-                await upsertUserProfile(email, profile);
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-212-          const adminEmail = normalizeEmail(process.env.ADMIN_EMAIL);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-213-          const email = normalizeEmail(user?.email ?? token?.email);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-214-          if (adminEmail && email && adminEmail === email) {
+lib/server/auth/handler.ts:215:            (token as { isAdmin?: boolean }).isAdmin = true;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-216-          } else {
+lib/server/auth/handler.ts:217:            (token as { isAdmin?: boolean }).isAdmin = false;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-218-          }
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-219-          if (email) {
+lib/server/auth/handler.ts-220-            (token as { uid?: string }).uid = email.trim();
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-228-          if (session.user && token?.uid) {
+lib/server/auth/handler.ts-229-            (session.user as { id?: string }).id = token.uid as string;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-230-          }
+lib/server/auth/handler.ts:231:          if (session.user && (token as { isAdmin?: boolean })?.isAdmin !== undefined) {
+lib/server/auth/handler.ts:232:            (session.user as { isAdmin?: boolean }).isAdmin = Boolean((token as { isAdmin?: boolean }).isAdmin);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-233-          }
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-234-          return session;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/auth/handler.ts-235-        },
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-2-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-3-export interface SubmissionAuthContext {
+lib/server/submissionAccess.ts-4-  id: string;
+lib/server/submissionAccess.ts:5:  isAdmin: boolean;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-6-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-7-
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-8-type RawAuth = {
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-18-  if (!auth || typeof auth.id !== "string") return null;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-19-  const id = normalizeActorId(auth.id);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-20-  if (!id) return null;
+lib/server/submissionAccess.ts:21:  const token = auth.token as { isAdmin?: unknown } | undefined;
+lib/server/submissionAccess.ts:22:  const isAdmin = token?.isAdmin === true;
+lib/server/submissionAccess.ts:23:  return { id, isAdmin };
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-24-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-25-
+lib/server/submissionAccess.ts-26-export function redactEventUserIds(events: PointEvent[]): Array<Omit<PointEvent, "userId">> {
+--
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-28-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-29-
+lib/server/submissionAccess.ts-30-export function filterEventsForViewer(events: PointEvent[], viewer: SubmissionAuthContext): PointEvent[] {
+lib/server/submissionAccess.ts:31:  if (viewer.isAdmin) return events;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-32-  return events.filter((event) => normalizeActorId(event.userId) === viewer.id);
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-33-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-34-
+lib/server/submissionAccess.ts-35-export function canViewEventDetail(event: PointEvent, viewer: SubmissionAuthContext): boolean {
+lib/server/submissionAccess.ts:36:  if (viewer.isAdmin) return true;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-37-  return normalizeActorId(event.userId) === viewer.id;
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-38-}
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-39-
+lib/server/submissionAccess.ts-40-export function resolveAdminViewAccess(viewer: SubmissionAuthContext | null): "ok" | "unauthorized" | "forbidden" {
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-41-  if (!viewer) return "unauthorized";
+lib/server/submissionAccess.ts:42:  if (!viewer.isAdmin) return "forbidden";
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-43-  return "ok";
+/Users/charlesvictormahouve/Documents/GitHub/africandatalayer/lib/server/submissionAccess.ts-44-}

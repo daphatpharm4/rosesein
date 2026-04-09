@@ -1,0 +1,1357 @@
+     1→import React, { useEffect, useMemo, useState } from 'react';
+     2→import { AlertTriangle, ArrowLeft, Camera, MapPin, ShieldCheck, Trash2, User, X } from 'lucide-react';
+     3→import { apiFetch, apiJson } from '../../lib/client/api';
+     4→import { clearSyncErrorRecords, listSyncErrorRecords, type SyncErrorRecord } from '../../lib/client/offlineQueue';
+     5→import type {
+     6→  AdminSubmissionEvent,
+     7→  AssignmentPlannerContext,
+     8→  ClientDeviceInfo,
+     9→  CollectionAssignment,
+    10→  SubmissionDetails,
+    11→  SubmissionFraudCheck,
+    12→  SubmissionLocation,
+    13→  SubmissionPhotoMetadata,
+    14→  SubmissionCategory,
+    15→} from '../../shared/types';
+    16→import { categoryLabel as getCategoryLabel, VERTICAL_IDS } from '../../shared/verticals';
+    17→
+    18→interface Props {
+    19→  onBack: () => void;
+    20→  language: 'en' | 'fr';
+    21→}
+    22→
+    23→type MatchState = 'match' | 'mismatch' | 'unavailable';
+    24→type RiskFilter = 'all' | 'flagged' | 'pending' | 'low_risk';
+    25→type ReviewDecision = 'approved' | 'rejected' | 'flagged';
+    26→
+    27→function exifStatusLabel(status: SubmissionPhotoMetadata['exifStatus'] | null | undefined, language: 'en' | 'fr'): string {
+    28→  if (status === 'ok') return language === 'fr' ? 'EXIF present' : 'EXIF present';
+    29→  if (status === 'fallback_recovered') return language === 'fr' ? 'Recupere via fallback' : 'Recovered via fallback';
+    30→  if (status === 'missing') return language === 'fr' ? 'EXIF absent' : 'EXIF missing';
+    31→  if (status === 'unsupported_format') return language === 'fr' ? 'Format non supporte' : 'Unsupported format';
+    32→  if (status === 'parse_error') return language === 'fr' ? 'Erreur de lecture EXIF' : 'EXIF parse error';
+    33→  return language === 'fr' ? 'Indisponible' : 'Unavailable';
+    34→}
+    35→
+    36→function exifSourceLabel(source: SubmissionPhotoMetadata['exifSource'] | null | undefined, language: 'en' | 'fr'): string {
+    37→  if (source === 'upload_buffer') return language === 'fr' ? 'Upload initial' : 'Initial upload';
+    38→  if (source === 'remote_url') return language === 'fr' ? 'Photo distante' : 'Remote photo';
+    39→  if (source === 'client_fallback') return language === 'fr' ? 'Fallback client' : 'Client fallback';
+    40→  if (source === 'none') return language === 'fr' ? 'Aucune source' : 'No source';
+    41→  return language === 'fr' ? 'Indisponible' : 'Unavailable';
+    42→}
+    43→
+    44→function formatLocation(location: SubmissionLocation | null | undefined, unavailable: string): string {
+    45→  if (!location) return unavailable;
+    46→  return `${location.latitude.toFixed(5)}°, ${location.longitude.toFixed(5)}°`;
+    47→}
+    48→
+    49→function formatDistance(distanceKm: number | null | undefined, unavailable: string): string {
+    50→  if (typeof distanceKm !== 'number' || !Number.isFinite(distanceKm)) return unavailable;
+    51→  return `${distanceKm.toFixed(3)} km`;
+    52→}
+    53→
+    54→function formatDate(iso: string | null | undefined, unavailable: string): string {
+    55→  if (!iso) return unavailable;
+    56→  const parsed = new Date(iso);
+    57→  if (Number.isNaN(parsed.getTime())) return unavailable;
+    58→  return parsed.toLocaleString();
+    59→}
+    60→
+    61→function categoryLabelLocal(category: AdminSubmissionEvent['event']['category'], language: 'en' | 'fr'): string {
+    62→  return getCategoryLabel(category, language);
+    63→}
+    64→
+    65→function getSiteName(item: AdminSubmissionEvent, language: 'en' | 'fr'): string {
+    66→  const details = item.event.details as SubmissionDetails;
+    67→  if (typeof details.siteName === 'string' && details.siteName.trim()) return details.siteName.trim();
+    68→  if (typeof details.name === 'string' && details.name.trim()) return details.name.trim();
+    69→  return language === 'fr' ? 'Soumission sans nom' : 'Unnamed submission';
+    70→}
+    71→
+    72→function getClientDevice(item: AdminSubmissionEvent): ClientDeviceInfo | null {
+    73→  const details = item.event.details as SubmissionDetails;
+    74→  if (!details.clientDevice || typeof details.clientDevice !== 'object') return null;
+    75→  const raw = details.clientDevice;
+    76→  if (typeof raw.deviceId !== 'string' || !raw.deviceId.trim()) return null;
+    77→  return {
+    78→    deviceId: raw.deviceId.trim(),
+    79→    platform: typeof raw.platform === 'string' ? raw.platform.trim() : undefined,
+    80→    userAgent: typeof raw.userAgent === 'string' ? raw.userAgent.trim() : undefined,
+    81→    deviceMemoryGb: typeof raw.deviceMemoryGb === 'number' && Number.isFinite(raw.deviceMemoryGb) ? raw.deviceMemoryGb : null,
+    82→    hardwareConcurrency:
+    83→      typeof raw.hardwareConcurrency === 'number' && Number.isFinite(raw.hardwareConcurrency) ? raw.hardwareConcurrency : null,
+    84→    isLowEnd: raw.isLowEnd === true
+    85→  };
+    86→}
+    87→
+    88→function isReadOnlySubmission(item: AdminSubmissionEvent): boolean {
+    89→  const source = typeof item.event.source === 'string' ? item.event.source.trim().toLowerCase() : '';
+    90→  if (source === 'legacy_submission' || source === 'osm_overpass') return true;
+    91→  if (item.event.id.startsWith('legacy-event-')) return true;
+    92→  return false;
+    93→}
+    94→
+    95→function getMatchState(fraudCheck: SubmissionFraudCheck | null): MatchState {
+    96→  const match = fraudCheck?.primaryPhoto?.submissionGpsMatch;
+    97→  if (match === true) return 'match';
+    98→  if (match === false) return 'mismatch';
+    99→  return 'unavailable';
+   100→}
+   101→
+   102→function matchStateLabel(state: MatchState, language: 'en' | 'fr'): string {
+   103→  if (state === 'match') return language === 'fr' ? 'OK' : 'Match';
+   104→  if (state === 'mismatch') return language === 'fr' ? 'Ecart' : 'Mismatch';
+   105→  return language === 'fr' ? 'Indisponible' : 'Unavailable';
+   106→}
+   107→
+   108→function matchStateClass(state: MatchState): string {
+   109→  if (state === 'match') return 'text-[#4c7c59] bg-[#eaf3ee] border-[#d2e6d8]';
+   110→  if (state === 'mismatch') return 'text-[#c86b4a] bg-[#fdf0ea] border-[#f4d5c6]';
+   111→  return 'text-gray-500 bg-gray-100 border-gray-200';
+   112→}
+   113→
+   114→function getRiskScore(item: AdminSubmissionEvent): number {
+   115→  const details = item.event.details as SubmissionDetails;
+   116→  const riskScore = details.riskScore;
+   117→  return typeof riskScore === 'number' && Number.isFinite(riskScore) ? riskScore : 0;
+   118→}
+   119→
+   120→function getReviewStatus(item: AdminSubmissionEvent): string {
+   121→  const details = item.event.details as SubmissionDetails;
+   122→  return typeof details.reviewStatus === 'string' ? details.reviewStatus : 'auto_approved';
+   123→}
+   124→
+   125→function getRiskBucket(item: AdminSubmissionEvent): Exclude<RiskFilter, 'all'> {
+   126→  const riskScore = getRiskScore(item);
+   127→  const reviewStatus = getReviewStatus(item);
+   128→  if (riskScore >= 60) return 'flagged';
+   129→  if (reviewStatus === 'pending_review') return 'pending';
+   130→  return 'low_risk';
+   131→}
+   132→
+   133→const DetailMetadataBlock: React.FC<{
+   134→  label: string;
+   135→  metadata: SubmissionPhotoMetadata | null;
+   136→  thresholdKm: number;
+   137→  unavailable: string;
+   138→  language: 'en' | 'fr';
+   139→}> = ({ label, metadata, thresholdKm, unavailable, language }) => {
+   140→  const t = (en: string, fr: string) => (language === 'fr' ? fr : en);
+   141→  const status = metadata?.submissionGpsMatch;
+   142→  const statusText =
+   143→    status === true ? t('Match', 'OK') : status === false ? t('Mismatch', 'Ecart') : t('Unavailable', 'Indisponible');
+   144→  const statusClass =
+   145→    status === true ? 'text-[#4c7c59]' : status === false ? 'text-[#c86b4a]' : 'text-gray-500';
+   146→  const exifStatusText = metadata ? exifStatusLabel(metadata.exifStatus, language) : unavailable;
+   147→  const exifReasonText = metadata?.exifReason ?? unavailable;
+   148→  const exifSourceText = metadata ? exifSourceLabel(metadata.exifSource, language) : unavailable;
+   149→
+   150→  return (
+   151→    <div className="rounded-2xl border border-gray-100 bg-[#f9fafb] p-4 space-y-2">
+   152→      <div className="text-[10px] font-bold uppercase tracking-widest text-[#0f2b46]">{label}</div>
+   153→      <div className="flex items-center justify-between text-[11px]">
+   154→        <span className="text-gray-500">{t('EXIF Status', 'Statut EXIF')}</span>
+   155→        <span className="text-gray-800">{exifStatusText}</span>
+   156→      </div>
+   157→      <div className="flex items-center justify-between text-[11px]">
+   158→        <span className="text-gray-500">{t('EXIF Source', 'Source EXIF')}</span>
+   159→        <span className="text-gray-800">{exifSourceText}</span>
+   160→      </div>
+   161→      <div className="text-[11px]">
+   162→        <div className="text-gray-500">{t('EXIF Reason', 'Raison EXIF')}</div>
+   163→        <div className="text-gray-800 break-words">{exifReasonText}</div>
+   164→      </div>
+   165→      <div className="flex items-center justify-between text-[11px]">
+   166→        <span className="text-gray-500">{t('Photo EXIF GPS', 'GPS EXIF photo')}</span>
+   167→        <span className="text-gray-800">{formatLocation(metadata?.gps, unavailable)}</span>
+   168→      </div>
+   169→      <div className="flex items-center justify-between text-[11px]">
+   170→        <span className="text-gray-500">{t('Capture Time', 'Heure de capture')}</span>
+   171→        <span className="text-gray-800">{formatDate(metadata?.capturedAt, unavailable)}</span>
+   172→      </div>
+   173→      <div className="flex items-center justify-between text-[11px]">
+   174→        <span className="text-gray-500">{t('Device', 'Appareil')}</span>
+   175→        <span className="text-gray-800">
+   176→          {metadata?.deviceMake || metadata?.deviceModel ? `${metadata?.deviceMake ?? ''} ${metadata?.deviceModel ?? ''}`.trim() : unavailable}
+   177→        </span>
+   178→      </div>
+   179→      <div className="flex items-center justify-between text-[11px]">
+   180→        <span className="text-gray-500">{t('Distance to Submission GPS', 'Distance au GPS soumis')}</span>
+   181→        <span className="text-gray-800">{formatDistance(metadata?.submissionDistanceKm, unavailable)}</span>
+   182→      </div>
+   183→      <div className="flex items-center justify-between text-[11px]">
+   184→        <span className="text-gray-500">{t('Distance to IP GPS', 'Distance au GPS IP')}</span>
+   185→        <span className="text-gray-800">{formatDistance(metadata?.ipDistanceKm, unavailable)}</span>
+   186→      </div>
+   187→      <div className="flex items-center justify-between text-[11px]">
+   188→        <span className="text-gray-500">{t('Submission GPS Match', 'Correspondance GPS soumission')}</span>
+   189→        <span className={statusClass}>{statusText}</span>
+   190→      </div>
+   191→      <div className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">
+   192→        {t('Threshold', 'Seuil')}: {thresholdKm} km
+   193→      </div>
+   194→    </div>
+   195→  );
+   196→};
+   197→
+   198→interface GroupedPoint {
+   199→  pointId: string;
+   200→  events: AdminSubmissionEvent[];
+   201→  category: AdminSubmissionEvent['event']['category'];
+   202→  siteName: string;
+   203→  latestEvent: AdminSubmissionEvent;
+   204→  createdEvent: AdminSubmissionEvent | null;
+   205→  enrichEvents: AdminSubmissionEvent[];
+   206→  allPhotos: { url: string; eventType: string; createdAt: string; metadata: SubmissionPhotoMetadata | null }[];
+   207→}
+   208→
+   209→interface SchemaGuardStatus {
+   210→  ok: boolean | null;
+   211→  expected: string[];
+   212→  actual: string[];
+   213→  missing: string[];
+   214→  extra: string[];
+   215→  reason?: string;
+   216→}
+   217→
+   218→function groupEventsByPoint(items: AdminSubmissionEvent[], language: 'en' | 'fr'): GroupedPoint[] {
+   219→  const groups = new Map<string, AdminSubmissionEvent[]>();
+   220→  for (const item of items) {
+   221→    const pid = item.event.pointId;
+   222→    const existing = groups.get(pid);
+   223→    if (existing) {
+   224→      existing.push(item);
+   225→    } else {
+   226→      groups.set(pid, [item]);
+   227→    }
+   228→  }
+   229→  const result: GroupedPoint[] = [];
+   230→  for (const [pointId, events] of groups) {
+   231→    const sorted = [...events].sort((a, b) => new Date(a.event.createdAt).getTime() - new Date(b.event.createdAt).getTime());
+   232→    const latestEvent = sorted[sorted.length - 1]!;
+   233→    const createdEvent = sorted.find((e) => e.event.eventType === 'CREATE_EVENT') ?? null;
+   234→    const enrichEvents = sorted.filter((e) => e.event.eventType === 'ENRICH_EVENT');
+   235→    const allPhotos: GroupedPoint['allPhotos'] = [];
+   236→    for (const ev of sorted) {
+   237→      const photoUrl = ev.event.photoUrl;
+   238→      if (photoUrl && typeof photoUrl === 'string' && photoUrl.trim()) {
+   239→        allPhotos.push({
+   240→          url: photoUrl,
+   241→          eventType: ev.event.eventType,
+   242→          createdAt: ev.event.createdAt,
+   243→          metadata: ev.fraudCheck?.primaryPhoto ?? null,
+   244→        });
+   245→      }
+   246→      const details = ev.event.details as SubmissionDetails;
+   247→      const secondUrl = typeof details.secondPhotoUrl === 'string' && details.secondPhotoUrl.trim() ? details.secondPhotoUrl : null;
+   248→      if (secondUrl) {
+   249→        allPhotos.push({
+   250→          url: secondUrl,
+   251→          eventType: ev.event.eventType + ' (secondary)',
+   252→          createdAt: ev.event.createdAt,
+   253→          metadata: ev.fraudCheck?.secondaryPhoto ?? null,
+   254→        });
+   255→      }
+   256→    }
+   257→    result.push({
+   258→      pointId,
+   259→      events: sorted,
+   260→      category: latestEvent.event.category,
+   261→      siteName: getSiteName(createdEvent ?? latestEvent, language),
+   262→      latestEvent,
+   263→      createdEvent,
+   264→      enrichEvents,
+   265→      allPhotos,
+   266→    });
+   267→  }
+   268→  return result.sort((a, b) => new Date(b.latestEvent.event.createdAt).getTime() - new Date(a.latestEvent.event.createdAt).getTime());
+   269→}
+   270→
+   271→function addDaysDateOnly(days: number): string {
+   272→  const date = new Date();
+   273→  date.setDate(date.getDate() + days);
+   274→  return date.toISOString().slice(0, 10);
+   275→}
+   276→
+   277→const DEFAULT_ASSIGNMENT_STATUS: CollectionAssignment['status'] = 'pending';
+   278→const ASSIGNMENT_STATUSES: CollectionAssignment['status'][] = ['pending', 'in_progress', 'completed', 'expired'];
+   279→const ASSIGNABLE_VERTICALS = VERTICAL_IDS as SubmissionCategory[];
+   280→
+   281→const AdminQueue: React.FC<Props> = ({ onBack, language }) => {
+   282→  const t = (en: string, fr: string) => (language === 'fr' ? fr : en);
+   283→  const [isLoading, setIsLoading] = useState(true);
+   284→  const [error, setError] = useState('');
+   285→  const [actionMessage, setActionMessage] = useState('');
+   286→  const [deleteError, setDeleteError] = useState('');
+   287→  const [isDeleting, setIsDeleting] = useState(false);
+   288→  const [items, setItems] = useState<AdminSubmissionEvent[]>([]);
+   289→  const [schemaGuard, setSchemaGuard] = useState<SchemaGuardStatus | null>(null);
+   290→  const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+   291→  const [syncErrors, setSyncErrors] = useState<SyncErrorRecord[]>([]);
+   292→  const [isClearingSyncErrors, setIsClearingSyncErrors] = useState(false);
+   293→  const [assignmentContext, setAssignmentContext] = useState<AssignmentPlannerContext | null>(null);
+   294→  const [assignments, setAssignments] = useState<CollectionAssignment[]>([]);
+   295→  const [isLoadingAssignments, setIsLoadingAssignments] = useState(true);
+   296→  const [assignmentError, setAssignmentError] = useState('');
+   297→  const [assignmentActionMessage, setAssignmentActionMessage] = useState('');
+   298→  const [assignmentStatusFilter, setAssignmentStatusFilter] = useState<CollectionAssignment['status'] | ''>(DEFAULT_ASSIGNMENT_STATUS);
+   299→  const [assignmentAgentFilter, setAssignmentAgentFilter] = useState('');
+   300→  const [plannerAgent, setPlannerAgent] = useState('');
+   301→  const [plannerZone, setPlannerZone] = useState('');
+   302→  const [plannerDueDate, setPlannerDueDate] = useState(addDaysDateOnly(4));
+   303→  const [plannerExpected, setPlannerExpected] = useState('30');
+   304→  const [plannerNotes, setPlannerNotes] = useState('');
+   305→  const [plannerVerticals, setPlannerVerticals] = useState<SubmissionCategory[]>(['pharmacy', 'mobile_money']);
+   306→  const [isCreatingAssignment, setIsCreatingAssignment] = useState(false);
+   307→  const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
+   308→  const [isApplyingDecision, setIsApplyingDecision] = useState(false);
+   309→  const [selectedForBulk, setSelectedForBulk] = useState<Set<string>>(new Set());
+   310→
+   311→  useEffect(() => {
+   312→    let cancelled = false;
+   313→    const load = async () => {
+   314→      try {
+   315→        setIsLoading(true);
+   316→        setError('');
+   317→        setDeleteError('');
+   318→        setActionMessage('');
+   319→        const data = await apiJson<AdminSubmissionEvent[]>('/api/submissions?view=admin_events&scope=global');
+   320→        if (cancelled) return;
+   321→        const safeItems = Array.isArray(data) ? data : [];
+   322→        setItems(safeItems);
+   323→        setSelectedPointId((prev) => {
+   324→          if (!prev) return safeItems[0]?.event.pointId ?? null;
+   325→          if (safeItems.some((item) => item.event.pointId === prev)) return prev;
+   326→          return safeItems[0]?.event.pointId ?? null;
+   327→        });
+   328→      } catch (loadError) {
+   329→        if (cancelled) return;
+   330→        const message = loadError instanceof Error ? loadError.message : t('Unable to load submissions.', 'Impossible de charger les soumissions.');
+   331→        setError(message);
+   332→        setItems([]);
+   333→        setSelectedPointId(null);
+   334→      } finally {
+   335→        if (!cancelled) setIsLoading(false);
+   336→      }
+   337→    };
+   338→
+   339→    void load();
+   340→    return () => {
+   341→      cancelled = true;
+   342→    };
+   343→  }, [language]);
+   344→
+   345→  useEffect(() => {
+   346→    let cancelled = false;
+   347→    const loadSchemaGuard = async () => {
+   348→      try {
+   349→        const data = await apiJson<SchemaGuardStatus>('/api/submissions?view=schema_guard');
+   350→        if (!cancelled) setSchemaGuard(data);
+   351→      } catch {
+   352→        if (!cancelled) setSchemaGuard(null);
+   353→      }
+   354→    };
+   355→    void loadSchemaGuard();
+   356→    return () => {
+   357→      cancelled = true;
+   358→    };
+   359→  }, []);
+   360→
+   361→  useEffect(() => {
+   362→    let cancelled = false;
+   363→
+   364→    const loadAssignments = async () => {
+   365→      try {
+   366→        setIsLoadingAssignments(true);
+   367→        setAssignmentError('');
+   368→        const params = new URLSearchParams();
+   369→        params.set('view', 'assignment_planner_context');
+   370→        if (assignmentStatusFilter) params.set('status', assignmentStatusFilter);
+   371→        if (assignmentAgentFilter) params.set('agentUserId', assignmentAgentFilter);
+   372→        const data = await apiJson<{ context: AssignmentPlannerContext; assignments: CollectionAssignment[] }>(
+   373→          `/api/user?${params.toString()}`,
+   374→        );
+   375→        if (cancelled) return;
+   376→        setAssignmentContext(data.context);
+   377→        setAssignments(Array.isArray(data.assignments) ? data.assignments : []);
+   378→        setPlannerAgent((prev) => prev || data.context?.agents?.[0]?.id || '');
+   379→        setPlannerZone((prev) => prev || data.context?.zones?.[0]?.id || '');
+   380→      } catch (assignmentLoadError) {
+   381→        if (cancelled) return;
+   382→        const message =
+   383→          assignmentLoadError instanceof Error
+   384→            ? assignmentLoadError.message
+   385→            : t('Unable to load assignments.', 'Impossible de charger les affectations.');
+   386→        setAssignmentError(message);
+   387→        setAssignments([]);
+   388→        setAssignmentContext(null);
+   389→      } finally {
+   390→        if (!cancelled) setIsLoadingAssignments(false);
+   391→      }
+   392→    };
+   393→
+   394→    void loadAssignments();
+   395→    return () => {
+   396→      cancelled = true;
+   397→    };
+   398→  }, [assignmentStatusFilter, assignmentAgentFilter, language]);
+   399→
+   400→  useEffect(() => {
+   401→    let cancelled = false;
+   402→
+   403→    const loadSyncErrors = async () => {
+   404→      try {
+   405→        const records = await listSyncErrorRecords();
+   406→        if (!cancelled) setSyncErrors(records);
+   407→      } catch {
+   408→        if (!cancelled) setSyncErrors([]);
+   409→      }
+   410→    };
+   411→
+   412→    void loadSyncErrors();
+   413→    return () => {
+   414→      cancelled = true;
+   415→    };
+   416→  }, []);
+   417→
+   418→  useEffect(() => {
+   419→    setDeleteError('');
+   420→    setActionMessage('');
+   421→  }, [selectedPointId]);
+   422→
+   423→  const groupedPoints = useMemo(() => groupEventsByPoint(items, language), [items, language]);
+   424→  const filteredGroups = useMemo(() => {
+   425→    const filtered = groupedPoints.filter((group) => {
+   426→      if (riskFilter === 'all') return true;
+   427→      return getRiskBucket(group.latestEvent) === riskFilter;
+   428→    });
+   429→
+   430→    return filtered.sort((a, b) => {
+   431→      const riskDelta = getRiskScore(b.latestEvent) - getRiskScore(a.latestEvent);
+   432→      if (riskDelta !== 0) return riskDelta;
+   433→      const reviewPriority = (value: string) => (value === 'pending_review' ? 1 : 0);
+   434→      const reviewDelta = reviewPriority(getReviewStatus(b.latestEvent)) - reviewPriority(getReviewStatus(a.latestEvent));
+   435→      if (reviewDelta !== 0) return reviewDelta;
+   436→      return new Date(b.latestEvent.event.createdAt).getTime() - new Date(a.latestEvent.event.createdAt).getTime();
+   437→    });
+   438→  }, [groupedPoints, riskFilter]);
+   439→  const selectedGroup = useMemo(() => filteredGroups.find((g) => g.pointId === selectedPointId) ?? null, [filteredGroups, selectedPointId]);
+   440→  const unavailableLabel = t('Unavailable', 'Indisponible');
+   441→
+   442→  useEffect(() => {
+   443→    if (filteredGroups.length === 0) {
+   444→      if (selectedPointId !== null) setSelectedPointId(null);
+   445→      return;
+   446→    }
+   447→    if (!selectedPointId || !filteredGroups.some((group) => group.pointId === selectedPointId)) {
+   448→      setSelectedPointId(filteredGroups[0]?.pointId ?? null);
+   449→    }
+   450→  }, [filteredGroups, selectedPointId]);
+   451→
+   452→  const handleDeleteSelected = async () => {
+   453→    if (!selectedGroup) return;
+   454→    const hasReadOnly = selectedGroup.events.some(isReadOnlySubmission);
+   455→    if (hasReadOnly) {
+   456→      setDeleteError(t('This point contains read-only events that cannot be deleted.', 'Ce point contient des evenements en lecture seule qui ne peuvent pas etre supprimes.'));
+   457→      return;
+   458→    }
+   459→
+   460→    const evtCount = selectedGroup.events.length;
+   461→    const confirmed = window.confirm(
+   462→      evtCount > 1
+   463→        ? t(`Delete all ${evtCount} events for this point permanently?`, `Supprimer definitivement les ${evtCount} evenements de ce point ?`)
+   464→        : t('Delete this submission event permanently?', 'Supprimer definitivement cet evenement de soumission ?')
+   465→    );
+   466→    if (!confirmed) return;
+   467→
+   468→    setIsDeleting(true);
+   469→    setDeleteError('');
+   470→    setActionMessage('');
+   471→    try {
+   472→      for (const ev of selectedGroup.events) {
+   473→        const response = await apiFetch(`/api/submissions/${encodeURIComponent(ev.event.id)}?view=event`, {
+   474→          method: 'DELETE',
+   475→        });
+   476→        if (!response.ok) {
+   477→          const message = (await response.text()) || t('Unable to delete submission.', 'Impossible de supprimer la soumission.');
+   478→          setDeleteError(message);
+   479→          return;
+   480→        }
+   481→      }
+   482→
+   483→      const deletedIds = new Set(selectedGroup.events.map((e) => e.event.id));
+   484→      const nextItems = items.filter((item) => !deletedIds.has(item.event.id));
+   485→      setItems(nextItems);
+   486→      setSelectedPointId(nextItems[0]?.event.pointId ?? null);
+   487→      setActionMessage(t('Point deleted successfully.', 'Point supprime avec succes.'));
+   488→    } catch (deleteActionError) {
+   489→      const message =
+   490→        deleteActionError instanceof Error
+   491→          ? deleteActionError.message
+   492→          : t('Unable to delete submission.', 'Impossible de supprimer la soumission.');
+   493→      setDeleteError(message);
+   494→    } finally {
+   495→      setIsDeleting(false);
+   496→    }
+   497→  };
+   498→
+   499→  const applyReviewToLocalState = (eventId: string, decision: ReviewDecision) => {
+   500→    setItems((prev) =>
+   501→      prev.map((item) => {
+   502→        if (item.event.id !== eventId) return item;
+   503→        const nextReviewStatus = decision === 'approved' ? 'auto_approved' : 'pending_review';
+   504→        return {
+   505→          ...item,
+   506→          event: {
+   507→            ...item.event,
+   508→            details: {
+   509→              ...(item.event.details as SubmissionDetails),
+   510→              reviewDecision: decision,
+   511→              reviewStatus: nextReviewStatus,
+   512→              reviewedAt: new Date().toISOString(),
+   513→            },
+   514→          },
+   515→        };
+   516→      }),
+   517→    );
+   518→  };
+   519→
+   520→  const handleReviewDecision = async (group: GroupedPoint, decision: ReviewDecision) => {
+   521→    if (isApplyingDecision) return;
+   522→    setActionMessage('');
+   523→    setDeleteError('');
+   524→    try {
+   525→      setIsApplyingDecision(true);
+   526→      await apiJson(`/api/submissions/${encodeURIComponent(group.latestEvent.event.id)}?view=review`, {
+   527→        method: 'PATCH',
+   528→        headers: { 'Content-Type': 'application/json' },
+   529→        body: JSON.stringify({ decision }),
+   530→      });
+   531→      applyReviewToLocalState(group.latestEvent.event.id, decision);
+   532→      setActionMessage(
+   533→        decision === 'approved'
+   534→          ? t('Latest event approved.', 'Dernier evenement approuve.')
+   535→          : decision === 'rejected'
+   536→            ? t('Latest event rejected.', 'Dernier evenement rejete.')
+   537→            : t('Latest event put on hold.', 'Dernier evenement mis en attente.'),
+   538→      );
+   539→    } catch (reviewError) {
+   540→      const message =
+   541→        reviewError instanceof Error
+   542→          ? reviewError.message
+   543→          : t('Unable to apply review decision.', 'Impossible d appliquer la decision.');
+   544→      setDeleteError(message);
+   545→    } finally {
+   546→      setIsApplyingDecision(false);
+   547→    }
+   548→  };
+   549→
+   550→  const toggleBulkItem = (pointId: string) => {
+   551→    setSelectedForBulk((prev) => {
+   552→      const next = new Set(prev);
+   553→      if (next.has(pointId)) next.delete(pointId);
+   554→      else next.add(pointId);
+   555→      return next;
+   556→    });
+   557→  };
+   558→
+   559→  const selectAllLowRisk = () => {
+   560→    const lowRiskIds = filteredGroups
+   561→      .filter((g) => getRiskBucket(g.latestEvent) === 'low_risk')
+   562→      .map((g) => g.pointId);
+   563→    setSelectedForBulk((prev) => {
+   564→      const allSelected = lowRiskIds.every((id) => prev.has(id));
+   565→      if (allSelected) return new Set();
+   566→      return new Set(lowRiskIds);
+   567→    });
+   568→  };
+   569→
+   570→  const handleBulkApproveLowRisk = async () => {
+   571→    if (isApplyingDecision) return;
+   572→
+   573→    const targetGroups = selectedForBulk.size > 0
+   574→      ? filteredGroups.filter((g) => selectedForBulk.has(g.pointId) && getReviewStatus(g.latestEvent) === 'pending_review')
+   575→      : filteredGroups.filter(
+   576→          (group) => getRiskBucket(group.latestEvent) === 'low_risk' && getReviewStatus(group.latestEvent) === 'pending_review',
+   577→        );
+   578→
+   579→    if (targetGroups.length === 0) {
+   580→      setActionMessage(t('No pending groups to approve.', 'Aucun groupe en attente a approuver.'));
+   581→      return;
+   582→    }
+   583→
+   584→    setActionMessage('');
+   585→    setDeleteError('');
+   586→    try {
+   587→      setIsApplyingDecision(true);
+   588→      for (const group of targetGroups) {
+   589→        await apiJson(`/api/submissions/${encodeURIComponent(group.latestEvent.event.id)}?view=review`, {
+   590→          method: 'PATCH',
+   591→          headers: { 'Content-Type': 'application/json' },
+   592→          body: JSON.stringify({ decision: 'approved' }),
+   593→        });
+   594→        applyReviewToLocalState(group.latestEvent.event.id, 'approved');
+   595→      }
+   596→      setSelectedForBulk(new Set());
+   597→      setActionMessage(
+   598→        t(`${targetGroups.length} group(s) approved.`, `${targetGroups.length} groupe(s) approuves.`),
+   599→      );
+   600→    } catch (error) {
+   601→      setDeleteError(error instanceof Error ? error.message : t('Bulk approve failed.', 'Approbation en lot impossible.'));
+   602→    } finally {
+   603→      setIsApplyingDecision(false);
+   604→    }
+   605→  };
+   606→
+   607→  const handleClearSyncErrors = async () => {
+   608→    if (isClearingSyncErrors) return;
+   609→    try {
+   610→      setIsClearingSyncErrors(true);
+   611→      await clearSyncErrorRecords();
+   612→      setSyncErrors([]);
+   613→    } finally {
+   614→      setIsClearingSyncErrors(false);
+   615→    }
+   616→  };
+   617→
+   618→  useEffect(() => {
+   619→    if (filteredGroups.length === 0) return;
+   620→
+   621→    const onKeyDown = (event: KeyboardEvent) => {
+   622→      const target = event.target as HTMLElement | null;
+   623→      const isTypingTarget =
+   624→        target?.tagName === 'INPUT'
+   625→        || target?.tagName === 'TEXTAREA'
+   626→        || target?.tagName === 'SELECT'
+   627→        || target?.isContentEditable === true;
+   628→      if (isTypingTarget) return;
+   629→
+   630→      const currentIndex = filteredGroups.findIndex((group) => group.pointId === selectedPointId);
+   631→      const selected = currentIndex >= 0 ? filteredGroups[currentIndex] : null;
+   632→      const key = event.key.toLowerCase();
+   633→
+   634→      if (key === 'j') {
+   635→        event.preventDefault();
+   636→        const next = filteredGroups[Math.min(filteredGroups.length - 1, Math.max(0, currentIndex + 1))];
+   637→        if (next) setSelectedPointId(next.pointId);
+   638→      }
+   639→      if (key === 'k') {
+   640→        event.preventDefault();
+   641→        const prev = filteredGroups[Math.max(0, currentIndex - 1)];
+   642→        if (prev) setSelectedPointId(prev.pointId);
+   643→      }
+   644→      if (!selected || isApplyingDecision) return;
+   645→      if (key === 'a') {
+   646→        event.preventDefault();
+   647→        void handleReviewDecision(selected, 'approved');
+   648→      }
+   649→      if (key === 'r') {
+   650→        event.preventDefault();
+   651→        void handleReviewDecision(selected, 'rejected');
+   652→      }
+   653→      if (key === 'h') {
+   654→        event.preventDefault();
+   655→        void handleReviewDecision(selected, 'flagged');
+   656→      }
+   657→    };
+   658→
+   659→    window.addEventListener('keydown', onKeyDown);
+   660→    return () => window.removeEventListener('keydown', onKeyDown);
+   661→  }, [filteredGroups, isApplyingDecision, selectedPointId]);
+   662→
+   663→  const togglePlannerVertical = (vertical: SubmissionCategory) => {
+   664→    setPlannerVerticals((prev) => {
+   665→      if (prev.includes(vertical)) return prev.filter((item) => item !== vertical);
+   666→      return [...prev, vertical];
+   667→    });
+   668→  };
+   669→
+   670→  const handleCreateAssignment = async () => {
+   671→    if (isCreatingAssignment) return;
+   672→    setAssignmentError('');
+   673→    setAssignmentActionMessage('');
+   674→    if (!plannerAgent) {
+   675→      setAssignmentError(t('Select an agent.', 'Selectionnez un agent.'));
+   676→      return;
+   677→    }
+   678→    if (!plannerZone) {
+   679→      setAssignmentError(t('Select a zone.', 'Selectionnez une zone.'));
+   680→      return;
+   681→    }
+   682→    if (!plannerDueDate) {
+   683→      setAssignmentError(t('Select a due date.', 'Selectionnez une date limite.'));
+   684→      return;
+   685→    }
+   686→    if (plannerVerticals.length === 0) {
+   687→      setAssignmentError(t('Select at least one vertical.', 'Selectionnez au moins une verticale.'));
+   688→      return;
+   689→    }
+   690→
+   691→    const pointsExpected = Number(plannerExpected);
+   692→    const normalizedExpected = Number.isFinite(pointsExpected) ? Math.max(0, Math.round(pointsExpected)) : 0;
+   693→
+   694→    try {
+   695→      setIsCreatingAssignment(true);
+   696→      const created = await apiJson<CollectionAssignment>('/api/user?view=assignments', {
+   697→        method: 'POST',
+   698→        headers: { 'Content-Type': 'application/json' },
+   699→        body: JSON.stringify({
+   700→          agentUserId: plannerAgent,
+   701→          zoneId: plannerZone,
+   702→          assignedVerticals: plannerVerticals,
+   703→          dueDate: plannerDueDate,
+   704→          pointsExpected: normalizedExpected,
+   705→          notes: plannerNotes.trim() ? plannerNotes.trim() : null,
+   706→        }),
+   707→      });
+   708→      setAssignments((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
+   709→      setPlannerNotes('');
+   710→      setAssignmentActionMessage(t('Assignment created.', 'Affectation creee.'));
+   711→    } catch (createError) {
+   712→      const message =
+   713→        createError instanceof Error
+   714→          ? createError.message
+   715→          : t('Unable to create assignment.', 'Impossible de creer l\'affectation.');
+   716→      setAssignmentError(message);
+   717→    } finally {
+   718→      setIsCreatingAssignment(false);
+   719→    }
+   720→  };
+   721→
+   722→  return (
+   723→    <div className="flex flex-col h-full bg-[#f9fafb] overflow-y-auto no-scrollbar">
+   724→      <div className="sticky top-0 z-30 bg-[#1f2933] text-white px-4 h-14 flex items-center justify-between">
+   725→        <button onClick={onBack} className="p-2 -ml-2 hover:text-[#c86b4a] transition-colors">
+   726→          <ArrowLeft size={20} />
+   727→        </button>
+   728→        <h3 className="text-xs font-bold uppercase tracking-[0.2em]">{t('Submission Forensics', 'Analyse forensique')}</h3>
+   729→        <ShieldCheck size={18} className="text-[#c86b4a]" />
+   730→      </div>
+   731→
+   732→      <div className="p-4 space-y-4">
+   733→        <div className="bg-white border border-gray-100 rounded-xl p-3 text-[10px] font-bold uppercase tracking-widest text-gray-500 flex items-center justify-between">
+   734→          <span>{t('Global Admin Scope', 'Portee admin globale')}</span>
+   735→          <span>{items.length} {t('items', 'elements')}</span>
+   736→        </div>
+   737→
+   738→        <div className="bg-white border border-gray-100 rounded-2xl p-4 space-y-3 shadow-sm">
+   739→          <div className="flex items-center justify-between gap-3">
+   740→            <div>
+   741→              <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-gray-400">{t('Risk Queue', 'File de risque')}</div>
+   742→              <div className="mt-1 text-sm font-bold text-gray-900">{filteredGroups.length} {t('visible groups', 'groupes visibles')}</div>
+   743→            </div>
+   744→            <div className="flex items-center gap-2">
+   745→              <button
+   746→                type="button"
+   747→                onClick={selectAllLowRisk}
+   748→                className="h-10 rounded-2xl px-3 text-[10px] font-bold uppercase tracking-widest bg-gray-50 text-gray-600 border border-gray-100"
+   749→              >
+   750→                {t('Select Low-Risk', 'Selectionner faible risque')}
+   751→              </button>
+   752→              <button
+   753→                type="button"
+   754→                onClick={handleBulkApproveLowRisk}
+   755→                disabled={isApplyingDecision}
+   756→                className={`h-10 rounded-2xl px-4 text-[10px] font-bold uppercase tracking-widest ${
+   757→                  isApplyingDecision ? 'bg-gray-100 text-gray-400' : 'bg-[#0f2b46] text-white'
+   758→                }`}
+   759→              >
+   760→                {selectedForBulk.size > 0
+   761→                  ? `${t('Approve', 'Approuver')} (${selectedForBulk.size})`
+   762→                  : t('Approve Low-Risk', 'Approuver faible risque')}
+   763→              </button>
+   764→            </div>
+   765→          </div>
+   766→          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+   767→            {([
+   768→              ['all', t('All', 'Tous')],
+   769→              ['flagged', t('Flagged', 'Signales')],
+   770→              ['pending', t('Pending', 'En attente')],
+   771→              ['low_risk', t('Low Risk', 'Faible risque')],
+   772→            ] as Array<[RiskFilter, string]>).map(([filter, label]) => (
+   773→              <button
+   774→                key={filter}
+   775→                type="button"
+   776→                onClick={() => setRiskFilter(filter)}
+   777→                className={`h-10 rounded-xl border text-[10px] font-bold uppercase tracking-widest ${
+   778→                  riskFilter === filter ? 'bg-[#0f2b46] text-white border-[#0f2b46]' : 'bg-[#f9fafb] text-gray-600 border-gray-100'
+   779→                }`}
+   780→              >
+   781→                {label}
+   782→              </button>
+   783→            ))}
+   784→          </div>
+   785→          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+   786→            {t('Keyboard', 'Clavier')}: J/K {t('navigate', 'naviguer')} • A {t('approve', 'approuver')} • R {t('reject', 'rejeter')} • H {t('hold', 'mettre en attente')}
+   787→          </div>
+   788→        </div>
+   789→
+   790→        {schemaGuard?.ok === false && (
+   791→          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+   792→            <div className="text-[10px] font-bold uppercase tracking-widest text-amber-700">
+   793→              {t('Schema Guard Warning', 'Alerte garde schema')}
+   794→            </div>
+   795→            {schemaGuard.missing.length > 0 && (
+   796→              <div className="text-xs text-amber-800">
+   797→                {t('Missing categories:', 'Categories manquantes:')} {schemaGuard.missing.map((value) => getCategoryLabel(value, language)).join(', ')}
+   798→              </div>
+   799→            )}
+   800→            {schemaGuard.extra.length > 0 && (
+   801→              <div className="text-xs text-amber-800">
+   802→                {t('Unexpected categories:', 'Categories inattendues:')} {schemaGuard.extra.join(', ')}
+   803→              </div>
+   804→            )}
+   805→          </div>
+   806→        )}
+   807→
+   808→        <div className="bg-white border border-gray-100 rounded-2xl p-4 space-y-4 shadow-sm">
+   809→          <div className="flex items-center justify-between">
+   810→            <h4 className="text-xs font-bold uppercase tracking-widest text-[#0f2b46]">
+   811→              {t('Assignment Planner', 'Planification des affectations')}
+   812→            </h4>
+   813→            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+   814→              {assignments.length} {t('active rows', 'lignes')}
+   815→            </span>
+   816→          </div>
+   817→
+   818→          {assignmentActionMessage && (
+   819→            <div className="rounded-xl border border-[#d2e6d8] bg-[#eaf3ee] p-3 text-[11px] text-[#2f855a]">
+   820→              {assignmentActionMessage}
+   821→            </div>
+   822→          )}
+   823→
+   824→          {assignmentError && (
+   825→            <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-[11px] text-red-600">
+   826→              {assignmentError}
+   827→            </div>
+   828→          )}
+   829→
+   830→          <div className="grid grid-cols-2 gap-2">
+   831→            <select
+   832→              value={assignmentStatusFilter}
+   833→              onChange={(event) => setAssignmentStatusFilter((event.target.value as CollectionAssignment['status']) || '')}
+   834→              className="h-10 rounded-xl border border-gray-100 px-3 text-xs bg-gray-50"
+   835→            >
+   836→              <option value="">{t('All statuses', 'Tous les statuts')}</option>
+   837→              {ASSIGNMENT_STATUSES.map((status) => (
+   838→                <option key={status} value={status}>
+   839→                  {status}
+   840→                </option>
+   841→              ))}
+   842→            </select>
+   843→            <select
+   844→              value={assignmentAgentFilter}
+   845→              onChange={(event) => setAssignmentAgentFilter(event.target.value)}
+   846→              className="h-10 rounded-xl border border-gray-100 px-3 text-xs bg-gray-50"
+   847→            >
+   848→              <option value="">{t('All agents', 'Tous les agents')}</option>
+   849→              {(assignmentContext?.agents ?? []).map((agent) => (
+   850→                <option key={agent.id} value={agent.id}>
+   851→                  {agent.name}
+   852→                </option>
+   853→              ))}
+   854→            </select>
+   855→          </div>
+   856→
+   857→          <div className="rounded-xl border border-gray-100 p-3 space-y-3 bg-[#f9fafb]">
+   858→            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+   859→              {t('Add Assignment', 'Ajouter une affectation')}
+   860→            </div>
+   861→            <div className="grid grid-cols-2 gap-2">
+   862→              <select
+   863→                value={plannerAgent}
+   864→                onChange={(event) => setPlannerAgent(event.target.value)}
+   865→                className="h-10 rounded-xl border border-gray-100 px-3 text-xs bg-white"
+   866→              >
+   867→                <option value="">{t('Select agent', 'Choisir agent')}</option>
+   868→                {(assignmentContext?.agents ?? []).map((agent) => (
+   869→                  <option key={agent.id} value={agent.id}>
+   870→                    {agent.name}
+   871→                  </option>
+   872→                ))}
+   873→              </select>
+   874→              <select
+   875→                value={plannerZone}
+   876→                onChange={(event) => setPlannerZone(event.target.value)}
+   877→                className="h-10 rounded-xl border border-gray-100 px-3 text-xs bg-white"
+   878→              >
+   879→                <option value="">{t('Select zone', 'Choisir zone')}</option>
+   880→                {(assignmentContext?.zones ?? []).map((zone) => (
+   881→                  <option key={zone.id} value={zone.id}>
+   882→                    {zone.label}
+   883→                  </option>
+   884→                ))}
+   885→              </select>
+   886→            </div>
+   887→            <div className="grid grid-cols-2 gap-2">
+   888→              <input
+   889→                type="date"
+   890→                value={plannerDueDate}
+   891→                onChange={(event) => setPlannerDueDate(event.target.value)}
+   892→                className="h-10 rounded-xl border border-gray-100 px-3 text-xs bg-white"
+   893→              />
+   894→              <input
+   895→                type="number"
+   896→                min={0}
+   897→                value={plannerExpected}
+   898→                onChange={(event) => setPlannerExpected(event.target.value)}
+   899→                placeholder={t('Expected points', 'Points attendus')}
+   900→                className="h-10 rounded-xl border border-gray-100 px-3 text-xs bg-white"
+   901→              />
+   902→            </div>
+   903→            <input
+   904→              value={plannerNotes}
+   905→              onChange={(event) => setPlannerNotes(event.target.value)}
+   906→              placeholder={t('Optional notes', 'Notes optionnelles')}
+   907→              className="h-10 rounded-xl border border-gray-100 px-3 text-xs bg-white"
+   908→            />
+   909→            <div className="grid grid-cols-2 gap-2">
+   910→              {ASSIGNABLE_VERTICALS.map((vertical) => {
+   911→                const active = plannerVerticals.includes(vertical);
+   912→                return (
+   913→                  <button
+   914→                    key={vertical}
+   915→                    type="button"
+   916→                    onClick={() => togglePlannerVertical(vertical)}
+   917→                    className={`h-9 rounded-xl border text-[10px] font-bold uppercase tracking-widest ${
+   918→                      active ? 'bg-[#0f2b46] text-white border-[#0f2b46]' : 'bg-white text-gray-600 border-gray-100'
+   919→                    }`}
+   920→                  >
+   921→                    {getCategoryLabel(vertical, language)}
+   922→                  </button>
+   923→                );
+   924→              })}
+   925→            </div>
+   926→            <button
+   927→              type="button"
+   928→              onClick={handleCreateAssignment}
+   929→              disabled={isCreatingAssignment}
+   930→              className={`h-10 rounded-xl text-[10px] font-bold uppercase tracking-widest ${
+   931→                isCreatingAssignment ? 'bg-gray-100 text-gray-400' : 'bg-[#0f2b46] text-white hover:bg-[#123a5f]'
+   932→              }`}
+   933→            >
+   934→              {isCreatingAssignment ? t('Creating...', 'Creation...') : t('Create Assignment', 'Creer affectation')}
+   935→            </button>
+   936→          </div>
+   937→
+   938→          {isLoadingAssignments ? (
+   939→            <div className="text-xs text-gray-500">{t('Loading assignments...', 'Chargement des affectations...')}</div>
+   940→          ) : (
+   941→            <div className="space-y-2">
+   942→              {assignments.length === 0 && (
+   943→                <div className="rounded-xl border border-gray-100 bg-[#f9fafb] p-3 text-xs text-gray-500">
+   944→                  {t('No assignments found.', 'Aucune affectation trouvee.')}
+   945→                </div>
+   946→              )}
+   947→              {assignments.map((assignment) => (
+   948→                <div key={assignment.id} className="rounded-xl border border-gray-100 p-3 bg-white">
+   949→                  <div className="flex items-center justify-between gap-2">
+   950→                    <div className="text-xs font-bold text-gray-900">{assignment.zoneLabel}</div>
+   951→                    <span className="text-[10px] uppercase tracking-widest text-gray-500">{assignment.status}</span>
+   952→                  </div>
+   953→                  <div className="text-[11px] text-gray-600">
+   954→                    {assignment.agentUserId} · {assignment.pointsSubmitted}/{assignment.pointsExpected} ({assignment.completionRate}%)
+   955→                  </div>
+   956→                  <div className="text-[10px] text-gray-500">
+   957→                    {t('Due', 'Echeance')}: {assignment.dueDate}
+   958→                  </div>
+   959→                  <div className="text-[10px] text-gray-500">
+   960→                    {assignment.assignedVerticals.map((vertical) => getCategoryLabel(vertical, language)).join(', ')}
+   961→                  </div>
+   962→                </div>
+   963→              ))}
+   964→            </div>
+   965→          )}
+   966→        </div>
+   967→
+   968→        {syncErrors.length > 0 && (
+   969→          <div className="bg-red-50 border border-red-100 rounded-2xl p-4 space-y-3">
+   970→            <div className="flex items-center justify-between gap-3">
+   971→              <div className="flex items-center space-x-2 text-red-700">
+   972→                <AlertTriangle size={14} />
+   973→                <span className="text-[10px] font-bold uppercase tracking-widest">
+   974→                  {t('Local Sync Errors', 'Erreurs locales de synchronisation')} ({syncErrors.length})
+   975→                </span>
+   976→              </div>
+   977→              <button
+   978→                type="button"
+   979→                onClick={handleClearSyncErrors}
+   980→                disabled={isClearingSyncErrors}
+   981→                className={`text-[10px] font-bold uppercase tracking-widest ${isClearingSyncErrors ? 'text-red-300' : 'text-red-700'}`}
+   982→              >
+   983→                {isClearingSyncErrors ? t('Clearing...', 'Suppression...') : t('Clear', 'Effacer')}
+   984→              </button>
+   985→            </div>
+   986→            <div className="text-xs text-red-700">
+   987→              {syncErrors[0]?.message ?? t('Unknown sync error.', 'Erreur de synchronisation inconnue.')}
+   988→            </div>
+   989→          </div>
+   990→        )}
+   991→
+   992→        {isLoading && (
+   993→          <div className="bg-white border border-gray-100 rounded-2xl p-5 text-xs text-gray-500">
+   994→            {t('Loading submissions...', 'Chargement des soumissions...')}
+   995→          </div>
+   996→        )}
+   997→
+   998→        {!isLoading && error && (
+   999→          <div className="bg-red-50 border border-red-100 rounded-2xl p-5 text-xs text-red-600">
+  1000→            {error}
+  1001→          </div>
+  1002→        )}
+  1003→
+  1004→        {!isLoading && !error && actionMessage && (
+  1005→          <div className="bg-[#eaf3ee] border border-[#d2e6d8] rounded-2xl p-4 text-xs text-[#2f855a]">
+  1006→            {actionMessage}
+  1007→          </div>
+  1008→        )}
+  1009→
+  1010→        {!isLoading && !error && deleteError && (
+  1011→          <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-xs text-red-600">
+  1012→            {deleteError}
+  1013→          </div>
+  1014→        )}
+  1015→
+  1016→        <div className="lg:flex lg:gap-4">
+  1017→        <div className="lg:w-[380px] lg:shrink-0 lg:overflow-y-auto lg:max-h-[calc(100vh-200px)]">
+  1018→        {!isLoading && !error && filteredGroups.length > 0 && (
+  1019→          <div className="space-y-3">
+  1020→            {filteredGroups.map((group) => {
+  1021→              const isSelected = selectedPointId === group.pointId;
+  1022→              const preview = group.allPhotos[0]?.url ?? null;
+  1023→              const riskScore = getRiskScore(group.latestEvent);
+  1024→              const reviewStatus = getReviewStatus(group.latestEvent);
+  1025→              return (
+  1026→                <div
+  1027→                  key={`desktop-${group.pointId}`}
+  1028→                  className={`hidden lg:block w-full text-left bg-white border rounded-2xl overflow-hidden shadow-sm transition-colors ${
+  1029→                    isSelected ? 'border-[#0f2b46]' : 'border-gray-100 hover:border-[#d5e1eb]'
+  1030→                  }`}
+  1031→                >
+  1032→                  <div className="flex">
+  1033→                    <div className="flex items-center pl-2">
+  1034→                      <input
+  1035→                        type="checkbox"
+  1036→                        checked={selectedForBulk.has(group.pointId)}
+  1037→                        onChange={() => toggleBulkItem(group.pointId)}
+  1038→                        className="w-4 h-4 rounded border-gray-300 text-[#0f2b46] shrink-0"
+  1039→                      />
+  1040→                    </div>
+  1041→                    <button
+  1042→                      type="button"
+  1043→                      onClick={() => setSelectedPointId(group.pointId)}
+  1044→                      className="flex flex-1 text-left"
+  1045→                    >
+  1046→                    <div className="w-16 h-16 bg-gray-100 shrink-0 flex items-center justify-center relative">
+  1047→                      {preview ? (
+  1048→                        <img src={preview} alt={t('submission', 'soumission')} className="h-full w-full object-cover" />
+  1049→                      ) : (
+  1050→                        <Camera size={14} className="text-gray-300" />
+  1051→                      )}
+  1052→                    </div>
+  1053→                    <div className="flex-1 p-2 space-y-1">
+  1054→                      <h4 className="text-xs font-bold text-gray-900 leading-tight truncate">{group.siteName}</h4>
+  1055→                      <p className="text-[9px] uppercase tracking-widest text-gray-400">
+  1056→                        {categoryLabelLocal(group.category, language)} • {riskScore} • {reviewStatus}
+  1057→                      </p>
+  1058→                    </div>
+  1059→                    </button>
+  1060→                  </div>
+  1061→                </div>
+  1062→              );
+  1063→            })}
+  1064→          </div>
+  1065→        )}
+  1066→        </div>
+  1067→        <div className="lg:flex-1 lg:overflow-y-auto lg:max-h-[calc(100vh-200px)]">
+  1068→
+  1069→        {!isLoading && !error && selectedGroup && (() => {
+  1070→          const hasReadOnly = selectedGroup.events.some(isReadOnlySubmission);
+  1071→          const latestFraudCheck = selectedGroup.latestEvent.fraudCheck ?? null;
+  1072→          const latestDevice = getClientDevice(selectedGroup.latestEvent);
+  1073→          const contributors = [...new Map<string, AdminSubmissionEvent['user']>(selectedGroup.events.map((e) => [e.user.id, e.user])).values()];
+  1074→          return (
+  1075→          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
+  1076→            <div className="flex items-center justify-between">
+  1077→              <h4 className="text-sm font-bold text-gray-900">{t('Point Detail', 'Detail du point')}</h4>
+  1078→              <button
+  1079→                type="button"
+  1080→                onClick={() => setSelectedPointId(null)}
+  1081→                className="h-8 w-8 rounded-full border border-gray-100 text-gray-500 hover:text-gray-900 flex items-center justify-center"
+  1082→              >
+  1083→                <X size={14} />
+  1084→              </button>
+  1085→            </div>
+  1086→
+  1087→            <div className="flex items-center justify-between gap-3">
+  1088→              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+  1089→                {selectedGroup.events.length} {t('event(s)', 'evenement(s)')}
+  1090→              </p>
+  1091→              <div className="flex flex-wrap justify-end gap-2">
+  1092→                <button
+  1093→                  type="button"
+  1094→                  onClick={() => void handleReviewDecision(selectedGroup, 'approved')}
+  1095→                  disabled={isApplyingDecision}
+  1096→                  className={`h-10 px-3 rounded-xl text-[10px] font-bold uppercase tracking-widest ${
+  1097→                    isApplyingDecision ? 'bg-gray-100 text-gray-400' : 'bg-[#eaf3ee] text-[#2f855a]'
+  1098→                  }`}
+  1099→                >
+  1100→                  {t('Approve', 'Approuver')}
+  1101→                </button>
+  1102→                <button
+  1103→                  type="button"
+  1104→                  onClick={() => void handleReviewDecision(selectedGroup, 'flagged')}
+  1105→                  disabled={isApplyingDecision}
+  1106→                  className={`h-10 px-3 rounded-xl text-[10px] font-bold uppercase tracking-widest ${
+  1107→                    isApplyingDecision ? 'bg-gray-100 text-gray-400' : 'bg-[#fff8f4] text-[#c86b4a]'
+  1108→                  }`}
+  1109→                >
+  1110→                  {t('Hold', 'Mettre en attente')}
+  1111→                </button>
+  1112→                <button
+  1113→                  type="button"
+  1114→                  onClick={() => void handleReviewDecision(selectedGroup, 'rejected')}
+  1115→                  disabled={isApplyingDecision}
+  1116→                  className={`h-10 px-3 rounded-xl text-[10px] font-bold uppercase tracking-widest ${
+  1117→                    isApplyingDecision ? 'bg-gray-100 text-gray-400' : 'bg-red-50 text-red-600'
+  1118→                  }`}
+  1119→                >
+  1120→                  {t('Reject', 'Rejeter')}
+  1121→                </button>
+  1122→                <button
+  1123→                  type="button"
+  1124→                  onClick={handleDeleteSelected}
+  1125→                  disabled={isDeleting || hasReadOnly}
+  1126→                  className={`h-10 px-3 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center space-x-2 ${
+  1127→                    isDeleting || hasReadOnly
+  1128→                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+  1129→                      : 'bg-red-50 border border-red-100 text-red-600 hover:bg-red-100'
+  1130→                  }`}
+  1131→                >
+  1132→                  <Trash2 size={14} />
+  1133→                  <span>
+  1134→                    {isDeleting
+  1135→                      ? t('Deleting...', 'Suppression...')
+  1136→                      : hasReadOnly
+  1137→                        ? t('Cannot delete', 'Suppression impossible')
+  1138→                        : t('Delete point', 'Supprimer point')}
+  1139→                  </span>
+  1140→                </button>
+  1141→              </div>
+  1142→            </div>
+  1143→
+  1144→            <div className="grid grid-cols-1 gap-3 text-[11px]">
+  1145→              <div className="rounded-2xl border border-gray-100 p-3 space-y-1">
+  1146→                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{t('Contributors', 'Contributeurs')}</div>
+  1147→                {contributors.map((user) => (
+  1148→                  <div key={user.id} className="space-y-0.5">
+  1149→                    <div className="text-gray-900 font-semibold">{user.name}</div>
+  1150→                    <div className="text-gray-600">{user.email ?? unavailableLabel}</div>
+  1151→                    <div className="text-[11px] text-gray-500">
+  1152→                      {t('Trust', 'Confiance')}: {typeof user.trustScore === 'number' ? user.trustScore : '--'} • {user.trustTier ?? unavailableLabel}
+  1153→                    </div>
+  1154→                    {user.suspendedUntil && (
+  1155→                      <div className="text-[11px] text-[#b85f3f]">
+  1156→                        {t('Suspended until', 'Suspendu jusqu’au')}: {formatDate(user.suspendedUntil, unavailableLabel)}
+  1157→                      </div>
+  1158→                    )}
+  1159→                  </div>
+  1160→                ))}
+  1161→              </div>
+  1162→
+  1163→              <div className="rounded-2xl border border-gray-100 p-3 space-y-1">
+  1164→                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{t('Point Metadata', 'Metadonnees du point')}</div>
+  1165→                <div>{t('Category', 'Categorie')}: {categoryLabelLocal(selectedGroup.category, language)}</div>
+  1166→                <div>Point ID: {selectedGroup.pointId}</div>
+  1167→                <div>{t('Events', 'Evenements')}: {selectedGroup.events.length}</div>
+  1168→                <div>{t('Risk Score', 'Score de risque')}: {getRiskScore(selectedGroup.latestEvent)}</div>
+  1169→                <div>{t('Review Status', 'Statut revue')}: {getReviewStatus(selectedGroup.latestEvent)}</div>
+  1170→              </div>
+  1171→
+  1172→              <div className="rounded-2xl border border-gray-100 p-3 space-y-2">
+  1173→                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{t('Event Timeline', 'Historique des evenements')}</div>
+  1174→                {selectedGroup.events.map((ev, idx) => {
+  1175→                  const device = getClientDevice(ev);
+  1176→                  return (
+  1177→                    <div key={ev.event.id} className={`p-2 rounded-xl ${idx === 0 ? 'bg-[#eaf3ee] border border-[#d2e6d8]' : 'bg-gray-50 border border-gray-100'}`}>
+  1178→                      <div className="flex items-center justify-between">
+  1179→                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#0f2b46]">
+  1180→                          {ev.event.eventType === 'CREATE_EVENT' ? t('Create', 'Creation') : t('Enrich', 'Enrichissement')}
+  1181→                        </span>
+  1182→                        <span className="text-[10px] text-gray-500">{formatDate(ev.event.createdAt, unavailableLabel)}</span>
+  1183→                      </div>
+  1184→                      <div className="text-gray-600 mt-1">{t('By', 'Par')}: {ev.user.name}</div>
+  1185→                      {device && <div className="text-gray-500">{t('Device', 'Appareil')}: {device.platform ?? 'Unknown'}</div>}
+  1186→                    </div>
+  1187→                  );
+  1188→                })}
+  1189→              </div>
+  1190→
+  1191→              <div className="rounded-2xl border border-gray-100 p-3 space-y-1">
+  1192→                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{t('Location', 'Localisation')}</div>
+  1193→                <div>{t('Submission GPS', 'GPS soumis')}: {formatLocation(latestFraudCheck?.submissionLocation, unavailableLabel)}</div>
+  1194→                <div>{t('Effective GPS', 'GPS effectif')}: {formatLocation(latestFraudCheck?.effectiveLocation, unavailableLabel)}</div>
+  1195→                <div>{t('IP GPS', 'GPS IP')}: {formatLocation(latestFraudCheck?.ipLocation, unavailableLabel)}</div>
+  1196→              </div>
+  1197→
+  1198→              <div className="rounded-2xl border border-gray-100 p-3 space-y-1">
+  1199→                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{t('Client Device', 'Appareil client')}</div>
+  1200→                <div>{t('Device ID', 'Device ID')}: {latestDevice?.deviceId ?? unavailableLabel}</div>
+  1201→                <div>{t('Platform', 'Plateforme')}: {latestDevice?.platform ?? unavailableLabel}</div>
+  1202→                <div>
+  1203→                  {t('Low-end flag', 'Indicateur entree de gamme')}:{' '}
+  1204→                  {latestDevice ? (latestDevice.isLowEnd === true ? t('Yes', 'Oui') : t('No', 'Non')) : unavailableLabel}
+  1205→                </div>
+  1206→              </div>
+  1207→
+  1208→              <div className="space-y-2">
+  1209→                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+  1210→                  {t('All Photos', 'Toutes les photos')} ({selectedGroup.allPhotos.length})
+  1211→                </div>
+  1212→                <div className="grid grid-cols-2 gap-3">
+  1213→                  {selectedGroup.allPhotos.length === 0 && (
+  1214→                    <div className="col-span-2 rounded-2xl border border-gray-100 bg-gray-50 h-28 flex items-center justify-center">
+  1215→                      <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest text-center px-2">
+  1216→                        {t('No photos available', 'Aucune photo disponible')}
+  1217→                      </div>
+  1218→                    </div>
+  1219→                  )}
+  1220→                  {selectedGroup.allPhotos.map((photo, idx) => (
+  1221→                    <div key={idx} className="space-y-1">
+  1222→                      <div className="rounded-2xl border border-gray-100 overflow-hidden bg-gray-50 h-28 flex items-center justify-center">
+  1223→                        <img src={photo.url} alt={`${t('Photo', 'Photo')} ${idx + 1}`} className="h-full w-full object-cover" />
+  1224→                      </div>
+  1225→                      <div className="text-[10px] text-gray-500 text-center">
+  1226→                        {photo.eventType === 'CREATE_EVENT' ? t('Create', 'Creation') : photo.eventType === 'ENRICH_EVENT' ? t('Enrich', 'Enrichissement') : photo.eventType}
+  1227→                      </div>
+  1228→                    </div>
+  1229→                  ))}
+  1230→                </div>
+  1231→              </div>
+  1232→
+  1233→              <div className="space-y-3">
+  1234→                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+  1235→                  {t('Photo EXIF Metadata', 'Metadonnees EXIF des photos')}
+  1236→                </div>
+  1237→                {selectedGroup.allPhotos.length === 0 && (
+  1238→                  <div className="text-[11px] text-gray-500">{unavailableLabel}</div>
+  1239→                )}
+  1240→                {selectedGroup.allPhotos.map((photo, idx) => (
+  1241→                  <DetailMetadataBlock
+  1242→                    key={idx}
+  1243→                    label={`${t('Photo', 'Photo')} ${idx + 1} — ${photo.eventType === 'CREATE_EVENT' ? t('Create', 'Creation') : photo.eventType === 'ENRICH_EVENT' ? t('Enrich', 'Enrichissement') : photo.eventType}`}
+  1244→                    metadata={photo.metadata}
+  1245→                    thresholdKm={latestFraudCheck?.submissionMatchThresholdKm ?? 1}
+  1246→                    unavailable={unavailableLabel}
+  1247→                    language={language}
+  1248→                  />
+  1249→                ))}
+  1250→                <div className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+  1251→                  {t('IP Match Threshold', 'Seuil correspondance IP')}: {latestFraudCheck?.ipMatchThresholdKm ?? 50} km
+  1252→                </div>
+  1253→              </div>
+  1254→            </div>
+  1255→          </div>
+  1256→          );
+  1257→        })()}
+  1258→
+  1259→        {!isLoading && !error && !selectedGroup && filteredGroups.length > 0 && (
+  1260→          <div className="hidden lg:flex bg-white border border-gray-100 rounded-2xl p-8 items-center justify-center text-xs text-gray-400 min-h-[200px]">
+  1261→            {t('Select an item to view details', 'Selectionnez un element pour voir les details')}
+  1262→          </div>
+  1263→        )}
+  1264→
+  1265→        </div>
+  1266→        </div>
+  1267→
+  1268→        {!isLoading && !error && filteredGroups.length === 0 && (
+  1269→          <div className="bg-white border border-gray-100 rounded-2xl p-6 text-xs text-gray-500 text-center">
+  1270→            {t('No submissions found.', 'Aucune soumission trouvee.')}
+  1271→          </div>
+  1272→        )}
+  1273→
+  1274→        {!isLoading && !error && filteredGroups.length > 0 && (
+  1275→          <div className="space-y-3 lg:hidden">
+  1276→            {filteredGroups.map((group) => {
+  1277→              const isSelected = selectedPointId === group.pointId;
+  1278→              const state = getMatchState(group.latestEvent.fraudCheck);
+  1279→              const preview = group.allPhotos[0]?.url ?? null;
+  1280→              const contributors = [...new Set(group.events.map((e) => e.user.name))];
+  1281→              const riskScore = getRiskScore(group.latestEvent);
+  1282→              const reviewStatus = getReviewStatus(group.latestEvent);
+  1283→              return (
+  1284→                <div
+  1285→                  key={group.pointId}
+  1286→                  className={`w-full text-left bg-white border rounded-2xl overflow-hidden shadow-sm transition-colors ${
+  1287→                    isSelected ? 'border-[#0f2b46]' : 'border-gray-100 hover:border-[#d5e1eb]'
+  1288→                  }`}
+  1289→                >
+  1290→                  <div className="flex">
+  1291→                    <div className="flex items-center pl-2">
+  1292→                      <input
+  1293→                        type="checkbox"
+  1294→                        checked={selectedForBulk.has(group.pointId)}
+  1295→                        onChange={(e) => {
+  1296→                          e.stopPropagation();
+  1297→                          toggleBulkItem(group.pointId);
+  1298→                        }}
+  1299→                        className="w-4 h-4 rounded border-gray-300 text-[#0f2b46] shrink-0"
+  1300→                      />
+  1301→                    </div>
+  1302→                    <button
+  1303→                      type="button"
+  1304→                      onClick={() => setSelectedPointId(group.pointId)}
+  1305→                      className="flex flex-1 text-left"
+  1306→                    >
+  1307→                    <div className="w-24 h-24 bg-gray-100 shrink-0 flex items-center justify-center relative">
+  1308→                      {preview ? (
+  1309→                        <img src={preview} alt={t('submission', 'soumission')} className="h-full w-full object-cover" />
+  1310→                      ) : (
+  1311→                        <Camera size={18} className="text-gray-300" />
+  1312→                      )}
+  1313→                      {group.allPhotos.length > 1 && (
+  1314→                        <div className="absolute top-1 right-1 bg-[#0f2b46] text-white text-[9px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+  1315→                          {group.allPhotos.length}
+  1316→                        </div>
+  1317→                      )}
+  1318→                    </div>
+  1319→                    <div className="flex-1 p-3 space-y-2">
+  1320→                      <div className="flex items-start justify-between gap-2">
+  1321→                        <div>
+  1322→                          <h4 className="text-sm font-bold text-gray-900 leading-tight">{group.siteName}</h4>
+  1323→                          <p className="text-[10px] uppercase tracking-widest text-gray-400">
+  1324→                            {categoryLabelLocal(group.category, language)}
+  1325→                            {group.events.length > 1 && ` · ${group.events.length} ${t('events', 'evenements')}`}
+  1326→                          </p>
+  1327→                        </div>
+  1328→                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg border ${matchStateClass(state)}`}>
+  1329→                          {matchStateLabel(state, language)}
+  1330→                        </span>
+  1331→                      </div>
+  1332→                      <div className="text-[11px] text-gray-600 flex items-center gap-1">
+  1333→                        <User size={12} />
+  1334→                        <span className="truncate">{contributors.join(', ')}</span>
+  1335→                      </div>
+  1336→                      <div className="text-[11px] text-gray-500 flex items-center gap-1">
+  1337→                        <MapPin size={12} />
+  1338→                        <span>{formatDate(group.latestEvent.event.createdAt, unavailableLabel)}</span>
+  1339→                      </div>
+  1340→                      <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+  1341→                        {t('Risk', 'Risque')}: {riskScore} • {reviewStatus}
+  1342→                      </div>
+  1343→                    </div>
+  1344→                  </button>
+  1345→                  </div>
+  1346→                </div>
+  1347→              );
+  1348→            })}
+  1349→          </div>
+  1350→        )}
+  1351→      </div>
+  1352→    </div>
+  1353→  );
+  1354→};
+  1355→
+  1356→export default AdminQueue;
+  1357→

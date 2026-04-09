@@ -1,0 +1,19 @@
+my google auth works when i create a new account but when i want to log in using goole it throws an error 
+
+[auth] google token endpoint response error {
+  status: 401,
+  statusText: 'Unauthorized',
+  body: '{\n  "error": "invalid_client",\n  "error_description": "Unauthorized"\n}'
+}
+error { error: 'invalid_client', error_description: 'Unauthorized' }
+[auth][error] CallbackRouteError: Read more at https://errors.authjs.dev#callbackrouteerror
+[auth][cause]: Error: TODO: Handle OIDC response body error
+    at handleOAuth (file:///var/task/node_modules/@auth/core/lib/actions/callback/oauth/callback.js:88:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async Module.callback (file:///var/task/node_modules/@auth/core/lib/actions/callback/index.js:27:41)
+    at async AuthInternal (file:///var/task/node_modules/@auth/core/lib/index.js:27:24)
+    at async Auth (file:///var/task/node_modules/@auth/core/index.js:109:34)
+    at async handler (/vercel/path0/api/auth/auth.ts:116:12)
+[auth][details]: {
+  "provider": "google"
+}

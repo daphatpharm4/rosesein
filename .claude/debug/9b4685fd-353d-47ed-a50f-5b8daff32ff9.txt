@@ -1,0 +1,1799 @@
+2026-02-27T14:11:29.093Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T14:11:29.094Z [DEBUG] MDM settings load completed in 20ms
+2026-02-27T14:11:29.157Z [DEBUG] [init] configureGlobalMTLS starting
+2026-02-27T14:11:29.157Z [DEBUG] [init] configureGlobalMTLS complete
+2026-02-27T14:11:29.157Z [DEBUG] [init] configureGlobalAgents starting
+2026-02-27T14:11:29.158Z [DEBUG] [init] configureGlobalAgents complete
+2026-02-27T14:11:29.163Z [DEBUG] Applying permission update: Adding 5 allow rule(s) to destination 'localSettings': ["Bash(wc:*)","Bash(npm run:*)","Bash(npx vitest:*)","mcp__claude_ai_Vercel__deploy_to_vercel","Bash(vercel deploy:*)"]
+2026-02-27T14:11:29.164Z [DEBUG] [STARTUP] Loading MCP configs...
+2026-02-27T14:11:29.167Z [DEBUG] [ToolSearch:optimistic] mode=tst-auto, ENABLE_TOOL_SEARCH=undefined, result=true
+2026-02-27T14:11:29.167Z [DEBUG] [STARTUP] Running setup()...
+2026-02-27T14:11:29.173Z [DEBUG] Loading skills from: managed=/Library/Application Support/ClaudeCode/.claude/skills, user=/Users/charlesvictormahouve/.claude/skills, project=[]
+2026-02-27T14:11:29.173Z [DEBUG] Error log sink initialized
+2026-02-27T14:11:29.176Z [DEBUG] [STARTUP] setup() completed in 9ms
+2026-02-27T14:11:29.176Z [DEBUG] [STARTUP] Loading commands and agents...
+2026-02-27T14:11:29.180Z [DEBUG] [Claude in Chrome] Found chrome profiles: Default
+2026-02-27T14:11:29.180Z [DEBUG] installed_plugins.json doesn't exist, returning empty V2 object
+2026-02-27T14:11:29.181Z [DEBUG] Found 0 plugins (0 enabled, 0 disabled)
+2026-02-27T14:11:29.181Z [DEBUG] getPluginSkills: Processing 0 enabled plugins
+2026-02-27T14:11:29.181Z [DEBUG] Total plugin skills loaded: 0
+2026-02-27T14:11:29.181Z [DEBUG] Total plugin commands loaded: 0
+2026-02-27T14:11:29.181Z [DEBUG] Registered 0 hooks from 0 plugins
+2026-02-27T14:11:29.182Z [DEBUG] Acquired PID lock for 2.1.62 (PID 41497)
+2026-02-27T14:11:29.182Z [DEBUG] Acquired PID lock on running version: /Users/charlesvictormahouve/.local/share/claude/versions/2.1.62
+2026-02-27T14:11:29.182Z [DEBUG] Total plugin agents loaded: 0
+2026-02-27T14:11:29.186Z [DEBUG] Loaded 0 unique skills (0 unconditional, 0 conditional, managed: 0, user: 0, project: 0, additional: 0, legacy commands: 0)
+2026-02-27T14:11:29.186Z [DEBUG] getSkills returning: 0 skill dir commands, 0 plugin skills, 3 bundled skills
+2026-02-27T14:11:29.186Z [DEBUG] [STARTUP] Commands and agents loaded in 10ms
+2026-02-27T14:11:29.192Z [DEBUG] [STARTUP] Running showSetupScreens()...
+2026-02-27T14:11:29.195Z [DEBUG] Grove: Using fresh cached config
+2026-02-27T14:11:29.205Z [DEBUG] [Perfetto] initializePerfettoTracing called, env value: undefined
+2026-02-27T14:11:29.205Z [DEBUG] [3P telemetry] isTelemetryEnabled=false (CLAUDE_CODE_ENABLE_TELEMETRY=undefined)
+2026-02-27T14:11:29.210Z [DEBUG] [keybindings] KeybindingSetup initialized with 102 bindings, 0 warnings
+2026-02-27T14:11:29.215Z [DEBUG] Git remote URL: https://github.com/daphatpharm4/africandatalayer.git
+2026-02-27T14:11:29.215Z [DEBUG] Parsed repository: github.com/daphatpharm4/africandatalayer from URL: https://github.com/daphatpharm4/africandatalayer.git
+2026-02-27T14:11:29.216Z [DEBUG] Git remote URL: https://github.com/daphatpharm4/africandatalayer.git
+2026-02-27T14:11:29.216Z [DEBUG] Parsed repository: github.com/daphatpharm4/africandatalayer from URL: https://github.com/daphatpharm4/africandatalayer.git
+2026-02-27T14:11:29.216Z [DEBUG] Path /Users/charlesvictormahouve/Documents/GitHub/africandatalayer already tracked for repo daphatpharm4/africandatalayer
+2026-02-27T14:11:29.217Z [DEBUG] [keybindings] Watching for changes to /Users/charlesvictormahouve/.claude/keybindings.json
+2026-02-27T14:11:29.236Z [DEBUG] [Claude in Chrome] Extension not found in any browser
+2026-02-27T14:11:29.497Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201489497
+2026-02-27T14:11:29.497Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T14:11:29.498Z [DEBUG] Temp file written successfully, size: 7937 bytes
+2026-02-27T14:11:29.498Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:11:29.498Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201489497 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T14:11:29.498Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T14:11:29.959Z [DEBUG] [STARTUP] showSetupScreens() completed in 767ms
+2026-02-27T14:11:29.960Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2026-02-27T14:11:29.960Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2026-02-27T14:11:29.960Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
+2026-02-27T14:11:29.960Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-27T14:11:29.960Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-27T14:11:29.961Z [DEBUG] Total LSP servers loaded: 0
+2026-02-27T14:11:29.961Z [DEBUG] [STARTUP] MCP configs loaded in 797ms
+2026-02-27T14:11:29.968Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2026-02-27T14:11:29.968Z [DEBUG] LSP manager initialized with 0 servers
+2026-02-27T14:11:29.968Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-27T14:11:29.969Z [DEBUG] Getting matching hook commands for SessionStart with query: startup
+2026-02-27T14:11:29.969Z [DEBUG] Found 0 hook matchers in settings
+2026-02-27T14:11:29.970Z [DEBUG] Matched 0 unique hooks for query "startup" (0 before deduplication)
+2026-02-27T14:11:29.970Z [DEBUG] Initialized versioned plugins system with 0 plugins
+2026-02-27T14:11:29.970Z [DEBUG] LSP server manager initialized successfully
+2026-02-27T14:11:29.970Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2026-02-27T14:11:29.971Z [DEBUG] [Reconnection] computeInitialTeamContext: No teammate context set (not a teammate)
+2026-02-27T14:11:29.972Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201489972
+2026-02-27T14:11:29.972Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T14:11:29.973Z [DEBUG] Temp file written successfully, size: 7937 bytes
+2026-02-27T14:11:29.973Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:11:29.973Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201489972 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T14:11:29.973Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T14:11:29.993Z [DEBUG] [keybindings] KeybindingSetup initialized with 102 bindings, 0 warnings
+2026-02-27T14:11:30.029Z [DEBUG] High write ratio: blit=0, write=1018 (100.0% writes), screen=18x151
+2026-02-27T14:11:30.039Z [DEBUG] [REPL:mount] REPL mounted, disabled=false
+2026-02-27T14:11:30.040Z [DEBUG] Official marketplace auto-install skipped: already_attempted
+2026-02-27T14:11:30.041Z [DEBUG] performStartupChecks called
+2026-02-27T14:11:30.041Z [DEBUG] Starting background plugin installations
+2026-02-27T14:11:30.041Z [DEBUG] performBackgroundPluginInstallations called
+2026-02-27T14:11:30.097Z [DEBUG] No CLAUDE.md/rules files found
+2026-02-27T14:11:30.098Z [DEBUG] Watching for changes in setting files /Users/charlesvictormahouve/.claude/settings.json, /Users/charlesvictormahouve/Documents/GitHub/africandatalayer/.claude/settings.json, /Users/charlesvictormahouve/Documents/GitHub/africandatalayer/.claude/settings.local.json...
+2026-02-27T14:11:30.827Z [DEBUG] [claudeai-mcp] Checking gate (cached)...
+2026-02-27T14:11:30.827Z [DEBUG] [claudeai-mcp] Gate returned: true
+2026-02-27T14:11:30.827Z [DEBUG] [claudeai-mcp] Fetching from https://api.anthropic.com/v1/mcp_servers?limit=1000
+2026-02-27T14:11:30.829Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-27T14:11:30.831Z [DEBUG] Setting installation status: 0 marketplaces, 0 installable plugins, 0 uninstallable plugins
+2026-02-27T14:11:30.833Z [DEBUG] Security messages are fresh (<1h old), skipping fetch
+2026-02-27T14:11:30.833Z [DEBUG] Org fast mode: disabled (extra_usage_disabled)
+2026-02-27T14:11:30.840Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:30.844Z [DEBUG] High write ratio: blit=0, write=1018 (100.0% writes), screen=18x151
+2026-02-27T14:11:30.851Z [DEBUG] Ripgrep first use test: PASSED (mode=builtin, path=/Users/charlesvictormahouve/.local/share/claude/versions/2.1.62)
+2026-02-27T14:11:30.906Z [DEBUG] Loaded plugins - Enabled: 0, Disabled: 0, Commands: 0, Agents: 0, Errors: 0
+2026-02-27T14:11:30.907Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:30.912Z [DEBUG] MCP server "ide": Starting connection with timeout of 30000ms
+2026-02-27T14:11:30.912Z [DEBUG] [claudeai-mcp] Checking gate (cached)...
+2026-02-27T14:11:30.912Z [DEBUG] [claudeai-mcp] Gate returned: true
+2026-02-27T14:11:30.912Z [DEBUG] [claudeai-mcp] Fetching from https://api.anthropic.com/v1/mcp_servers?limit=1000
+2026-02-27T14:11:30.913Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:30.926Z [DEBUG] MCP server "ide": Successfully connected to ws-ide server in 16ms
+2026-02-27T14:11:30.926Z [DEBUG] MCP server "ide": Connection established with capabilities: {"hasTools":true,"hasPrompts":false,"hasResources":false,"hasResourceSubscribe":false,"serverVersion":{"name":"Claude Code VSCode MCP","version":"2.1.61"}}
+2026-02-27T14:11:30.926Z [DEBUG] [MCP] Server "ide" connected with subscribe=false
+2026-02-27T14:11:30.954Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:30.957Z [DEBUG] High write ratio: blit=0, write=1018 (100.0% writes), screen=18x151
+2026-02-27T14:11:30.961Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:31.097Z [DEBUG] [claudeai-mcp] Fetched 1 servers
+2026-02-27T14:11:31.281Z [DEBUG] [claudeai-mcp] Fetched 1 servers
+2026-02-27T14:11:31.282Z [DEBUG] MCP server "claude.ai Vercel": Initializing claude.ai proxy transport for server mcpsrv_01UWUJEQiCSed6MzpF5Wmx8Q
+2026-02-27T14:11:31.282Z [DEBUG] MCP server "claude.ai Vercel": Using claude.ai proxy at https://mcp-proxy.anthropic.com/v1/mcp/mcpsrv_01UWUJEQiCSed6MzpF5Wmx8Q
+2026-02-27T14:11:31.282Z [DEBUG] MCP server "claude.ai Vercel": claude.ai proxy transport created successfully
+2026-02-27T14:11:31.283Z [DEBUG] MCP server "claude.ai Vercel": Starting connection with timeout of 30000ms
+2026-02-27T14:11:31.286Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:31.418Z [ERROR] Error: Error: 1: Command failed with ERR_STREAM_PREMATURE_CLOSE: code --force --install-extension anthropic.claude-code
+Premature close 
+    at sx7 (/$bunfs/root/claude:1846:4307)
+    at async rx7 (/$bunfs/root/claude:1846:1794)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T14:11:31.421Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:31.491Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:31.498Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T14:11:31.498Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T14:11:31.500Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:32.464Z [DEBUG] MCP server "claude.ai Vercel": Successfully connected to claudeai-proxy server in 1182ms
+2026-02-27T14:11:32.465Z [DEBUG] MCP server "claude.ai Vercel": Connection established with capabilities: {"hasTools":true,"hasPrompts":true,"hasResources":false,"hasResourceSubscribe":false,"serverVersion":{"name":"Vercel MCP Server","version":"2"}}
+2026-02-27T14:11:32.465Z [DEBUG] [MCP] Server "claude.ai Vercel" connected with subscribe=false
+2026-02-27T14:11:33.311Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:33.318Z [DEBUG] High write ratio: blit=0, write=1018 (100.0% writes), screen=18x151
+2026-02-27T14:11:58.088Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:58.106Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:58.125Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:59.152Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:59.164Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:59.395Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:59.405Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:59.818Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:11:59.826Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:00.819Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:01.331Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:02.008Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:02.547Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:03.020Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201523020
+2026-02-27T14:12:03.021Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T14:12:03.021Z [DEBUG] Temp file written successfully, size: 7981 bytes
+2026-02-27T14:12:03.021Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:12:03.021Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201523020 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T14:12:03.021Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T14:12:03.042Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:03.054Z [DEBUG] High write ratio: blit=0, write=1229 (100.0% writes), screen=26x151
+2026-02-27T14:12:03.062Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:03.081Z [DEBUG] git pull: cwd=/Users/charlesvictormahouve/.claude/plugins/marketplaces/claude-plugins-official ref=default
+2026-02-27T14:12:04.139Z [DEBUG] Successfully refreshed marketplace: claude-plugins-official
+2026-02-27T14:12:04.139Z [DEBUG] Plugin autoupdate: checking installed plugins
+2026-02-27T14:12:08.013Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:09.765Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:12.582Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:14.966Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude/settings.json.tmp.41497.1772201534966
+2026-02-27T14:12:14.966Z [DEBUG] Preserving file permissions: 100644
+2026-02-27T14:12:14.966Z [DEBUG] Temp file written successfully, size: 3 bytes
+2026-02-27T14:12:14.966Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:12:14.966Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude/settings.json.tmp.41497.1772201534966 to /Users/charlesvictormahouve/.claude/settings.json
+2026-02-27T14:12:14.967Z [DEBUG] File /Users/charlesvictormahouve/.claude/settings.json written atomically
+2026-02-27T14:12:14.970Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude/settings.json.tmp.41497.1772201534970
+2026-02-27T14:12:14.970Z [DEBUG] Preserving file permissions: 100644
+2026-02-27T14:12:14.970Z [DEBUG] Temp file written successfully, size: 22 bytes
+2026-02-27T14:12:14.970Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:12:14.970Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude/settings.json.tmp.41497.1772201534970 to /Users/charlesvictormahouve/.claude/settings.json
+2026-02-27T14:12:14.971Z [DEBUG] File /Users/charlesvictormahouve/.claude/settings.json written atomically
+2026-02-27T14:12:14.971Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:14.979Z [DEBUG] FileHistory: Added snapshot for 2629dd20-2b18-4300-a6b0-3d9d16f0bfe8, tracking 0 files
+2026-02-27T14:12:14.986Z [DEBUG] [useDeferredValue] Messages deferred by 3 (0→3)
+2026-02-27T14:12:15.001Z [DEBUG] High write ratio: blit=0, write=1005 (100.0% writes), screen=22x151
+2026-02-27T14:12:15.010Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-27T14:12:15.010Z [DEBUG] [useDeferredValue] Messages deferred by 3 (0→3)
+2026-02-27T14:12:15.011Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:15.018Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-27T14:12:15.026Z [DEBUG] [useDeferredValue] Messages deferred by 3 (0→3)
+2026-02-27T14:12:15.038Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:15.040Z [DEBUG] High write ratio: blit=0, write=1031 (100.0% writes), screen=21x151
+2026-02-27T14:12:15.042Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-27T14:12:15.046Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201535046
+2026-02-27T14:12:15.046Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T14:12:15.046Z [DEBUG] Temp file written successfully, size: 8006 bytes
+2026-02-27T14:12:15.046Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:12:15.046Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201535046 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T14:12:15.046Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T14:12:15.047Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201535047
+2026-02-27T14:12:15.047Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T14:12:15.047Z [DEBUG] Temp file written successfully, size: 8034 bytes
+2026-02-27T14:12:15.047Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:12:15.047Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201535047 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T14:12:15.047Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T14:12:15.052Z [DEBUG] [useDeferredValue] Messages deferred by 3 (0→3)
+2026-02-27T14:12:15.053Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:15.055Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:15.500Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T14:12:15.501Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T14:12:15.503Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:18.630Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:18.633Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:19.279Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:19.283Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:19.808Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:20.277Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:20.789Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:20.797Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:20.798Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:21.803Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:22.302Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:26.036Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:26.043Z [DEBUG] High write ratio: blit=0, write=1270 (100.0% writes), screen=29x151
+2026-02-27T14:12:26.046Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:29.537Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:31.771Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:32.139Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:34.007Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:36.082Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude/settings.json.tmp.41497.1772201556082
+2026-02-27T14:12:36.082Z [DEBUG] Preserving file permissions: 100644
+2026-02-27T14:12:36.082Z [DEBUG] Temp file written successfully, size: 22 bytes
+2026-02-27T14:12:36.082Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:12:36.082Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude/settings.json.tmp.41497.1772201556082 to /Users/charlesvictormahouve/.claude/settings.json
+2026-02-27T14:12:36.083Z [DEBUG] File /Users/charlesvictormahouve/.claude/settings.json written atomically
+2026-02-27T14:12:36.084Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:36.086Z [DEBUG] FileHistory: Making snapshot for message 996f9bc9-abad-4042-a76f-8fcc0e7a8155
+2026-02-27T14:12:36.086Z [DEBUG] FileHistory: Added snapshot for 996f9bc9-abad-4042-a76f-8fcc0e7a8155, tracking 0 files
+2026-02-27T14:12:36.089Z [DEBUG] [useDeferredValue] Messages deferred by 3 (3→6)
+2026-02-27T14:12:36.100Z [DEBUG] High write ratio: blit=0, write=1123 (100.0% writes), screen=26x151
+2026-02-27T14:12:36.105Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-27T14:12:36.105Z [DEBUG] [useDeferredValue] Messages deferred by 3 (3→6)
+2026-02-27T14:12:36.106Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:36.108Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-27T14:12:36.122Z [DEBUG] [useDeferredValue] Messages deferred by 3 (3→6)
+2026-02-27T14:12:36.125Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:36.128Z [DEBUG] High write ratio: blit=0, write=1099 (100.0% writes), screen=24x151
+2026-02-27T14:12:36.128Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-27T14:12:36.130Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201556130
+2026-02-27T14:12:36.130Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T14:12:36.130Z [DEBUG] Temp file written successfully, size: 8067 bytes
+2026-02-27T14:12:36.130Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:12:36.130Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201556130 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T14:12:36.130Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T14:12:36.131Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201556131
+2026-02-27T14:12:36.131Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T14:12:36.131Z [DEBUG] Temp file written successfully, size: 8067 bytes
+2026-02-27T14:12:36.131Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:12:36.131Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201556131 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T14:12:36.131Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T14:12:36.140Z [DEBUG] [useDeferredValue] Messages deferred by 3 (3→6)
+2026-02-27T14:12:36.140Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:36.142Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:36.714Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T14:12:36.714Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T14:12:36.717Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:58.293Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:58.505Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:58.861Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-27T14:12:58.861Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-27T14:12:58.862Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-27T14:12:58.862Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-27T14:12:58.865Z [DEBUG] Sending 1 skills via attachment (initial, 1 total sent)
+2026-02-27T14:12:58.872Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:58.873Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:58.884Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:58.888Z [WARN] [3P telemetry] Event dropped (no event logger initialized): user_prompt
+2026-02-27T14:12:58.890Z [DEBUG] Getting matching hook commands for UserPromptSubmit with query: undefined
+2026-02-27T14:12:58.890Z [DEBUG] Found 0 hook matchers in settings
+2026-02-27T14:12:58.891Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-27T14:12:58.891Z [DEBUG] FileHistory: Making snapshot for message 96f007a2-4f77-4d55-a46b-78c517114ffe
+2026-02-27T14:12:58.891Z [DEBUG] FileHistory: Added snapshot for 96f007a2-4f77-4d55-a46b-78c517114ffe, tracking 0 files
+2026-02-27T14:12:58.892Z [DEBUG] [useDeferredValue] Messages deferred by 2 (6→8)
+2026-02-27T14:12:58.905Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:58.909Z [DEBUG] High write ratio: blit=0, write=1249 (100.0% writes), screen=29x151
+2026-02-27T14:12:58.910Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-27T14:12:58.912Z [DEBUG] MCP server "ide": Calling MCP tool: closeAllDiffTabs
+2026-02-27T14:12:58.928Z [DEBUG] MCP server "ide": Tool 'closeAllDiffTabs' completed successfully in 16ms
+2026-02-27T14:12:58.939Z [DEBUG] Total plugin output styles loaded: 0
+2026-02-27T14:12:58.949Z [DEBUG] autocompact: tokens=328 threshold=167000 effectiveWindow=180000
+2026-02-27T14:12:58.958Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-27T14:12:58.958Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-27T14:12:58.958Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-27T14:12:58.960Z [DEBUG] [useDeferredValue] Messages deferred by 2 (6→8)
+2026-02-27T14:12:58.961Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:58.970Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:58.980Z [DEBUG] High write ratio: blit=0, write=1249 (100.0% writes), screen=29x151
+2026-02-27T14:12:59.287Z [DEBUG] Tool search disabled via experiment (tengu_tst_kx7): below threshold, deferred tools present [source: query]
+2026-02-27T14:12:59.299Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.62.023; cc_entrypoint=cli; cch=00000;
+2026-02-27T14:12:59.300Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:59.300Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-27T14:12:59.300Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-27T14:12:59.300Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:59.301Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-27T14:12:59.301Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:12:59.303Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201579303
+2026-02-27T14:12:59.303Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T14:12:59.304Z [DEBUG] Temp file written successfully, size: 8126 bytes
+2026-02-27T14:12:59.304Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:12:59.304Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201579303 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T14:12:59.304Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T14:12:59.307Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:13:01.810Z [DEBUG] Stream started - received first chunk
+2026-02-27T14:13:01.813Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:13:01.991Z [DEBUG] [useDeferredValue] Messages deferred by 1 (8→9)
+2026-02-27T14:13:01.992Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:13:02.007Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:13:02.011Z [DEBUG] High write ratio: blit=0, write=1279 (100.0% writes), screen=31x151
+2026-02-27T14:13:02.019Z [DEBUG] Getting matching hook commands for Stop with query: undefined
+2026-02-27T14:13:02.019Z [DEBUG] Found 0 hook matchers in settings
+2026-02-27T14:13:02.019Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-27T14:13:02.023Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:13:02.024Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-27T14:13:02.025Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201582025
+2026-02-27T14:13:02.025Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T14:13:02.026Z [DEBUG] Temp file written successfully, size: 8126 bytes
+2026-02-27T14:13:02.026Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:13:02.026Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201582025 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T14:13:02.026Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T14:13:02.027Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201582027
+2026-02-27T14:13:02.027Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T14:13:02.027Z [DEBUG] Temp file written successfully, size: 8126 bytes
+2026-02-27T14:13:02.027Z [DEBUG] Applied original permissions to temp file
+2026-02-27T14:13:02.027Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772201582027 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T14:13:02.027Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T14:13:02.034Z [DEBUG] High write ratio: blit=0, write=1134 (100.0% writes), screen=28x151
+2026-02-27T14:13:26.449Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:14:03.305Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:14:06.288Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:14:06.294Z [DEBUG] High write ratio: blit=0, write=1066 (100.0% writes), screen=28x134
+2026-02-27T14:14:06.338Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:14:26.023Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:14:26.031Z [DEBUG] High write ratio: blit=0, write=1230 (100.0% writes), screen=28x175
+2026-02-27T14:18:18.085Z [DEBUG] MCP server "ide": WebSocket transport closed/disconnected, attempting automatic reconnection
+2026-02-27T14:18:18.143Z [DEBUG] MCP server "ide": Starting connection with timeout of 30000ms
+2026-02-27T14:18:18.176Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:18:18.230Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:18:18.257Z [DEBUG] MCP server "ide": Connection failed after 150ms: WebSocket is not open. Cannot start transport.
+2026-02-27T14:18:18.258Z [ERROR] MCP server "ide" Connection failed: WebSocket is not open. Cannot start transport.
+2026-02-27T14:18:18.258Z [DEBUG] MCP server "ide": WebSocket reconnection attempt 1 completed with status: failed
+2026-02-27T14:18:18.258Z [DEBUG] MCP server "ide": Scheduling reconnection attempt 2 in 1000ms
+2026-02-27T14:18:19.265Z [DEBUG] MCP server "ide": Starting connection with timeout of 30000ms
+2026-02-27T14:18:19.267Z [DEBUG] MCP server "ide": Successfully connected to ws-ide server in 2ms
+2026-02-27T14:18:19.267Z [DEBUG] MCP server "ide": Connection established with capabilities: {"hasTools":true,"hasPrompts":false,"hasResources":false,"hasResourceSubscribe":false,"serverVersion":{"name":"Claude Code VSCode MCP","version":"2.1.61"}}
+2026-02-27T14:18:19.267Z [DEBUG] [MCP] Server "ide" connected with subscribe=false
+2026-02-27T14:18:19.268Z [DEBUG] MCP server "ide": WS-IDE connection closed after 0s (cleanly)
+2026-02-27T14:18:19.268Z [DEBUG] MCP server "ide": Cleared connection cache for reconnection
+2026-02-27T14:18:19.268Z [ERROR] MCP server "ide" Failed to fetch tools: MCP error -32000: Connection closed
+2026-02-27T14:18:19.268Z [DEBUG] MCP server "ide": WebSocket reconnection successful after 3ms (attempt 2)
+2026-02-27T14:18:19.311Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:18:19.337Z [DEBUG] High write ratio: blit=0, write=1281 (100.0% writes), screen=28x175
+2026-02-27T14:18:19.345Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:18:29.216Z [DEBUG] Detected change to /Users/charlesvictormahouve/.claude/settings.json
+2026-02-27T14:18:29.222Z [DEBUG] Getting matching hook commands for ConfigChange with query: user_settings
+2026-02-27T14:18:29.222Z [DEBUG] Found 0 hook matchers in settings
+2026-02-27T14:18:29.222Z [DEBUG] Matched 0 unique hooks for query "user_settings" (0 before deduplication)
+2026-02-27T14:18:29.231Z [DEBUG] Settings changed from userSettings, updating app state
+2026-02-27T14:18:29.233Z [DEBUG] Replacing all allow rules for destination 'userSettings' with 0 rule(s): []
+2026-02-27T14:18:29.233Z [DEBUG] Replacing all deny rules for destination 'userSettings' with 0 rule(s): []
+2026-02-27T14:18:29.233Z [DEBUG] Replacing all ask rules for destination 'userSettings' with 0 rule(s): []
+2026-02-27T14:18:29.233Z [DEBUG] Replacing all allow rules for destination 'projectSettings' with 0 rule(s): []
+2026-02-27T14:18:29.233Z [DEBUG] Replacing all deny rules for destination 'projectSettings' with 0 rule(s): []
+2026-02-27T14:18:29.233Z [DEBUG] Replacing all ask rules for destination 'projectSettings' with 0 rule(s): []
+2026-02-27T14:18:29.233Z [DEBUG] Replacing all allow rules for destination 'localSettings' with 0 rule(s): []
+2026-02-27T14:18:29.233Z [DEBUG] Replacing all deny rules for destination 'localSettings' with 0 rule(s): []
+2026-02-27T14:18:29.233Z [DEBUG] Replacing all ask rules for destination 'localSettings' with 0 rule(s): []
+2026-02-27T14:18:29.233Z [DEBUG] Replacing all allow rules for destination 'localSettings' with 5 rule(s): ["Bash(wc:*)","Bash(npm run:*)","Bash(npx vitest:*)","mcp__claude_ai_Vercel__deploy_to_vercel","Bash(vercel deploy:*)"]
+2026-02-27T14:18:29.243Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:18:29.250Z [DEBUG] High write ratio: blit=0, write=1230 (100.0% writes), screen=28x175
+2026-02-27T14:40:05.223Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:40:05.258Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:40:05.386Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:40:05.396Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:40:05.594Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:40:05.601Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:40:05.728Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:40:05.735Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:41:30.102Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T14:42:36.109Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:42:37.024Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T14:42:37.027Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T14:42:37.031Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:44:19.352Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:44:19.361Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:44:19.382Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:44:19.395Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:44:19.444Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:44:19.456Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:44:19.548Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:44:19.554Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:46:34.464Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:46:34.474Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:46:34.535Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:46:34.544Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:46:34.549Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:46:34.560Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:46:34.564Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:46:34.571Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:46:34.582Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:46:34.660Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:46:34.679Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:46:34.696Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:46:34.711Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:02.674Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:02.682Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:02.690Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:02.698Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:02.708Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:02.728Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:02.777Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:02.787Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:02.790Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:02.861Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:02.867Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:05.228Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:05.235Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:05.248Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:05.254Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:05.264Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:05.269Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:05.274Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:05.284Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:05.289Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:05.311Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:05.317Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:31.522Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:31.593Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:31.612Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:31.616Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:31.626Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:31.644Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:31.658Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:31.661Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:31.672Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:31.685Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:50:31.778Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:50:31.782Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:55:59.410Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:55:59.497Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:55:59.539Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:55:59.543Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:55:59.599Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:55:59.607Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:59:42.182Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:59:42.208Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:59:42.229Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:59:42.248Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:59:42.266Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:59:42.271Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:59:42.281Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:59:42.290Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:59:42.310Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:59:42.315Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T14:59:42.403Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T14:59:42.407Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:03:10.884Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:03:10.940Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:03:10.986Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:03:10.989Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:04:24.617Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:04:24.626Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:04:24.640Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:04:24.650Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:04:24.662Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:04:24.668Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:04:24.679Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:04:24.686Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:04:24.696Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:04:24.703Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:04:24.720Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:04:24.726Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:04:24.733Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:04:24.742Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:04:24.752Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:04:24.755Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:04:24.897Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:04:24.906Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:04:24.963Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:04:24.968Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:11:30.065Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T15:12:36.080Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:12:36.825Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T15:12:36.830Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T15:12:36.837Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:17:25.208Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:17:25.243Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:17:25.252Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:17:25.260Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:17:25.264Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:17:25.278Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:17:25.284Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:17:25.290Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:17:25.467Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:17:25.475Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:17:25.492Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:17:25.495Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:17:25.509Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:17:25.513Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:17:25.530Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:17:25.536Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:17:25.550Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:17:25.558Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-27T15:41:37.261Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T15:58:43.241Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T15:58:44.257Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T15:58:44.261Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T15:58:44.270Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T16:18:27.313Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T16:39:41.951Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T16:39:43.745Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T16:39:43.751Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T16:39:43.761Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T16:39:46.999Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T16:57:03.410Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T17:16:56.989Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T17:17:00.269Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772212620269
+2026-02-27T17:17:00.269Z [DEBUG] Preserving file permissions: 100600
+2026-02-27T17:17:00.270Z [DEBUG] Temp file written successfully, size: 8245 bytes
+2026-02-27T17:17:00.270Z [DEBUG] Applied original permissions to temp file
+2026-02-27T17:17:00.270Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772212620269 to /Users/charlesvictormahouve/.claude.json
+2026-02-27T17:17:00.270Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-27T17:17:00.879Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data,status=401,body=OAuth token has expired. Please obtain a new token or refresh your existing token.] Error
+    at DM (/$bunfs/root/claude:92:1144)
+    at <anonymous> (/$bunfs/root/claude:93:10067)
+    at emit (node:events:92:22)
+    at endReadableNT (internal:streams/readable:861:50)
+    at processTicksAndRejections (native:7:39)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T17:17:01.101Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data,status=401,body=OAuth token has expired. Please obtain a new token or refresh your existing token.] Error
+    at DM (/$bunfs/root/claude:92:1144)
+    at <anonymous> (/$bunfs/root/claude:93:10067)
+    at emit (node:events:92:22)
+    at endReadableNT (internal:streams/readable:861:50)
+    at processTicksAndRejections (native:7:39)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T17:17:01.992Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T17:17:34.751Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T17:17:34.752Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T17:17:34.760Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T17:40:09.205Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T17:46:56.974Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T17:46:57.739Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T17:46:57.743Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T17:46:57.749Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T18:24:22.283Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T18:24:22.297Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T18:24:27.295Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T18:24:41.277Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T18:24:41.279Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T18:24:41.293Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T18:58:34.982Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T18:58:34.990Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T18:59:12.007Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T18:59:12.007Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T18:59:12.025Z [ERROR] Error: Error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:16930)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T18:59:12.025Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+2026-02-27T18:59:12.028Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T18:59:12.029Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T18:59:12.029Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-27T18:59:12.037Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T19:42:10.896Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T19:42:10.925Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T19:42:15.913Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T19:42:47.863Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T19:42:47.863Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T19:42:47.872Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T20:18:52.571Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T20:18:52.607Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T20:19:30.117Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T20:19:30.117Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T20:19:30.118Z [ERROR] Error: Error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:16930)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T20:19:30.118Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+2026-02-27T20:19:30.122Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T20:19:30.126Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T20:19:30.126Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T20:19:30.126Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-27T21:03:44.905Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T21:03:44.934Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T21:03:49.919Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T21:04:03.678Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T21:04:03.683Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T21:04:03.693Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T21:45:42.746Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T21:45:42.770Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T21:46:19.779Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T21:46:19.780Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T21:46:19.780Z [ERROR] Error: Error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:16930)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T21:46:19.780Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+2026-02-27T21:46:19.784Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T21:46:19.790Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T21:46:19.790Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T21:46:19.790Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-27T22:27:54.818Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T22:27:54.855Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T22:27:59.829Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T22:28:14.280Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T22:28:14.284Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T22:28:14.298Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T23:01:54.803Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T23:01:54.810Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T23:02:31.688Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T23:02:31.688Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T23:02:31.688Z [ERROR] Error: Error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:16930)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T23:02:31.688Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+2026-02-27T23:02:31.693Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T23:02:31.695Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T23:02:31.695Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T23:02:31.695Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-27T23:34:56.791Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-27T23:34:56.829Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-27T23:35:01.801Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-27T23:35:16.573Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-27T23:35:16.577Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-27T23:35:16.589Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T00:10:25.640Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T00:10:25.651Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T00:11:02.696Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T00:11:02.697Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T00:11:02.698Z [ERROR] Error: Error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:16930)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T00:11:02.698Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+2026-02-28T00:11:02.707Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T00:11:02.715Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T00:11:02.715Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T00:11:02.715Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T00:52:15.770Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T00:52:15.786Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T00:52:17.202Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-28T00:52:17.205Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-28T00:52:17.211Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T00:52:20.784Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T01:29:24.624Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T01:29:24.647Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T01:29:25.966Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772242165966
+2026-02-28T01:29:25.966Z [DEBUG] Preserving file permissions: 100600
+2026-02-28T01:29:25.966Z [DEBUG] Temp file written successfully, size: 8245 bytes
+2026-02-28T01:29:25.966Z [DEBUG] Applied original permissions to temp file
+2026-02-28T01:29:25.966Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772242165966 to /Users/charlesvictormahouve/.claude.json
+2026-02-28T01:29:25.967Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-28T01:29:26.748Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data,status=401,body=OAuth token has expired. Please obtain a new token or refresh your existing token.] Error
+    at DM (/$bunfs/root/claude:92:1144)
+    at <anonymous> (/$bunfs/root/claude:93:10067)
+    at emit (node:events:92:22)
+    at endReadableNT (internal:streams/readable:861:50)
+    at processTicksAndRejections (native:7:39)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T01:29:26.773Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data,status=401,body=OAuth token has expired. Please obtain a new token or refresh your existing token.] Error
+    at DM (/$bunfs/root/claude:92:1144)
+    at <anonymous> (/$bunfs/root/claude:93:10067)
+    at emit (node:events:92:22)
+    at endReadableNT (internal:streams/readable:861:50)
+    at processTicksAndRejections (native:7:39)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T01:29:29.628Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T01:30:01.480Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T01:30:01.480Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T01:30:01.500Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T01:59:31.110Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T01:59:31.127Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T01:59:46.126Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T01:59:46.127Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T01:59:46.127Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T02:00:12.219Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T02:00:12.219Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T02:00:12.224Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T02:39:25.858Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T02:39:25.943Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T02:39:30.869Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T02:40:07.448Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T02:40:07.448Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T02:40:07.453Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T03:20:07.174Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T03:20:07.183Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T03:20:22.226Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T03:20:22.227Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T03:20:22.227Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T03:20:27.033Z [DEBUG] Checking for native installer update to version 2.1.62
+2026-02-28T03:20:27.034Z [DEBUG] Found 2.1.62 at /Users/charlesvictormahouve/.local/bin/claude, skipping install
+2026-02-28T03:20:27.040Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T03:20:41.120Z [ERROR] Error: Error: 1P event logging: 5 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T03:20:41.121Z [ERROR] Error: Error: {"message":"Failed to export 5 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 5 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T03:20:41.121Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 5 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 5 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T03:52:52.717Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T03:52:52.727Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T03:52:57.740Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T03:53:35.506Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T03:53:35.506Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T03:53:35.516Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T04:31:34.337Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T04:31:34.456Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T04:32:11.204Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T04:32:11.205Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T04:32:11.205Z [ERROR] Error: Error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:16930)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T04:32:11.205Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+2026-02-28T04:32:11.216Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T04:32:11.226Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T04:32:11.226Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T04:32:11.226Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T05:09:50.865Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T05:09:50.880Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T05:09:55.872Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T05:10:28.357Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T05:10:28.357Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T05:10:28.365Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T05:57:03.032Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T05:57:03.065Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T05:57:40.109Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T05:57:40.110Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T05:57:40.111Z [ERROR] Error: Error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:16930)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T05:57:40.111Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+2026-02-28T05:57:40.125Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T05:57:40.140Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T05:57:40.141Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T05:57:40.145Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T06:37:26.723Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T06:37:26.738Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T06:37:31.734Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T06:38:04.538Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T06:38:04.538Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T06:38:04.545Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T07:11:18.183Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T07:11:18.207Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T07:11:33.203Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:11:33.204Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:11:33.204Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T07:12:00.191Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:12:00.191Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:12:00.302Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T07:12:15.225Z [ERROR] Error: Error: 1P event logging: 2 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:12:15.226Z [ERROR] Error: Error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:12:15.226Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T07:42:46.326Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T07:42:46.347Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T07:58:18.135Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:58:18.136Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:58:18.148Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T07:58:55.037Z [ERROR] Error: Error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:16930)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:58:55.037Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+2026-02-28T07:58:55.039Z [ERROR] Error: Error: 1P event logging: 2 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:58:55.039Z [ERROR] Error: Error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T07:58:55.039Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T08:16:01.017Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T08:16:01.033Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T08:16:16.025Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T08:16:16.025Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T08:16:16.025Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T08:16:43.803Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T08:16:43.803Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T08:16:43.809Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T08:47:15.472Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T08:47:15.512Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T08:47:45.486Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T08:47:45.487Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T08:47:45.497Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T09:03:24.541Z [ERROR] Error: Error: 1P event logging: 2 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T09:03:24.542Z [ERROR] Error: Error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T09:03:24.542Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T09:19:11.531Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T09:19:11.546Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T09:19:49.126Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T09:19:49.126Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T09:19:49.127Z [ERROR] Error: Error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:16930)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T09:19:49.127Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Operation timed out.","originalLine":"119","originalColumn":"163330","line":"119","column":"163330","sourceURL":"/$bunfs/root/claude","stack":"Error: Operation timed out.\n    at <anonymous> (/$bunfs/root/claude:119:163330)","name":"Error"}
+2026-02-28T09:19:49.134Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T09:19:49.141Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T09:19:49.141Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T09:19:49.141Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T09:59:21.643Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T09:59:21.678Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T09:59:26.661Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T09:59:42.080Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T09:59:42.121Z [DEBUG] Downloading native installer version 2.1.63
+2026-02-28T10:12:31.409Z [DEBUG] Download stalled on attempt 1/3, retrying...
+2026-02-28T10:13:38.999Z [DEBUG] Download stalled on attempt 2/3, retrying...
+2026-02-28T10:26:07.263Z [ERROR] Error: Error: Failed to download binary from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.63/darwin-arm64/claude: Download stalled: no data received for 60 seconds
+    at e38 (/$bunfs/root/claude:2439:4320)
+    at async jUB (unknown)
+    at async CO8 (unknown)
+    at async WO8 (unknown)
+    at async dp (unknown)
+    at unknown
+    at processTicksAndRejections (native:7:39)
+2026-02-28T10:26:07.264Z [ERROR] StallTimeoutError: StallTimeoutError: Download stalled: no data received for 60 seconds
+    at t38 (/$bunfs/root/claude:2439:2917)
+    at async e38 (unknown)
+    at async jUB (unknown)
+    at async CO8 (unknown)
+    at async WO8 (unknown)
+    at async dp (unknown)
+    at unknown
+    at processTicksAndRejections (native:7:39)
+2026-02-28T10:26:07.283Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T10:26:09.305Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772274369305
+2026-02-28T10:26:09.305Z [DEBUG] Preserving file permissions: 100600
+2026-02-28T10:26:09.306Z [DEBUG] Temp file written successfully, size: 8245 bytes
+2026-02-28T10:26:09.306Z [DEBUG] Applied original permissions to temp file
+2026-02-28T10:26:09.306Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772274369305 to /Users/charlesvictormahouve/.claude.json
+2026-02-28T10:26:09.307Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-28T10:26:10.020Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data,status=401,body=OAuth token has expired. Please obtain a new token or refresh your existing token.] Error
+    at DM (/$bunfs/root/claude:92:1144)
+    at <anonymous> (/$bunfs/root/claude:93:10067)
+    at emit (node:events:92:22)
+    at endReadableNT (internal:streams/readable:861:50)
+    at processTicksAndRejections (native:7:39)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T10:26:10.121Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data,status=401,body=OAuth token has expired. Please obtain a new token or refresh your existing token.] Error
+    at DM (/$bunfs/root/claude:92:1144)
+    at <anonymous> (/$bunfs/root/claude:93:10067)
+    at emit (node:events:92:22)
+    at endReadableNT (internal:streams/readable:861:50)
+    at processTicksAndRejections (native:7:39)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T10:26:12.355Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T10:26:49.172Z [ERROR] AxiosError: [url=https://http-intake.logs.us5.datadoghq.com/api/v2/logs] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T10:43:34.730Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T10:43:34.769Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T10:43:35.629Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T10:43:35.636Z [DEBUG] Downloading native installer version 2.1.63
+2026-02-28T10:43:49.747Z [ERROR] Error: Error: 1P event logging: 4 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T10:43:49.748Z [ERROR] Error: Error: {"message":"Failed to export 4 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 4 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T10:43:49.748Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 4 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 4 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T11:01:36.200Z [DEBUG] Download stalled on attempt 1/3, retrying...
+2026-02-28T11:19:40.362Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T11:21:02.807Z [DEBUG] Download stalled on attempt 2/3, retrying...
+2026-02-28T11:27:07.193Z [ERROR] Error: Error: Failed to download binary from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.63/darwin-arm64/claude: Download stalled: no data received for 60 seconds
+    at e38 (/$bunfs/root/claude:2439:4320)
+    at async jUB (unknown)
+    at async CO8 (unknown)
+    at async WO8 (unknown)
+    at async dp (unknown)
+    at unknown
+    at processTicksAndRejections (native:7:39)
+2026-02-28T11:27:07.290Z [ERROR] StallTimeoutError: StallTimeoutError: Download stalled: no data received for 60 seconds
+    at t38 (/$bunfs/root/claude:2439:2917)
+    at async e38 (unknown)
+    at async jUB (unknown)
+    at async CO8 (unknown)
+    at async WO8 (unknown)
+    at async dp (unknown)
+    at unknown
+    at processTicksAndRejections (native:7:39)
+2026-02-28T11:27:07.301Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T11:27:12.313Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T11:49:40.204Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T11:49:40.271Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T11:49:41.238Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T11:49:41.243Z [DEBUG] Downloading native installer version 2.1.63
+2026-02-28T11:49:45.285Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T11:50:10.703Z [ERROR] Error: Error: 1P event logging: 4 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T11:50:10.704Z [ERROR] Error: Error: {"message":"Failed to export 4 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 4 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T11:50:10.704Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 4 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 4 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T11:54:03.642Z [DEBUG] Atomically installed binary to /Users/charlesvictormahouve/.local/share/claude/versions/2.1.63
+2026-02-28T11:54:03.653Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T11:54:03.666Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T11:54:03.690Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:19:40.216Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T12:19:40.316Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:19:40.913Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T12:19:40.919Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T12:19:40.920Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T12:19:40.920Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T12:19:40.934Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:49:40.216Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T12:49:40.354Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:49:40.958Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T12:49:40.965Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T12:49:40.965Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T12:49:40.965Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T12:49:40.977Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:58:12.936Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:58:12.997Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T12:58:13.048Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772283493048
+2026-02-28T12:58:13.048Z [DEBUG] Preserving file permissions: 100600
+2026-02-28T12:58:13.048Z [DEBUG] Temp file written successfully, size: 8321 bytes
+2026-02-28T12:58:13.048Z [DEBUG] Applied original permissions to temp file
+2026-02-28T12:58:13.048Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772283493048 to /Users/charlesvictormahouve/.claude.json
+2026-02-28T12:58:13.049Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-28T12:58:13.076Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:58:13.082Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T12:58:13.412Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772283493412
+2026-02-28T12:58:13.412Z [DEBUG] Preserving file permissions: 100600
+2026-02-28T12:58:13.412Z [DEBUG] Temp file written successfully, size: 8321 bytes
+2026-02-28T12:58:13.412Z [DEBUG] Applied original permissions to temp file
+2026-02-28T12:58:13.412Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772283493412 to /Users/charlesvictormahouve/.claude.json
+2026-02-28T12:58:13.412Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-28T12:58:13.650Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:58:13.656Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T12:58:13.669Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:58:13.675Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T12:58:13.718Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:58:13.724Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T12:58:13.790Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:58:13.799Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T12:58:13.822Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T12:58:13.827Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T13:06:01.276Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T13:06:01.294Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T13:06:01.403Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772283961403
+2026-02-28T13:06:01.403Z [DEBUG] Preserving file permissions: 100600
+2026-02-28T13:06:01.404Z [DEBUG] Temp file written successfully, size: 8321 bytes
+2026-02-28T13:06:01.404Z [DEBUG] Applied original permissions to temp file
+2026-02-28T13:06:01.404Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772283961403 to /Users/charlesvictormahouve/.claude.json
+2026-02-28T13:06:01.404Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-28T13:06:01.433Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T13:06:01.444Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T13:06:01.753Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772283961753
+2026-02-28T13:06:01.753Z [DEBUG] Preserving file permissions: 100600
+2026-02-28T13:06:01.754Z [DEBUG] Temp file written successfully, size: 8321 bytes
+2026-02-28T13:06:01.754Z [DEBUG] Applied original permissions to temp file
+2026-02-28T13:06:01.754Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772283961753 to /Users/charlesvictormahouve/.claude.json
+2026-02-28T13:06:01.754Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-28T13:20:46.793Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T13:20:47.073Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T13:20:48.338Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T13:20:48.344Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T13:20:48.344Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T13:20:48.345Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T13:20:48.353Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T13:45:42.437Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T13:45:42.476Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T13:45:42.539Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T13:45:42.545Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T13:51:09.987Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T13:51:10.057Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T13:51:11.235Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T13:51:11.246Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T13:51:11.248Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T13:51:11.257Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T13:51:11.264Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T14:06:44.514Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T14:06:44.543Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T14:06:44.583Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T14:06:44.587Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T14:23:12.178Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T14:23:12.334Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T14:23:12.796Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T14:23:12.798Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T14:23:12.798Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T14:23:12.798Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T14:23:12.812Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T14:59:09.790Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T14:59:09.822Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T14:59:10.914Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T14:59:10.917Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T14:59:10.918Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T14:59:10.918Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T14:59:10.929Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T14:59:14.808Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T15:31:52.709Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T15:31:52.743Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T15:31:57.718Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T15:32:11.621Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T15:32:11.626Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T15:32:11.630Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T15:32:11.630Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T15:32:11.644Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T16:14:21.983Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T16:14:22.080Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T16:14:23.046Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T16:14:23.049Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T16:14:23.049Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T16:14:23.050Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T16:14:23.057Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T16:44:21.784Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T16:44:21.896Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T16:44:26.909Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T16:44:41.418Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T16:44:41.420Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T16:44:41.420Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T16:44:41.420Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T16:44:41.430Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:18:45.377Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:18:45.500Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T17:19:00.385Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T17:19:00.386Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T17:19:00.386Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T17:19:04.340Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T17:19:04.348Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T17:19:04.348Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T17:19:04.348Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T17:19:04.359Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:19:19.134Z [ERROR] Error: Error: 1P event logging: 5 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T17:19:19.134Z [ERROR] Error: Error: {"message":"Failed to export 5 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 5 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T17:19:19.134Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 5 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 5 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T17:48:45.689Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T17:48:45.993Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:48:46.795Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T17:48:46.796Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T17:48:46.796Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T17:48:46.796Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T17:48:46.800Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:49:20.172Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:49:20.222Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:49:20.243Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:49:20.248Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:52:45.669Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:52:45.711Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:52:45.739Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:52:45.750Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:52:45.777Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:52:45.792Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:52:45.824Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:52:45.832Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:52:45.857Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:52:45.865Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:52:45.887Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:52:45.891Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:52:45.908Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:52:45.917Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:52:45.953Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:52:45.956Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:55:15.915Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:55:15.931Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:55:15.994Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:55:16.005Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:55:16.032Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:55:16.042Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:55:16.056Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:55:16.062Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:55:16.296Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:55:16.310Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:55:16.505Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:55:16.510Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T17:55:16.573Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T17:55:16.580Z [DEBUG] High write ratio: blit=0, write=1210 (100.0% writes), screen=28x170
+2026-02-28T18:26:13.985Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T18:26:14.061Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T18:26:15.218Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T18:26:15.220Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T18:26:15.220Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T18:26:15.220Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T18:26:15.234Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T18:56:13.700Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T18:56:13.853Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T18:56:14.484Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T18:56:14.489Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T18:56:14.489Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T18:56:14.489Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T18:56:14.495Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T18:56:22.253Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772304982253
+2026-02-28T18:56:22.253Z [DEBUG] Preserving file permissions: 100600
+2026-02-28T18:56:22.253Z [DEBUG] Temp file written successfully, size: 8322 bytes
+2026-02-28T18:56:22.253Z [DEBUG] Applied original permissions to temp file
+2026-02-28T18:56:22.253Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772304982253 to /Users/charlesvictormahouve/.claude.json
+2026-02-28T18:56:22.254Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically
+2026-02-28T19:30:38.871Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T19:30:38.890Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T19:30:53.883Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T19:30:53.885Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T19:30:53.885Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T19:30:57.716Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T19:30:57.726Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T19:30:57.726Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T19:30:57.727Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T19:30:57.735Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T20:04:10.805Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T20:04:10.867Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T20:04:15.814Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T20:04:29.521Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T20:04:29.526Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T20:04:29.527Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T20:04:29.527Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T20:04:29.533Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T20:47:53.827Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T20:47:53.849Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T20:48:31.542Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T20:48:31.543Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T20:48:31.551Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T21:32:43.937Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T21:32:44.027Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T21:32:48.947Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T21:33:03.139Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T21:33:03.143Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T21:33:03.143Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T21:33:03.144Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T21:33:03.154Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T22:17:23.262Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T22:17:23.556Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T22:17:24.318Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T22:17:24.324Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T22:17:24.324Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T22:17:24.324Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T22:17:24.331Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T22:52:42.538Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T22:52:42.572Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T22:52:47.558Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T22:53:01.612Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T22:53:01.749Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T22:53:01.755Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T22:53:01.759Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T22:53:01.790Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T23:34:12.565Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-02-28T23:34:12.669Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-02-28T23:34:27.609Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T23:34:27.614Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-02-28T23:34:27.614Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-02-28T23:34:32.059Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-02-28T23:34:32.068Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-02-28T23:34:32.068Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-02-28T23:34:32.070Z [DEBUG] Successfully updated to version 2.1.63
+2026-02-28T23:34:32.078Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T00:07:22.491Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T00:07:22.561Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-03-01T00:07:27.511Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T00:08:06.251Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T00:08:06.254Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T00:08:06.271Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T00:43:01.951Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T00:43:06.848Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-03-01T00:43:17.152Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T00:43:17.195Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T00:43:17.195Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-03-01T00:43:32.989Z [DEBUG] Checking for native installer update to version 2.1.63
+2026-03-01T00:43:33.005Z [DEBUG] Version 2.1.63 already installed, updating symlink
+2026-03-01T00:43:33.005Z [DEBUG] Created directory /Users/charlesvictormahouve/.local/bin for symlink
+2026-03-01T00:43:33.006Z [DEBUG] Successfully updated to version 2.1.63
+2026-03-01T00:43:33.346Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T01:18:11.181Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T01:18:15.355Z [DEBUG] Slow render: 107.6ms, screen: 28x170, damage: 170x28 at (0,0), changes: 45
+2026-03-01T01:18:16.941Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-03-01T01:18:18.184Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:27.859Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:27.870Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:27.870Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-03-01T01:18:41.301Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:41.665Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:42.022Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T01:18:48.472Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:48.590Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:48.592Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:48.592Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:59.040Z [ERROR] Error: Error: 1P event logging: 2 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:59.315Z [ERROR] Error: Error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T01:18:59.315Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-03-01T03:10:18.050Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T03:10:30.236Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-03-01T03:10:30.478Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:30.479Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:30.479Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:30.479Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:39.258Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:39.279Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:39.279Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-03-01T03:10:44.317Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:44.330Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:45.269Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T03:10:52.034Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:52.399Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:54.286Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:10:54.521Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:11:03.318Z [ERROR] Error: Error: 1P event logging: 2 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:11:03.323Z [ERROR] Error: Error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T03:11:03.323Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-03-01T04:01:46.078Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T04:01:53.924Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:01:53.925Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:01:53.925Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:01:53.925Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:01:54.064Z [DEBUG] detectFileEncoding failed for expected reason: ENOENT
+2026-03-01T04:02:03.999Z [ERROR] Error: Error: 1P event logging: 1 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:02:04.008Z [ERROR] Error: Error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:02:04.008Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 1 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-03-01T04:02:16.091Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:02:16.217Z [ERROR] Error: Error: Failed to fetch version from https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest: timeout of 30000ms exceeded
+    at o38 (/$bunfs/root/claude:2439:2072)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:02:17.730Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T04:02:23.273Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:02:23.527Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:02:23.542Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:02:24.487Z [ERROR] AxiosError: [url=https://api.anthropic.com/api/oauth/claude_cli/client_data] Error
+    at <anonymous> (/$bunfs/root/claude:93:10649)
+    at emit (node:events:92:22)
+    at <anonymous> (/$bunfs/root/claude:92:5642)
+    at request (/$bunfs/root/claude:95:2149)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:02:32.649Z [ERROR] Error: Error: 1P event logging: 2 events failed to export (code=ECONNABORTED, timeout of 10000ms exceeded)
+    at queueFailedEvents (/$bunfs/root/claude:6252:2350)
+    at async doExport (/$bunfs/root/claude:6252:1257)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:02:32.776Z [ERROR] Error: Error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+    at error (/$bunfs/root/claude:2407:25028)
+    at <anonymous> (/$bunfs/root/claude:119:92465)
+    at l$D (/$bunfs/root/claude:119:93009)
+    at <anonymous> (/$bunfs/root/claude:120:17366)
+    at processTicksAndRejections (native:7:39)
+2026-03-01T04:02:32.776Z [ERROR] [3P telemetry] OTEL diag error: {"message":"Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)","originalLine":"6252","originalColumn":"1409","line":"6252","column":"1409","sourceURL":"/$bunfs/root/claude","stack":"Error: Failed to export 2 events (code=ECONNABORTED, timeout of 10000ms exceeded)\n    at doExport (/$bunfs/root/claude:6252:1409)\n    at processTicksAndRejections (native:7:39)","name":"Error"}
+2026-03-01T04:04:06.864Z [DEBUG] MCP server "claude.ai Vercel": SSE transport closed/disconnected, attempting automatic reconnection
+2026-03-01T04:04:06.878Z [DEBUG] LSP server manager shut down successfully
+2026-03-01T04:04:06.890Z [DEBUG] MCP server "claude.ai Vercel": Initializing claude.ai proxy transport for server mcpsrv_01UWUJEQiCSed6MzpF5Wmx8Q
+2026-03-01T04:04:06.890Z [DEBUG] MCP server "claude.ai Vercel": Using claude.ai proxy at https://mcp-proxy.anthropic.com/v1/mcp/mcpsrv_01UWUJEQiCSed6MzpF5Wmx8Q
+2026-03-01T04:04:06.892Z [DEBUG] MCP server "claude.ai Vercel": claude.ai proxy transport created successfully
+2026-03-01T04:04:06.898Z [DEBUG] MCP server "claude.ai Vercel": Starting connection with timeout of 30000ms
+2026-03-01T04:04:07.504Z [DEBUG] Getting matching hook commands for SessionEnd with query: other
+2026-03-01T04:04:07.504Z [DEBUG] Found 0 hook matchers in settings
+2026-03-01T04:04:07.515Z [DEBUG] Matched 0 unique hooks for query "other" (0 before deduplication)
+2026-03-01T04:04:07.645Z [DEBUG] MCP server "claude.ai Vercel": claude.ai proxy connection failed after 755ms: No claude.ai OAuth token available
+2026-03-01T04:04:07.645Z [ERROR] MCP server "claude.ai Vercel" Error: No claude.ai OAuth token available
+2026-03-01T04:04:07.646Z [DEBUG] MCP server "claude.ai Vercel": Connection failed after 755ms: No claude.ai OAuth token available
+2026-03-01T04:04:07.646Z [ERROR] MCP server "claude.ai Vercel" Connection failed: No claude.ai OAuth token available
+2026-03-01T04:04:07.646Z [DEBUG] MCP server "claude.ai Vercel": SSE reconnection attempt 1 completed with status: failed
+2026-03-01T04:04:07.646Z [DEBUG] MCP server "claude.ai Vercel": Scheduling reconnection attempt 2 in 1000ms
+2026-03-01T04:04:07.737Z [DEBUG] Fast mode unavailable: Fast mode requires extra usage billing · /extra-usage to enable
+2026-03-01T04:04:07.824Z [ERROR] Failed to save config with lock: Error: Lock file is already being held
+2026-03-01T04:04:07.834Z [DEBUG] Writing to temp file: /Users/charlesvictormahouve/.claude.json.tmp.41497.1772337847834
+2026-03-01T04:04:07.834Z [DEBUG] Preserving file permissions: 100600
+2026-03-01T04:04:07.834Z [DEBUG] Temp file written successfully, size: 7122 bytes
+2026-03-01T04:04:07.834Z [DEBUG] Applied original permissions to temp file
+2026-03-01T04:04:07.834Z [DEBUG] Renaming /Users/charlesvictormahouve/.claude.json.tmp.41497.1772337847834 to /Users/charlesvictormahouve/.claude.json
+2026-03-01T04:04:07.835Z [DEBUG] File /Users/charlesvictormahouve/.claude.json written atomically

@@ -1,0 +1,2271 @@
+     1→# ADL Cloud Engineering Document
+     2→
+     3→**Author:** Teammate 3 -- Cloud Engineer
+     4→**Date:** 2026-02-27
+     5→**Status:** Living document -- updates with each scaling phase
+     6→**Predecessors:**
+     7→- [01-cloud-architecture.md](./01-cloud-architecture.md) (Cloud Architect)
+     8→- [02-system-design.md](./02-system-design.md) (System Design Expert)
+     9→**Scope:** Infrastructure as Code, CI/CD pipelines, observability, backup/DR, deployment runbooks, security hardening, and performance engineering for African Data Layer
+    10→
+    11→---
+    12→
+    13→## Table of Contents
+    14→
+    15→1. [Infrastructure as Code (IaC)](#1-infrastructure-as-code-iac)
+    16→2. [CI/CD Pipeline](#2-cicd-pipeline)
+    17→3. [Observability Stack](#3-observability-stack)
+    18→4. [Backup & Disaster Recovery](#4-backup--disaster-recovery)
+    19→5. [Deployment Runbooks](#5-deployment-runbooks)
+    20→6. [Security Hardening](#6-security-hardening)
+    21→7. [Performance Engineering](#7-performance-engineering)
+    22→
+    23→---
+    24→
+    25→## 1. Infrastructure as Code (IaC)
+    26→
+    27→### 1.1 Vercel Project Configuration as Code
+    28→
+    29→The current `vercel.json` is minimal:
+    30→
+    31→```json
+    32→{
+    33→  "framework": "vite",
+    34→  "buildCommand": "vite build",
+    35→  "devCommand": "vite",
+    36→  "outputDirectory": "dist"
+    37→}
+    38→```
+    39→
+    40→**Enhanced `vercel.json` -- apply immediately:**
+    41→
+    42→```json
+    43→{
+    44→  "framework": "vite",
+    45→  "buildCommand": "vite build",
+    46→  "devCommand": "vite",
+    47→  "outputDirectory": "dist",
+    48→  "regions": ["cdg1"],
+    49→  "functions": {
+    50→    "api/**/*.ts": {
+    51→      "memory": 256,
+    52→      "maxDuration": 30
+    53→    },
+    54→    "api/submissions/index.ts": {
+    55→      "memory": 512,
+    56→      "maxDuration": 45
+    57→    },
+    58→    "api/health/index.ts": {
+    59→      "memory": 128,
+    60→      "maxDuration": 10
+    61→    }
+    62→  },
+    63→  "headers": [
+    64→    {
+    65→      "source": "/assets/(.*)",
+    66→      "headers": [
+    67→        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
+    68→        { "key": "X-Content-Type-Options", "value": "nosniff" }
+    69→      ]
+    70→    },
+    71→    {
+    72→      "source": "/api/(.*)",
+    73→      "headers": [
+    74→        { "key": "X-Content-Type-Options", "value": "nosniff" },
+    75→        { "key": "X-Frame-Options", "value": "DENY" },
+    76→        { "key": "X-XSS-Protection", "value": "0" },
+    77→        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+    78→        { "key": "Permissions-Policy", "value": "camera=(self), geolocation=(self), microphone=()" }
+    79→      ]
+    80→    },
+    81→    {
+    82→      "source": "/(.*)",
+    83→      "headers": [
+    84→        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+    85→        { "key": "X-Content-Type-Options", "value": "nosniff" },
+    86→        { "key": "X-Frame-Options", "value": "DENY" },
+    87→        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+    88→      ]
+    89→    }
+    90→  ],
+    91→  "rewrites": [
+    92→    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    93→  ],
+    94→  "crons": [
+    95→    {
+    96→      "path": "/api/cron/health-deep",
+    97→      "schedule": "*/5 * * * *"
+    98→    },
+    99→    {
+   100→      "path": "/api/cron/refresh-projections",
+   101→      "schedule": "*/10 * * * *"
+   102→    },
+   103→    {
+   104→      "path": "/api/cron/backup-export",
+   105→      "schedule": "0 2 * * *"
+   106→    }
+   107→  ]
+   108→}
+   109→```
+   110→
+   111→**Key additions explained:**
+   112→- `regions: ["cdg1"]` -- Paris, closest Vercel region to Douala (~180ms). Lock functions to a single region co-located with Supabase.
+   113→- Per-function memory/timeout: `api/submissions/index.ts` does photo upload, EXIF extraction, and fraud checks synchronously -- needs 512 MB and 45s. Health check needs only 128 MB.
+   114→- Security headers applied globally (HSTS, X-Content-Type-Options, X-Frame-Options).
+   115→- Immutable caching for Vite hashed assets (`/assets/index-QrY-Hdyj.js`).
+   116→- SPA rewrite rule for client-side routing.
+   117→- Cron jobs for deep health check, materialized view refresh, and nightly backup export.
+   118→
+   119→### 1.2 Supabase Project Configuration
+   120→
+   121→#### Migration Management
+   122→
+   123→Current migrations in `supabase/migrations/`:
+   124→```
+   125→20260219_init_adl.sql          -- user_profiles + point_events tables + indexes
+   126→20260224_phone_identifier.sql  -- phone column on user_profiles
+   127→```
+   128→
+   129→**New migrations to add:**
+   130→
+   131→**`supabase/migrations/20260227_audit_log.sql`**
+   132→```sql
+   133→-- Audit log table (referenced in 01-cloud-architecture.md section 6.3)
+   134→CREATE TABLE IF NOT EXISTS public.audit_log (
+   135→  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   136→  actor_id text NOT NULL,
+   137→  action text NOT NULL,
+   138→  resource_type text NOT NULL,
+   139→  resource_id text,
+   140→  details jsonb DEFAULT '{}'::jsonb,
+   141→  ip_address inet,
+   142→  user_agent text,
+   143→  created_at timestamptz NOT NULL DEFAULT now()
+   144→);
+   145→
+   146→CREATE INDEX IF NOT EXISTS idx_audit_log_actor
+   147→  ON public.audit_log (actor_id, created_at DESC);
+   148→CREATE INDEX IF NOT EXISTS idx_audit_log_action
+   149→  ON public.audit_log (action, created_at DESC);
+   150→CREATE INDEX IF NOT EXISTS idx_audit_log_created_at
+   151→  ON public.audit_log (created_at DESC);
+   152→```
+   153→
+   154→**`supabase/migrations/20260227_idempotency_keys.sql`**
+   155→```sql
+   156→-- Server-side idempotency dedup table
+   157→-- (Addresses gap identified in 01-cloud-architecture.md section 4.4)
+   158→CREATE TABLE IF NOT EXISTS public.idempotency_keys (
+   159→  key text PRIMARY KEY,
+   160→  event_id uuid NOT NULL REFERENCES public.point_events(id),
+   161→  created_at timestamptz NOT NULL DEFAULT now()
+   162→);
+   163→
+   164→-- Auto-expire keys older than 48 hours
+   165→CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created_at
+   166→  ON public.idempotency_keys (created_at);
+   167→```
+   168→
+   169→**`supabase/migrations/20260227_point_projections.sql`**
+   170→```sql
+   171→-- Materialized view to replace in-app projectPointsFromEvents()
+   172→-- (Referenced in 01-cloud-architecture.md section 5.1)
+   173→CREATE MATERIALIZED VIEW IF NOT EXISTS public.point_projections AS
+   174→SELECT DISTINCT ON (point_id)
+   175→  point_id,
+   176→  category,
+   177→  latitude,
+   178→  longitude,
+   179→  details,
+   180→  photo_url,
+   181→  created_at,
+   182→  source,
+   183→  external_id
+   184→FROM public.point_events
+   185→ORDER BY point_id, created_at DESC;
+   186→
+   187→CREATE UNIQUE INDEX IF NOT EXISTS idx_point_projections_point_id
+   188→  ON public.point_projections (point_id);
+   189→
+   190→CREATE INDEX IF NOT EXISTS idx_point_projections_category
+   191→  ON public.point_projections (category);
+   192→
+   193→CREATE INDEX IF NOT EXISTS idx_point_projections_location
+   194→  ON public.point_projections (latitude, longitude);
+   195→```
+   196→
+   197→**`supabase/migrations/20260227_rls_policies.sql`**
+   198→```sql
+   199→-- Enable Row Level Security on all tables
+   200→ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+   201→ALTER TABLE public.point_events ENABLE ROW LEVEL SECURITY;
+   202→ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
+   203→
+   204→-- Application role (used by the API server via POSTGRES_URL)
+   205→-- Vercel functions connect as 'authenticated_api' role
+   206→DO $$
+   207→BEGIN
+   208→  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'adl_api') THEN
+   209→    CREATE ROLE adl_api;
+   210→  END IF;
+   211→END $$;
+   212→
+   213→GRANT SELECT, INSERT, UPDATE ON public.user_profiles TO adl_api;
+   214→GRANT SELECT, INSERT, UPDATE, DELETE ON public.point_events TO adl_api;
+   215→GRANT SELECT, INSERT ON public.audit_log TO adl_api;
+   216→GRANT SELECT ON public.point_projections TO adl_api;
+   217→
+   218→-- Read-only role for preview deployments
+   219→DO $$
+   220→BEGIN
+   221→  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'adl_readonly') THEN
+   222→    CREATE ROLE adl_readonly;
+   223→  END IF;
+   224→END $$;
+   225→
+   226→GRANT SELECT ON public.user_profiles TO adl_readonly;
+   227→GRANT SELECT ON public.point_events TO adl_readonly;
+   228→GRANT SELECT ON public.audit_log TO adl_readonly;
+   229→GRANT SELECT ON public.point_projections TO adl_readonly;
+   230→
+   231→-- RLS policies for user_profiles
+   232→CREATE POLICY user_profiles_api_select ON public.user_profiles
+   233→  FOR SELECT TO adl_api USING (true);
+   234→CREATE POLICY user_profiles_api_insert ON public.user_profiles
+   235→  FOR INSERT TO adl_api WITH CHECK (true);
+   236→CREATE POLICY user_profiles_api_update ON public.user_profiles
+   237→  FOR UPDATE TO adl_api USING (true);
+   238→
+   239→-- RLS policies for point_events
+   240→CREATE POLICY point_events_api_all ON public.point_events
+   241→  FOR ALL TO adl_api USING (true);
+   242→
+   243→-- RLS policies for audit_log (insert-only for API, select for admins via direct query)
+   244→CREATE POLICY audit_log_api_insert ON public.audit_log
+   245→  FOR INSERT TO adl_api WITH CHECK (true);
+   246→CREATE POLICY audit_log_api_select ON public.audit_log
+   247→  FOR SELECT TO adl_api USING (true);
+   248→```
+   249→
+   250→#### Running Migrations
+   251→
+   252→```bash
+   253→# Install Supabase CLI
+   254→npm install -g supabase
+   255→
+   256→# Apply migrations to target environment
+   257→supabase db push --db-url "$POSTGRES_URL"
+   258→
+   259→# Verify migration status
+   260→supabase migration list --db-url "$POSTGRES_URL"
+   261→
+   262→# Generate a diff for manual changes made in Supabase Studio
+   263→supabase db diff --schema public --db-url "$POSTGRES_URL" > supabase/migrations/$(date +%Y%m%d)_auto_diff.sql
+   264→```
+   265→
+   266→### 1.3 Environment Variable Management Strategy
+   267→
+   268→**Variable classification:**
+   269→
+   270→| Variable | Environments | Sensitivity | Source |
+   271→|----------|-------------|-------------|--------|
+   272→| `ADL_POSTGRES_URL` | All (different values) | SECRET | Vercel Env Vars (encrypted) |
+   273→| `BLOB_READ_WRITE_TOKEN` | All (different values) | SECRET | Vercel Env Vars (encrypted) |
+   274→| `AUTH_SECRET` | All (different values) | SECRET | Vercel Env Vars (encrypted) |
+   275→| `GOOGLE_CLIENT_ID` | Production + Preview | CONFIDENTIAL | Vercel Env Vars |
+   276→| `GOOGLE_CLIENT_SECRET` | Production + Preview | SECRET | Vercel Env Vars (encrypted) |
+   277→| `GEMINI_API_KEY` | Production only | SECRET | Vercel Env Vars (server only) |
+   278→| `ADMIN_EMAIL` | Production only | INTERNAL | Vercel Env Vars |
+   279→| `ADMIN_PASSWORD` | REMOVE | CRITICAL | Migrate to DB password_hash |
+   280→| `EDGE_CONFIG` | All | CONFIDENTIAL | Vercel Env Vars |
+   281→| `DATA_STORE_DRIVER` | All | PUBLIC | Vercel Env Vars (always `postgres`) |
+   282→| `POSTGRES_POOL_MAX` | Per environment | PUBLIC | Vercel Env Vars |
+   283→| `SENTRY_DSN` | All | PUBLIC | Vercel Env Vars |
+   284→| `VERCEL_API_TOKEN` | CI only | CRITICAL | GitHub Actions Secrets only |
+   285→
+   286→**Naming convention for environment-specific variables:**
+   287→
+   288→```
+   289→Production:  ADL_POSTGRES_URL = postgres://adl_api:***@db.xyz.supabase.co:5432/postgres
+   290→Staging:     ADL_POSTGRES_URL = postgres://adl_api:***@db.abc.supabase.co:5432/postgres
+   291→Preview:     ADL_POSTGRES_URL = postgres://adl_readonly:***@db.abc.supabase.co:5432/postgres
+   292→```
+   293→
+   294→**Critical fix -- remove client-side API key exposure:**
+   295→
+   296→The current `vite.config.ts` exposes `GEMINI_API_KEY` to the browser bundle:
+   297→
+   298→```typescript
+   299→// CURRENT -- INSECURE (vite.config.ts lines 19-22)
+   300→define: {
+   301→  'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+   302→  'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+   303→},
+   304→```
+   305→
+   306→**Fix:** Remove these `define` entries. Create a server-side proxy at `api/gemini/index.ts` that uses `process.env.GEMINI_API_KEY` on the server and expose a safe endpoint to the client.
+   307→
+   308→### 1.4 IaC Tool Selection
+   309→
+   310→**Phase 1 (Now -- MVP):** No Terraform/Pulumi needed. Manage infra with:
+   311→- `vercel.json` for Vercel configuration
+   312→- `supabase/migrations/*.sql` for database schema
+   313→- GitHub Actions for CI/CD
+   314→- Vercel CLI for deployment
+   315→
+   316→**Phase 2 (1K-10K users):** Introduce Pulumi with TypeScript for:
+   317→- Multi-environment Supabase project provisioning
+   318→- Vercel project and domain configuration
+   319→- Upstash Redis provisioning (rate limiting)
+   320→- Edge Config management
+   321→
+   322→**Phase 3 (10K+ users):** Full Pulumi stack:
+   323→- Cloudflare R2 for photo archival
+   324→- Supabase read replicas
+   325→- QStash topic management
+   326→
+   327→**Rationale for Pulumi over Terraform:**
+   328→- TypeScript native (same language as the codebase)
+   329→- Vercel and Supabase both have Pulumi providers
+   330→- Richer programming constructs than HCL
+   331→- Single `package.json` can include infra code
+   332→
+   333→### 1.5 Concrete IaC Files Needed Now
+   334→
+   335→```
+   336→africandatalayer/
+   337→  vercel.json                          # Enhanced (section 1.1)
+   338→  supabase/
+   339→    migrations/
+   340→      20260219_init_adl.sql            # Existing
+   341→      20260224_phone_identifier.sql    # Existing
+   342→      20260227_audit_log.sql           # NEW
+   343→      20260227_idempotency_keys.sql    # NEW
+   344→      20260227_point_projections.sql   # NEW
+   345→      20260227_rls_policies.sql        # NEW
+   346→    config.toml                        # NEW: Supabase project config
+   347→  .github/
+   348→    workflows/
+   349→      ci.yml                           # NEW: Main CI/CD pipeline
+   350→      migration.yml                    # NEW: Database migration workflow
+   351→      security-scan.yml                # NEW: Dependency + SAST scanning
+   352→  scripts/
+   353→    backup-export.sh                   # NEW: Database export script
+   354→    refresh-projections.sh             # NEW: Materialized view refresh
+   355→```
+   356→
+   357→**`supabase/config.toml`:**
+   358→```toml
+   359→[project]
+   360→id = "adl-prod"
+   361→
+   362→[db]
+   363→port = 5432
+   364→major_version = 15
+   365→
+   366→[db.pooler]
+   367→enabled = true
+   368→port = 6543
+   369→pool_mode = "transaction"
+   370→default_pool_size = 15
+   371→max_client_conn = 100
+   372→
+   373→[auth]
+   374→enabled = false
+   375→
+   376→[storage]
+   377→enabled = false
+   378→
+   379→[realtime]
+   380→enabled = false
+   381→```
+   382→
+   383→Auth, storage, and realtime are disabled in Supabase config because ADL uses Auth.js, Vercel Blob, and has no realtime yet. This avoids unnecessary resource usage on the Supabase instance.
+   384→
+   385→---
+   386→
+   387→## 2. CI/CD Pipeline
+   388→
+   389→### 2.1 GitHub Actions Workflow Design
+   390→
+   391→**`.github/workflows/ci.yml`** -- Main CI/CD pipeline:
+   392→
+   393→```yaml
+   394→name: CI/CD Pipeline
+   395→
+   396→on:
+   397→  push:
+   398→    branches: [main, develop]
+   399→  pull_request:
+   400→    branches: [main, develop]
+   401→
+   402→concurrency:
+   403→  group: ${{ github.workflow }}-${{ github.ref }}
+   404→  cancel-in-progress: true
+   405→
+   406→env:
+   407→  NODE_VERSION: "20"
+   408→
+   409→jobs:
+   410→  # ──────────────────────────────────────────
+   411→  # Stage 1: Lint & Type Check
+   412→  # ──────────────────────────────────────────
+   413→  lint:
+   414→    name: Lint & Type Check
+   415→    runs-on: ubuntu-latest
+   416→    steps:
+   417→      - uses: actions/checkout@v4
+   418→
+   419→      - uses: actions/setup-node@v4
+   420→        with:
+   421→          node-version: ${{ env.NODE_VERSION }}
+   422→          cache: "npm"
+   423→
+   424→      - run: npm ci
+   425→
+   426→      - name: TypeScript type check
+   427→        run: npx tsc --noEmit --strict
+   428→
+   429→      - name: Check for console.log in production code
+   430→        run: |
+   431→          if grep -rn "console\.log\b" api/ lib/server/ --include="*.ts" | grep -v "test\." | grep -v "\.test\."; then
+   432→            echo "::warning::Found console.log statements in production code. Use structured logging instead."
+   433→          fi
+   434→
+   435→  # ──────────────────────────────────────────
+   436→  # Stage 2: Unit Tests
+   437→  # ──────────────────────────────────────────
+   438→  test:
+   439→    name: Unit Tests
+   440→    runs-on: ubuntu-latest
+   441→    needs: lint
+   442→    steps:
+   443→      - uses: actions/checkout@v4
+   444→
+   445→      - uses: actions/setup-node@v4
+   446→        with:
+   447→          node-version: ${{ env.NODE_VERSION }}
+   448→          cache: "npm"
+   449→
+   450→      - run: npm ci
+   451→
+   452→      - name: Run tests
+   453→        run: node --test tests/*.test.ts
+   454→        env:
+   455→          NODE_OPTIONS: "--experimental-strip-types"
+   456→
+   457→      - name: Upload test results
+   458→        if: always()
+   459→        uses: actions/upload-artifact@v4
+   460→        with:
+   461→          name: test-results
+   462→          path: test-results/
+   463→
+   464→  # ──────────────────────────────────────────
+   465→  # Stage 3: Build & Bundle Analysis
+   466→  # ──────────────────────────────────────────
+   467→  build:
+   468→    name: Build & Bundle Analysis
+   469→    runs-on: ubuntu-latest
+   470→    needs: lint
+   471→    steps:
+   472→      - uses: actions/checkout@v4
+   473→
+   474→      - uses: actions/setup-node@v4
+   475→        with:
+   476→          node-version: ${{ env.NODE_VERSION }}
+   477→          cache: "npm"
+   478→
+   479→      - run: npm ci
+   480→
+   481→      - name: Build
+   482→        run: npm run build
+   483→        env:
+   484→          NODE_ENV: production
+   485→
+   486→      - name: Check bundle size
+   487→        run: |
+   488→          MAX_MAIN_KB=350
+   489→          MAX_TOTAL_KB=800
+   490→          MAIN_SIZE=$(du -sk dist/assets/index-*.js | awk '{print $1}')
+   491→          TOTAL_SIZE=$(du -sk dist/assets/ | awk '{print $1}')
+   492→          echo "Main bundle: ${MAIN_SIZE}KB (limit: ${MAX_MAIN_KB}KB)"
+   493→          echo "Total assets: ${TOTAL_SIZE}KB (limit: ${MAX_TOTAL_KB}KB)"
+   494→          if [ "$MAIN_SIZE" -gt "$MAX_MAIN_KB" ]; then
+   495→            echo "::error::Main bundle exceeds ${MAX_MAIN_KB}KB limit (${MAIN_SIZE}KB)"
+   496→            exit 1
+   497→          fi
+   498→          if [ "$TOTAL_SIZE" -gt "$MAX_TOTAL_KB" ]; then
+   499→            echo "::warning::Total assets exceed ${MAX_TOTAL_KB}KB soft limit (${TOTAL_SIZE}KB)"
+   500→          fi
+   501→
+   502→      - name: Upload build artifacts
+   503→        uses: actions/upload-artifact@v4
+   504→        with:
+   505→          name: build-dist
+   506→          path: dist/
+   507→          retention-days: 7
+   508→
+   509→  # ──────────────────────────────────────────
+   510→  # Stage 4: Security Scanning
+   511→  # ──────────────────────────────────────────
+   512→  security:
+   513→    name: Security Scan
+   514→    runs-on: ubuntu-latest
+   515→    needs: lint
+   516→    steps:
+   517→      - uses: actions/checkout@v4
+   518→
+   519→      - uses: actions/setup-node@v4
+   520→        with:
+   521→          node-version: ${{ env.NODE_VERSION }}
+   522→          cache: "npm"
+   523→
+   524→      - run: npm ci
+   525→
+   526→      - name: npm audit (production deps)
+   527→        run: npm audit --production --audit-level=high
+   528→        continue-on-error: true
+   529→
+   530→      - name: Check for known vulnerable packages
+   531→        run: |
+   532→          npx audit-ci --high --report-type full
+   533→
+   534→      - name: Check for secrets in code
+   535→        uses: trufflesecurity/trufflehog@main
+   536→        with:
+   537→          extra_args: --only-verified
+   538→
+   539→  # ──────────────────────────────────────────
+   540→  # Stage 5: Database Migration Dry Run (PRs only)
+   541→  # ──────────────────────────────────────────
+   542→  migration-check:
+   543→    name: Migration Dry Run
+   544→    runs-on: ubuntu-latest
+   545→    if: github.event_name == 'pull_request'
+   546→    steps:
+   547→      - uses: actions/checkout@v4
+   548→
+   549→      - name: Check for new migration files
+   550→        id: migration-check
+   551→        run: |
+   552→          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- 'supabase/migrations/')
+   553→          if [ -n "$CHANGED" ]; then
+   554→            echo "has_migrations=true" >> "$GITHUB_OUTPUT"
+   555→            echo "Changed migration files:"
+   556→            echo "$CHANGED"
+   557→          else
+   558→            echo "has_migrations=false" >> "$GITHUB_OUTPUT"
+   559→            echo "No migration changes detected."
+   560→          fi
+   561→
+   562→      - name: Validate SQL syntax
+   563→        if: steps.migration-check.outputs.has_migrations == 'true'
+   564→        run: |
+   565→          for f in supabase/migrations/*.sql; do
+   566→            echo "Checking $f..."
+   567→            # Basic SQL syntax validation
+   568→            if ! grep -qE '(CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|GRANT|REVOKE|DO)' "$f"; then
+   569→              echo "::warning::$f does not contain recognizable SQL statements"
+   570→            fi
+   571→          done
+   572→
+   573→      - name: Label PR with migration tag
+   574→        if: steps.migration-check.outputs.has_migrations == 'true'
+   575→        uses: actions/github-script@v7
+   576→        with:
+   577→          script: |
+   578→            github.rest.issues.addLabels({
+   579→              owner: context.repo.owner,
+   580→              repo: context.repo.repo,
+   581→              issue_number: context.issue.number,
+   582→              labels: ['database-migration']
+   583→            })
+   584→
+   585→  # ──────────────────────────────────────────
+   586→  # Stage 6: Deploy
+   587→  # ──────────────────────────────────────────
+   588→  deploy:
+   589→    name: Deploy to Vercel
+   590→    runs-on: ubuntu-latest
+   591→    needs: [test, build, security]
+   592→    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+   593→    environment: production
+   594→    steps:
+   595→      - uses: actions/checkout@v4
+   596→
+   597→      - name: Deploy to Vercel
+   598→        uses: amondnet/vercel-action@v25
+   599→        with:
+   600→          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+   601→          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+   602→          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+   603→          vercel-args: "--prod"
+   604→
+   605→      - name: Post-deploy health check
+   606→        run: |
+   607→          echo "Waiting 30s for deployment to propagate..."
+   608→          sleep 30
+   609→          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://africandatalayer.vercel.app/api/health)
+   610→          if [ "$STATUS" != "200" ]; then
+   611→            echo "::error::Health check failed with status $STATUS"
+   612→            exit 1
+   613→          fi
+   614→          echo "Health check passed (HTTP $STATUS)"
+   615→
+   616→      - name: Notify deployment
+   617→        if: always()
+   618→        run: |
+   619→          echo "Deployment ${{ job.status }} for commit ${{ github.sha }}"
+   620→```
+   621→
+   622→**`.github/workflows/migration.yml`** -- Database migration pipeline:
+   623→
+   624→```yaml
+   625→name: Database Migration
+   626→
+   627→on:
+   628→  workflow_dispatch:
+   629→    inputs:
+   630→      environment:
+   631→        description: "Target environment"
+   632→        required: true
+   633→        type: choice
+   634→        options:
+   635→          - staging
+   636→          - production
+   637→      dry_run:
+   638→        description: "Dry run (validate only, no apply)"
+   639→        type: boolean
+   640→        default: true
+   641→
+   642→jobs:
+   643→  migrate:
+   644→    name: Run Migrations (${{ inputs.environment }})
+   645→    runs-on: ubuntu-latest
+   646→    environment: ${{ inputs.environment }}
+   647→    steps:
+   648→      - uses: actions/checkout@v4
+   649→
+   650→      - name: Install Supabase CLI
+   651→        run: |
+   652→          curl -fsSL https://raw.githubusercontent.com/supabase/cli/main/install.sh | sh
+   653→
+   654→      - name: Validate migrations
+   655→        run: |
+   656→          echo "=== Migration files to apply ==="
+   657→          ls -la supabase/migrations/
+   658→          echo ""
+   659→          for f in supabase/migrations/*.sql; do
+   660→            echo "--- $f ---"
+   661→            head -5 "$f"
+   662→            echo "..."
+   663→          done
+   664→
+   665→      - name: Apply migrations (dry run)
+   666→        if: inputs.dry_run
+   667→        run: |
+   668→          echo "DRY RUN: would apply migrations to ${{ inputs.environment }}"
+   669→          echo "Connection: ${{ inputs.environment }} database"
+   670→          # Validate SQL by parsing, do not execute
+   671→          for f in supabase/migrations/*.sql; do
+   672→            echo "Would apply: $f"
+   673→          done
+   674→
+   675→      - name: Apply migrations
+   676→        if: ${{ !inputs.dry_run }}
+   677→        run: |
+   678→          supabase db push --db-url "${{ secrets.ADL_POSTGRES_URL }}"
+   679→        env:
+   680→          ADL_POSTGRES_URL: ${{ secrets.ADL_POSTGRES_URL }}
+   681→
+   682→      - name: Verify migration
+   683→        if: ${{ !inputs.dry_run }}
+   684→        run: |
+   685→          supabase migration list --db-url "${{ secrets.ADL_POSTGRES_URL }}"
+   686→```
+   687→
+   688→### 2.2 Branch Strategy
+   689→
+   690→```
+   691→main (production)
+   692→  |
+   693→  +-- develop (staging, auto-deploys to preview)
+   694→       |
+   695→       +-- feature/add-rate-limiting
+   696→       +-- feature/idempotency-keys
+   697→       +-- fix/photo-upload-timeout
+   698→       +-- chore/update-dependencies
+   699→```
+   700→
+   701→| Branch | Deploys To | DB Target | Auto-Deploy | Protection |
+   702→|--------|-----------|-----------|-------------|------------|
+   703→| `main` | Production | `adl-prod` | Yes (after CI passes) | Require PR + 1 approval + CI green |
+   704→| `develop` | Staging (preview) | `adl-staging` | Yes | Require CI green |
+   705→| `feature/*` | PR preview | `adl-staging` (read-only) | Yes (Vercel preview) | None |
+   706→| `fix/*` | PR preview | `adl-staging` (read-only) | Yes (Vercel preview) | None |
+   707→| `hotfix/*` | Production (fast-track) | `adl-prod` | After expedited review | Require 1 approval |
+   708→
+   709→### 2.3 Preview Deployment Strategy
+   710→
+   711→Vercel auto-deploys every PR as a preview. ADL-specific configuration:
+   712→
+   713→1. **Preview environment variables:** Set via Vercel dashboard scoped to "Preview"
+   714→   - `ADL_POSTGRES_URL` -> staging database with `adl_readonly` role
+   715→   - `DATA_STORE_DRIVER=postgres`
+   716→   - `BLOB_READ_WRITE_TOKEN` -> staging blob store
+   717→   - Preview deployments are **read-only** -- POST to `/api/submissions` returns 403
+   718→
+   719→2. **Preview URL pattern:** `adl-<branch>-<hash>.vercel.app`
+   720→
+   721→3. **PR comment with preview link:** Vercel bot auto-posts this
+   722→
+   723→4. **Preview cleanup:** Vercel auto-removes preview deployments after PR merge
+   724→
+   725→### 2.4 Database Migration Pipeline
+   726→
+   727→**Safe migration process (zero-downtime):**
+   728→
+   729→```
+   730→Step 1: PR contains new file in supabase/migrations/
+   731→Step 2: CI auto-labels PR with 'database-migration'
+   732→Step 3: migration-check job validates SQL syntax
+   733→Step 4: Developer triggers manual migration.yml workflow on staging (dry run first)
+   734→Step 5: Verify staging works with new schema
+   735→Step 6: PR merges to main
+   736→Step 7: Developer triggers migration.yml on production (dry run, then apply)
+   737→Step 8: main deploys new code that uses the new schema
+   738→```
+   739→
+   740→**Critical rules:**
+   741→- Migrations MUST be backwards-compatible (old code must work with new schema)
+   742→- Never DROP columns or tables in the same deploy as code changes
+   743→- Use a two-phase approach: Phase 1 adds columns/tables, Phase 2 (next release) removes old ones
+   744→- Always add `IF NOT EXISTS` / `IF EXISTS` guards
+   745→- Test migrations against a copy of production data before applying
+   746→
+   747→### 2.5 Rollback Strategy
+   748→
+   749→**Application rollback (instant):**
+   750→```bash
+   751→# List recent deployments
+   752→vercel ls --prod
+   753→
+   754→# Instantly rollback to a specific deployment
+   755→vercel rollback <deployment-url> --prod
+   756→
+   757→# Or promote a previous deployment
+   758→vercel promote <deployment-url>
+   759→```
+   760→
+   761→**Database rollback:** Migrations are forward-only. To "undo" a migration:
+   762→1. Write a new migration that reverts the changes
+   763→2. Apply via the migration pipeline
+   764→3. This is why backwards-compatible migrations are essential
+   765→
+   766→**Emergency rollback procedure:**
+   767→1. Vercel instant rollback to last known-good deployment (< 30 seconds)
+   768→2. If DB schema change caused the issue: apply reverse migration
+   769→3. If data corruption: restore from Supabase PITR (see section 4)
+   770→
+   771→### 2.6 Security Scanning in CI
+   772→
+   773→**Already included in `ci.yml` Stage 4. Additional configuration:**
+   774→
+   775→**`.github/workflows/security-scan.yml`** -- Weekly deep scan:
+   776→
+   777→```yaml
+   778→name: Weekly Security Scan
+   779→
+   780→on:
+   781→  schedule:
+   782→    - cron: "0 6 * * 1"  # Monday 6 AM UTC
+   783→  workflow_dispatch:
+   784→
+   785→jobs:
+   786→  dependency-audit:
+   787→    name: Dependency Audit
+   788→    runs-on: ubuntu-latest
+   789→    steps:
+   790→      - uses: actions/checkout@v4
+   791→
+   792→      - uses: actions/setup-node@v4
+   793→        with:
+   794→          node-version: "20"
+   795→          cache: "npm"
+   796→
+   797→      - run: npm ci
+   798→
+   799→      - name: Full npm audit
+   800→        run: npm audit --json > audit-report.json || true
+   801→
+   802→      - name: Parse critical/high vulnerabilities
+   803→        run: |
+   804→          CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' audit-report.json)
+   805→          HIGH=$(jq '.metadata.vulnerabilities.high // 0' audit-report.json)
+   806→          echo "Critical: $CRITICAL, High: $HIGH"
+   807→          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+   808→            echo "::error::Found $CRITICAL critical and $HIGH high vulnerabilities"
+   809→          fi
+   810→
+   811→      - name: Upload audit report
+   812→        uses: actions/upload-artifact@v4
+   813→        with:
+   814→          name: audit-report
+   815→          path: audit-report.json
+   816→
+   817→  sast:
+   818→    name: Static Analysis
+   819→    runs-on: ubuntu-latest
+   820→    steps:
+   821→      - uses: actions/checkout@v4
+   822→
+   823→      - name: Run Semgrep SAST
+   824→        uses: returntocorp/semgrep-action@v1
+   825→        with:
+   826→          config: >-
+   827→            p/typescript
+   828→            p/jwt
+   829→            p/sql-injection
+   830→            p/xss
+   831→```
+   832→
+   833→### 2.7 Performance Budget Enforcement
+   834→
+   835→Defined in the `build` job above. Summary of budgets:
+   836→
+   837→| Metric | Hard Limit | Soft Limit | Measured By |
+   838→|--------|-----------|------------|-------------|
+   839→| Main JS bundle | 350 KB | 250 KB | `du -sk dist/assets/index-*.js` |
+   840→| Total assets | 800 KB | 600 KB | `du -sk dist/assets/` |
+   841→| TypeScript errors | 0 | 0 | `tsc --noEmit` |
+   842→| npm audit critical | 0 | 0 | `npm audit` |
+   843→| Test pass rate | 100% | 100% | `node --test` |
+   844→
+   845→---
+   846→
+   847→## 3. Observability Stack
+   848→
+   849→### 3.1 Logging Strategy
+   850→
+   851→**Current state:** Minimal logging. `console.info("[SUBMISSION_DEVICE]", ...)` only in non-production (line 673 of `api/submissions/index.ts`). `console.error("Postgres pool error", error)` in `lib/server/db.ts`.
+   852→
+   853→**Structured logging module -- `lib/server/logger.ts`:**
+   854→
+   855→```typescript
+   856→type LogLevel = "debug" | "info" | "warn" | "error";
+   857→
+   858→interface LogEntry {
+   859→  level: LogLevel;
+   860→  message: string;
+   861→  timestamp: string;
+   862→  requestId?: string;
+   863→  userId?: string;
+   864→  action?: string;
+   865→  duration_ms?: number;
+   866→  metadata?: Record<string, unknown>;
+   867→}
+   868→
+   869→const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
+   870→  debug: 0,
+   871→  info: 1,
+   872→  warn: 2,
+   873→  error: 3,
+   874→};
+   875→
+   876→const MIN_LEVEL: LogLevel =
+   877→  (process.env.LOG_LEVEL as LogLevel) || (process.env.NODE_ENV === "production" ? "info" : "debug");
+   878→
+   879→function shouldLog(level: LogLevel): boolean {
+   880→  return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[MIN_LEVEL];
+   881→}
+   882→
+   883→function emit(entry: LogEntry): void {
+   884→  if (!shouldLog(entry.level)) return;
+   885→  const output = JSON.stringify(entry);
+   886→  if (entry.level === "error") {
+   887→    console.error(output);
+   888→  } else if (entry.level === "warn") {
+   889→    console.warn(output);
+   890→  } else {
+   891→    console.log(output);
+   892→  }
+   893→}
+   894→
+   895→export const logger = {
+   896→  debug: (message: string, metadata?: Record<string, unknown>) =>
+   897→    emit({ level: "debug", message, timestamp: new Date().toISOString(), ...metadata }),
+   898→  info: (message: string, metadata?: Record<string, unknown>) =>
+   899→    emit({ level: "info", message, timestamp: new Date().toISOString(), ...metadata }),
+   900→  warn: (message: string, metadata?: Record<string, unknown>) =>
+   901→    emit({ level: "warn", message, timestamp: new Date().toISOString(), ...metadata }),
+   902→  error: (message: string, metadata?: Record<string, unknown>) =>
+   903→    emit({ level: "error", message, timestamp: new Date().toISOString(), ...metadata }),
+   904→};
+   905→```
+   906→
+   907→**What to log (and what NOT to log):**
+   908→
+   909→| Event | Level | Log? | Fields |
+   910→|-------|-------|------|--------|
+   911→| Submission created | `info` | YES | `eventId`, `userId`, `category`, `eventType`, `duration_ms` |
+   912→| Submission validation failed | `warn` | YES | `reason`, `userId`, `category` |
+   913→| Fraud check flagged | `warn` | YES | `eventId`, `userId`, `riskScore`, `signals` |
+   914→| Photo upload failed | `error` | YES | `eventId`, `errorCode`, `errorMessage` |
+   915→| DB query timeout | `error` | YES | `query` (first 100 chars), `timeout_ms` |
+   916→| DB pool error | `error` | YES | `errorCode`, `errorMessage` |
+   917→| Auth login success | `info` | YES | `userId`, `provider` |
+   918→| Auth login failed | `warn` | YES | `identifier` (hashed), `reason` |
+   919→| Health check | `debug` | NO in prod | `db_status`, `latency_ms` |
+   920→| Request body contents | - | NEVER | Contains PII, photos |
+   921→| Password hashes | - | NEVER | Security |
+   922→| Full SQL queries with params | - | NEVER | May contain PII |
+   923→
+   924→### 3.2 Metrics Collection
+   925→
+   926→**Custom ADL metrics (log-derived, queryable in Vercel Logs or Sentry):**
+   927→
+   928→| Metric | Type | Source | Alert Threshold |
+   929→|--------|------|--------|-----------------|
+   930→| `adl.submissions.created` | Counter | POST /api/submissions 201 | < 1/hour during business hours |
+   931→| `adl.submissions.failed` | Counter | POST /api/submissions 4xx/5xx | > 10/hour |
+   932→| `adl.submissions.latency_p99` | Histogram | POST /api/submissions duration_ms | > 15000 ms |
+   933→| `adl.fraud.flagged` | Counter | Fraud check with risk > 0.7 | > 5/hour |
+   934→| `adl.fraud.blocked` | Counter | Submissions blocked by fraud | > 3/hour |
+   935→| `adl.sync.failures` | Counter | Offline queue permanent failures | > 0 (alert on any) |
+   936→| `adl.auth.login_failed` | Counter | Auth login failures | > 20/hour |
+   937→| `adl.db.query_timeout` | Counter | StorageUnavailableError | > 0 |
+   938→| `adl.db.pool_errors` | Counter | Pool error event | > 0 |
+   939→| `adl.blob.upload_failed` | Counter | Photo upload failures | > 3/hour |
+   940→| `adl.health.status` | Gauge | /api/health response | != "ok" |
+   941→
+   942→**Implementation approach:**
+   943→
+   944→Since ADL is on Vercel (no Prometheus endpoint), metrics are derived from structured log lines. Use Vercel Log Drains to send logs to a metrics backend:
+   945→
+   946→```bash
+   947→# Set up Vercel log drain to send to a webhook or Datadog/Axiom
+   948→vercel logs drain create \
+   949→  --type json \
+   950→  --url https://your-metrics-endpoint.example.com/ingest \
+   951→  --project-id $VERCEL_PROJECT_ID
+   952→```
+   953→
+   954→For MVP, Vercel's built-in Logs tab + `@vercel/analytics` (already installed) provides sufficient observability. Upgrade to Axiom (free Vercel integration) when log volume grows.
+   955→
+   956→### 3.3 Alerting Rules and Thresholds
+   957→
+   958→| Alert | Condition | Channel | Severity |
+   959→|-------|-----------|---------|----------|
+   960→| **Service Down** | Health check returns non-200 for 2 consecutive checks | SMS + Email | P1 - Critical |
+   961→| **DB Unreachable** | `adl.db.pool_errors > 0` in 5 min window | Email | P1 - Critical |
+   962→| **High Error Rate** | `5xx responses > 5%` of total in 10 min window | Email | P2 - High |
+   963→| **Submission Spike** | `adl.submissions.created > 100` in 10 min (possible bot) | Email | P2 - High |
+   964→| **Fraud Spike** | `adl.fraud.flagged > 10` in 1 hour | Email | P2 - High |
+   965→| **Build Failure** | CI pipeline fails on `main` | GitHub notification | P3 - Medium |
+   966→| **Bundle Regression** | Main JS bundle > 350 KB | GitHub PR comment | P3 - Medium |
+   967→| **Dependency Vuln** | Critical/High npm audit finding | Weekly email digest | P3 - Medium |
+   968→
+   969→### 3.4 Distributed Tracing for Serverless Functions
+   970→
+   971→Vercel Functions have limited tracing support. Implement lightweight request tracing:
+   972→
+   973→**Request ID propagation -- `lib/server/requestContext.ts`:**
+   974→
+   975→```typescript
+   976→export function getRequestId(request: Request): string {
+   977→  return (
+   978→    request.headers.get("x-vercel-id") ??
+   979→    request.headers.get("x-request-id") ??
+   980→    crypto.randomUUID()
+   981→  );
+   982→}
+   983→
+   984→export function withRequestTiming<T>(
+   985→  label: string,
+   986→  fn: () => Promise<T>,
+   987→  requestId: string,
+   988→): Promise<T> {
+   989→  const start = performance.now();
+   990→  return fn().then(
+   991→    (result) => {
+   992→      const duration = Math.round(performance.now() - start);
+   993→      console.log(JSON.stringify({
+   994→        level: "info",
+   995→        requestId,
+   996→        trace: label,
+   997→        duration_ms: duration,
+   998→        timestamp: new Date().toISOString(),
+   999→      }));
+  1000→      return result;
+  1001→    },
+  1002→    (error) => {
+  1003→      const duration = Math.round(performance.now() - start);
+  1004→      console.error(JSON.stringify({
+  1005→        level: "error",
+  1006→        requestId,
+  1007→        trace: label,
+  1008→        duration_ms: duration,
+  1009→        error: error instanceof Error ? error.message : String(error),
+  1010→        timestamp: new Date().toISOString(),
+  1011→      }));
+  1012→      throw error;
+  1013→    },
+  1014→  );
+  1015→}
+  1016→```
+  1017→
+  1018→**Usage in `api/submissions/index.ts` POST handler:**
+  1019→
+  1020→```typescript
+  1021→const requestId = getRequestId(request);
+  1022→const photoUrl = await withRequestTiming(
+  1023→  "blob.upload",
+  1024→  () => uploadSubmissionPhoto(eventId, parsedPhoto.imageBuffer, parsedPhoto.mime, parsedPhoto.ext),
+  1025→  requestId,
+  1026→);
+  1027→await withRequestTiming(
+  1028→  "db.insert_event",
+  1029→  () => insertPointEvent(newEvent),
+  1030→  requestId,
+  1031→);
+  1032→```
+  1033→
+  1034→This produces log lines like:
+  1035→```json
+  1036→{"level":"info","requestId":"cdg1::abcd-1234","trace":"blob.upload","duration_ms":1250,"timestamp":"2026-02-27T10:00:00.000Z"}
+  1037→{"level":"info","requestId":"cdg1::abcd-1234","trace":"db.insert_event","duration_ms":85,"timestamp":"2026-02-27T10:00:01.250Z"}
+  1038→```
+  1039→
+  1040→### 3.5 Health Check Enhancement
+  1041→
+  1042→The current `/api/health/index.ts` only checks `SELECT 1`. Enhance it:
+  1043→
+  1044→**Enhanced `api/health/index.ts`:**
+  1045→
+  1046→```typescript
+  1047→import { query } from "../../lib/server/db.js";
+  1048→
+  1049→interface HealthCheckResult {
+  1050→  status: "ok" | "degraded" | "error";
+  1051→  db: "ok" | "error";
+  1052→  db_latency_ms: number | null;
+  1053→  blob: "ok" | "unchecked";
+  1054→  version: string;
+  1055→  region: string | null;
+  1056→  uptime_s: number;
+  1057→  ts: string;
+  1058→}
+  1059→
+  1060→const startTime = Date.now();
+  1061→
+  1062→export async function GET(request: Request): Promise<Response> {
+  1063→  const isDeepCheck = new URL(request.url).searchParams.get("deep") === "true";
+  1064→  const result: HealthCheckResult = {
+  1065→    status: "ok",
+  1066→    db: "error",
+  1067→    db_latency_ms: null,
+  1068→    blob: "unchecked",
+  1069→    version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
+  1070→    region: process.env.VERCEL_REGION ?? null,
+  1071→    uptime_s: Math.round((Date.now() - startTime) / 1000),
+  1072→    ts: new Date().toISOString(),
+  1073→  };
+  1074→
+  1075→  // Database check
+  1076→  const dbStart = performance.now();
+  1077→  try {
+  1078→    await query("SELECT 1");
+  1079→    result.db = "ok";
+  1080→    result.db_latency_ms = Math.round(performance.now() - dbStart);
+  1081→  } catch {
+  1082→    result.status = "error";
+  1083→    result.db_latency_ms = Math.round(performance.now() - dbStart);
+  1084→  }
+  1085→
+  1086→  // Deep check: verify table accessibility
+  1087→  if (isDeepCheck && result.db === "ok") {
+  1088→    try {
+  1089→      await query("SELECT count(*) FROM point_events WHERE created_at > now() - interval '1 day'");
+  1090→    } catch {
+  1091→      result.status = "degraded";
+  1092→    }
+  1093→  }
+  1094→
+  1095→  // DB latency warning
+  1096→  if (result.db_latency_ms !== null && result.db_latency_ms > 5000) {
+  1097→    result.status = result.status === "ok" ? "degraded" : result.status;
+  1098→  }
+  1099→
+  1100→  const httpStatus = result.status === "error" ? 503 : 200;
+  1101→  return new Response(JSON.stringify(result), {
+  1102→    status: httpStatus,
+  1103→    headers: {
+  1104→      "Content-Type": "application/json",
+  1105→      "Cache-Control": "no-cache, no-store",
+  1106→    },
+  1107→  });
+  1108→}
+  1109→```
+  1110→
+  1111→### 3.6 Dashboard Design
+  1112→
+  1113→**ADL Operations Dashboard (Axiom/Grafana/Vercel Analytics):**
+  1114→
+  1115→| Panel | Query/Source | Refresh |
+  1116→|-------|-------------|---------|
+  1117→| **Health Status** | GET /api/health every 60s, display status badge | 1 min |
+  1118→| **Submissions/Hour** | Count of 201 responses on POST /api/submissions | 5 min |
+  1119→| **Submissions by Category** | Breakdown: pharmacy, fuel_station, mobile_money | 5 min |
+  1120→| **Error Rate** | 4xx + 5xx / total requests as % | 5 min |
+  1121→| **P50/P95/P99 Latency** | Duration of POST /api/submissions | 5 min |
+  1122→| **Active Users (24h)** | Distinct user_id in point_events WHERE created_at > 24h ago | 15 min |
+  1123→| **Fraud Detection Rate** | Flagged / total submissions as % | 15 min |
+  1124→| **Offline Sync Failures** | Count of permanent sync failures (from structured logs) | 15 min |
+  1125→| **DB Connection Pool** | Pool active / max (from Supabase metrics) | 1 min |
+  1126→| **Blob Storage Usage** | Total blob storage in GB | 1 hour |
+  1127→| **Bundle Size Trend** | Main JS bundle KB over last 30 days (from CI artifacts) | Daily |
+  1128→| **Top Contributors** | Leaderboard top 10 by XP | 30 min |
+  1129→
+  1130→### 3.7 Error Tracking
+  1131→
+  1132→**Recommendation: Sentry (free tier: 5K errors/month)**
+  1133→
+  1134→```bash
+  1135→npm install @sentry/node
+  1136→```
+  1137→
+  1138→**`lib/server/sentry.ts`:**
+  1139→
+  1140→```typescript
+  1141→import * as Sentry from "@sentry/node";
+  1142→
+  1143→const DSN = process.env.SENTRY_DSN;
+  1144→
+  1145→if (DSN) {
+  1146→  Sentry.init({
+  1147→    dsn: DSN,
+  1148→    environment: process.env.VERCEL_ENV ?? "development",
+  1149→    release: process.env.VERCEL_GIT_COMMIT_SHA ?? "dev",
+  1150→    tracesSampleRate: 0.1,
+  1151→    beforeSend(event) {
+  1152→      // Strip PII from error reports
+  1153→      if (event.request?.data) {
+  1154→        event.request.data = "[REDACTED]";
+  1155→      }
+  1156→      if (event.request?.cookies) {
+  1157→        event.request.cookies = {};
+  1158→      }
+  1159→      return event;
+  1160→    },
+  1161→  });
+  1162→}
+  1163→
+  1164→export { Sentry };
+  1165→```
+  1166→
+  1167→**Integration points:**
+  1168→- Wrap each API handler's catch block with `Sentry.captureException(error)`
+  1169→- Add `Sentry.setUser({ id: auth.id })` after authentication
+  1170→- Use `Sentry.addBreadcrumb()` for tracing key operations
+  1171→
+  1172→---
+  1173→
+  1174→## 4. Backup & Disaster Recovery
+  1175→
+  1176→### 4.1 Database Backup Strategy
+  1177→
+  1178→**Layer 1: Supabase Automatic Backups**
+  1179→
+  1180→| Supabase Tier | Backup Type | Frequency | Retention |
+  1181→|---------------|-------------|-----------|-----------|
+  1182→| Free | Daily snapshot | 24h | 7 days |
+  1183→| Pro ($25/mo) | PITR (Point-in-Time Recovery) | Continuous WAL | 7 days |
+  1184→| Team ($599/mo) | PITR | Continuous WAL | 30 days |
+  1185→
+  1186→**Current tier: Free.** Upgrade to Pro when user count exceeds 500 (projected ~$55/mo total per architect's cost table).
+  1187→
+  1188→**Layer 2: Custom Nightly Export**
+  1189→
+  1190→**`scripts/backup-export.sh`:**
+  1191→
+  1192→```bash
+  1193→#!/bin/bash
+  1194→set -euo pipefail
+  1195→
+  1196→# Configuration
+  1197→BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+  1198→BACKUP_DIR="/tmp/adl-backup-${BACKUP_DATE}"
+  1199→POSTGRES_URL="${ADL_POSTGRES_URL:?ADL_POSTGRES_URL is required}"
+  1200→
+  1201→mkdir -p "$BACKUP_DIR"
+  1202→
+  1203→echo "[backup] Starting ADL database export at $(date -u)"
+  1204→
+  1205→# Export tables as compressed CSV
+  1206→psql "$POSTGRES_URL" -c "\COPY (SELECT * FROM point_events ORDER BY created_at) TO STDOUT WITH CSV HEADER" | gzip > "$BACKUP_DIR/point_events.csv.gz"
+  1207→echo "[backup] point_events exported ($(du -sh "$BACKUP_DIR/point_events.csv.gz" | awk '{print $1}'))"
+  1208→
+  1209→psql "$POSTGRES_URL" -c "\COPY (SELECT id, email, phone, name, image, occupation, xp, is_admin, map_scope, created_at, updated_at FROM user_profiles) TO STDOUT WITH CSV HEADER" | gzip > "$BACKUP_DIR/user_profiles.csv.gz"
+  1210→echo "[backup] user_profiles exported (password_hash excluded)"
+  1211→
+  1212→psql "$POSTGRES_URL" -c "\COPY (SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 100000) TO STDOUT WITH CSV HEADER" | gzip > "$BACKUP_DIR/audit_log.csv.gz" 2>/dev/null || echo "[backup] audit_log table not found, skipping"
+  1213→
+  1214→# Export schema
+  1215→pg_dump "$POSTGRES_URL" --schema-only --no-owner --no-acl > "$BACKUP_DIR/schema.sql"
+  1216→echo "[backup] Schema exported"
+  1217→
+  1218→# Checksum
+  1219→sha256sum "$BACKUP_DIR"/* > "$BACKUP_DIR/checksums.sha256"
+  1220→
+  1221→# Upload to Vercel Blob (or S3/R2 in future)
+  1222→echo "[backup] Backup complete: $BACKUP_DIR"
+  1223→echo "[backup] Files:"
+  1224→ls -lh "$BACKUP_DIR/"
+  1225→
+  1226→# Cleanup backups older than 30 days
+  1227→find /tmp -maxdepth 1 -name "adl-backup-*" -mtime +30 -exec rm -rf {} \;
+  1228→echo "[backup] Old backups cleaned up"
+  1229→```
+  1230→
+  1231→**API endpoint for cron-triggered backup (Vercel Cron):**
+  1232→
+  1233→```typescript
+  1234→// api/cron/backup-export.ts
+  1235→import { query } from "../../lib/server/db.js";
+  1236→
+  1237→export async function GET(request: Request): Promise<Response> {
+  1238→  // Verify cron secret
+  1239→  const authHeader = request.headers.get("authorization");
+  1240→  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  1241→    return new Response("Unauthorized", { status: 401 });
+  1242→  }
+  1243→
+  1244→  try {
+  1245→    const countResult = await query<{ count: string }>(
+  1246→      "SELECT count(*) as count FROM point_events"
+  1247→    );
+  1248→    const count = parseInt(countResult.rows[0]?.count ?? "0", 10);
+  1249→
+  1250→    // Log backup metadata (actual export runs via scheduled script)
+  1251→    console.log(JSON.stringify({
+  1252→      level: "info",
+  1253→      action: "backup.checkpoint",
+  1254→      point_events_count: count,
+  1255→      timestamp: new Date().toISOString(),
+  1256→    }));
+  1257→
+  1258→    return new Response(JSON.stringify({
+  1259→      status: "ok",
+  1260→      point_events_count: count,
+  1261→      ts: new Date().toISOString(),
+  1262→    }), {
+  1263→      status: 200,
+  1264→      headers: { "Content-Type": "application/json" },
+  1265→    });
+  1266→  } catch (error) {
+  1267→    return new Response(JSON.stringify({ status: "error" }), { status: 500 });
+  1268→  }
+  1269→}
+  1270→```
+  1271→
+  1272→### 4.2 Blob Storage Backup
+  1273→
+  1274→**Current:** Photos stored in Vercel Blob under `submissions/{eventId}-{timestamp}.{ext}`.
+  1275→
+  1276→**Backup strategy:**
+  1277→1. Vercel Blob has no built-in backup. Photos are referenced by URL in `point_events.photo_url`.
+  1278→2. Nightly script lists all blob URLs from `point_events.photo_url` and verifies accessibility.
+  1279→3. Phase 2: Copy blobs older than 30 days to Cloudflare R2 as cold archive.
+  1280→
+  1281→**Blob verification script:**
+  1282→
+  1283→```bash
+  1284→#!/bin/bash
+  1285→# Verify all photo URLs are accessible
+  1286→psql "$ADL_POSTGRES_URL" -t -c "SELECT DISTINCT photo_url FROM point_events WHERE photo_url IS NOT NULL AND photo_url != ''" | while read -r url; do
+  1287→  url=$(echo "$url" | xargs)  # trim whitespace
+  1288→  if [ -z "$url" ]; then continue; fi
+  1289→  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$url" --max-time 10)
+  1290→  if [ "$STATUS" != "200" ]; then
+  1291→    echo "[blob-check] MISSING: $url (HTTP $STATUS)"
+  1292→  fi
+  1293→done
+  1294→```
+  1295→
+  1296→### 4.3 Configuration Backup
+  1297→
+  1298→| Config | Location | Backup Method |
+  1299→|--------|----------|---------------|
+  1300→| `vercel.json` | Git repo | Git history |
+  1301→| `supabase/migrations/` | Git repo | Git history |
+  1302→| Vercel Environment Variables | Vercel dashboard | Manual export quarterly, store encrypted in 1Password/Vault |
+  1303→| Vercel Edge Config | Vercel dashboard | Export JSON quarterly |
+  1304→| GitHub Actions Secrets | GitHub | Document secret names (not values) in team wiki |
+  1305→
+  1306→### 4.4 RTO/RPO Targets
+  1307→
+  1308→Per the Cloud Architect's section 7.4:
+  1309→
+  1310→| Phase | RTO (Recovery Time Objective) | RPO (Recovery Point Objective) |
+  1311→|-------|-------------------------------|-------------------------------|
+  1312→| **MVP (now)** | 4 hours | 24 hours |
+  1313→| **Phase 2 (1K-10K users)** | 1 hour | 1 hour |
+  1314→| **Phase 3 (10K+ users)** | 15 minutes | 5 minutes |
+  1315→
+  1316→**How each target is met:**
+  1317→
+  1318→| Phase | RTO Met By | RPO Met By |
+  1319→|-------|-----------|-----------|
+  1320→| MVP | Vercel instant rollback + Supabase daily backup restore | Nightly CSV export + Supabase 7-day snapshots |
+  1321→| Phase 2 | Vercel rollback + Supabase PITR | Supabase PITR (continuous WAL) |
+  1322→| Phase 3 | Multi-region failover + read replicas | Real-time replication + PITR |
+  1323→
+  1324→### 4.5 Disaster Recovery Runbook
+  1325→
+  1326→**DR Scenario 1: Vercel Outage (app unreachable)**
+  1327→
+  1328→```
+  1329→Time 0:00 - Detect (health check fails, Vercel status page confirms)
+  1330→  Action: Nothing to do. Wait for Vercel to recover.
+  1331→  Mitigation: Vercel SLA is 99.99% for Pro tier.
+  1332→  If > 1 hour:
+  1333→    1. Redirect DNS to a static "maintenance" page on Cloudflare Pages
+  1334→    2. Communicate via status page / Twitter
+  1335→
+  1336→Time 0:15 - Notify users
+  1337→  Action: Post on ADL status page: "We are experiencing intermittent issues.
+  1338→          Your offline submissions are safely queued and will sync when
+  1339→          service resumes."
+  1340→```
+  1341→
+  1342→**DR Scenario 2: Database Corruption / Accidental Data Loss**
+  1343→
+  1344→```
+  1345→Time 0:00 - Detect (API returns 500, health check shows db: error)
+  1346→  Action: Verify via Supabase dashboard
+  1347→
+  1348→Time 0:05 - Assess scope
+  1349→  Query: SELECT count(*) FROM point_events;
+  1350→  Query: SELECT max(created_at) FROM point_events;
+  1351→  Compare with last backup checkpoint count.
+  1352→
+  1353→Time 0:15 - If data loss confirmed:
+  1354→  Option A (< 1 hour of data lost, Supabase Pro):
+  1355→    1. Use Supabase PITR to restore to timestamp just before corruption
+  1356→    2. supabase db restore --to <timestamp>
+  1357→
+  1358→  Option B (> 1 hour of data lost, Free tier):
+  1359→    1. Restore from nightly CSV backup:
+  1360→       psql $POSTGRES_URL -c "BEGIN;"
+  1361→       psql $POSTGRES_URL -c "\COPY point_events FROM 'point_events.csv' WITH CSV HEADER"
+  1362→       psql $POSTGRES_URL -c "COMMIT;"
+  1363→    2. Data between backup and corruption is lost.
+  1364→    3. Users' offline queues may contain some of the lost data --
+  1365→       it will re-sync when they come online.
+  1366→
+  1367→Time 0:30 - Verify restoration
+  1368→  Run: SELECT count(*) FROM point_events;
+  1369→  Run: /api/health?deep=true
+  1370→  Run: Manual test: create a submission via the app
+  1371→
+  1372→Time 1:00 - Post-incident
+  1373→  Write incident report. Update RPO assessment.
+  1374→```
+  1375→
+  1376→**DR Scenario 3: Supabase Region Outage (full database unavailable)**
+  1377→
+  1378→```
+  1379→Time 0:00 - Detect (all DB queries fail, Supabase status confirms)
+  1380→
+  1381→Time 0:05 - Enable offline-only mode:
+  1382→  1. Set Edge Config flag: { "maintenance_mode": true }
+  1383→  2. App detects maintenance_mode and switches to offline-only UI
+  1384→  3. All submissions queue to IndexedDB
+  1385→
+  1386→Time 0:10 - Communicate:
+  1387→  "We are temporarily in offline mode. Your submissions are saved locally
+  1388→   and will sync automatically when database service resumes."
+  1389→
+  1390→Time ?:?? - Supabase recovers:
+  1391→  1. Verify connectivity: curl /api/health
+  1392→  2. Clear maintenance_mode flag in Edge Config
+  1393→  3. Users' apps will auto-flush offline queues
+  1394→
+  1395→Post-incident:
+  1396→  Evaluate multi-region database setup if outage > 4 hours.
+  1397→```
+  1398→
+  1399→### 4.6 Backup Verification Schedule
+  1400→
+  1401→| Check | Frequency | Method | Owner |
+  1402→|-------|-----------|--------|-------|
+  1403→| Verify nightly CSV export ran | Daily (automated) | Check log for `backup.checkpoint` entry | Cron |
+  1404→| Restore CSV to test database | Weekly (manual) | Load into local Postgres, run SELECT count(*) | Engineer |
+  1405→| Verify Supabase snapshot exists | Weekly | Check Supabase dashboard > Backups | Engineer |
+  1406→| Full DR drill (restore from backup) | Monthly | Spin up fresh Supabase project, restore, run tests | Team |
+  1407→| Blob URL accessibility scan | Weekly | `blob-check.sh` script | Cron |
+  1408→
+  1409→---
+  1410→
+  1411→## 5. Deployment Runbooks
+  1412→
+  1413→### 5.1 Standard Deployment Runbook (Feature Release)
+  1414→
+  1415→```
+  1416→PRE-DEPLOYMENT CHECKLIST
+  1417→========================
+  1418→[ ] All CI checks pass on the PR (lint, test, build, security)
+  1419→[ ] PR approved by at least 1 reviewer
+  1420→[ ] No 'database-migration' label on PR (if yes, follow section 5.3)
+  1421→[ ] Bundle size within budget (< 350 KB main, < 800 KB total)
+  1422→[ ] Manual testing on preview URL completed
+  1423→[ ] Release notes drafted
+  1424→
+  1425→DEPLOYMENT STEPS
+  1426→================
+  1427→1. Merge PR to main
+  1428→   $ git checkout main && git pull
+  1429→   $ git merge --no-ff feature/my-feature
+  1430→   $ git push origin main
+  1431→
+  1432→2. Monitor CI pipeline
+  1433→   - Go to: https://github.com/<org>/africandatalayer/actions
+  1434→   - Wait for all 5 stages to pass (lint, test, build, security, deploy)
+  1435→   - Expected time: 3-5 minutes
+  1436→
+  1437→3. Verify deployment
+  1438→   $ curl -s https://africandatalayer.vercel.app/api/health | jq .
+  1439→   # Expected: { "status": "ok", "db": "ok", "version": "<new-commit-sha>" }
+  1440→
+  1441→4. Smoke test
+  1442→   - Open https://africandatalayer.vercel.app
+  1443→   - Login with test account
+  1444→   - Verify map loads with points
+  1445→   - Verify leaderboard loads
+  1446→   - Submit a test data point (staging environment)
+  1447→
+  1448→5. Monitor for 30 minutes
+  1449→   - Watch Vercel Logs for error spikes
+  1450→   - Check Sentry for new exceptions
+  1451→   - Verify no regression in Vercel Analytics (Web Vitals)
+  1452→
+  1453→POST-DEPLOYMENT
+  1454→===============
+  1455→[ ] Update changelog
+  1456→[ ] Close related GitHub issues
+  1457→[ ] Notify team in Slack/Discord
+  1458→```
+  1459→
+  1460→### 5.2 Hotfix Deployment Runbook
+  1461→
+  1462→```
+  1463→HOTFIX PROTOCOL (< 30 min end-to-end)
+  1464→======================================
+  1465→
+  1466→1. Create hotfix branch from main
+  1467→   $ git checkout main && git pull
+  1468→   $ git checkout -b hotfix/critical-fix-description
+  1469→
+  1470→2. Apply fix (minimal change only)
+  1471→   - Fix ONLY the immediate issue
+  1472→   - No refactoring, no feature additions
+  1473→   - Add regression test if time permits
+  1474→
+  1475→3. Push and create PR
+  1476→   $ git push -u origin hotfix/critical-fix-description
+  1477→   $ gh pr create --title "HOTFIX: <description>" --base main
+  1478→
+  1479→4. Expedited review
+  1480→   - Tag on-call reviewer for immediate review
+  1481→   - CI must pass (no skipping)
+  1482→   - 1 approval required (not 2)
+  1483→
+  1484→5. Merge and monitor
+  1485→   - Merge immediately after approval
+  1486→   - Monitor health check within 2 minutes
+  1487→   - Watch logs for 15 minutes
+  1488→
+  1489→6. If hotfix fails:
+  1490→   $ vercel rollback --prod
+  1491→   # This instantly reverts to the previous deployment
+  1492→```
+  1493→
+  1494→### 5.3 Database Migration Runbook
+  1495→
+  1496→```
+  1497→DATABASE MIGRATION PROTOCOL
+  1498→============================
+  1499→
+  1500→PRE-MIGRATION
+  1501→=============
+  1502→1. Review migration SQL carefully
+  1503→   $ cat supabase/migrations/<new-file>.sql
+  1504→
+  1505→2. Verify backwards compatibility
+  1506→   - New columns must have DEFAULT values
+  1507→   - No DROP without a two-phase plan
+  1508→   - No renames without aliases
+  1509→
+  1510→3. Take a backup checkpoint
+  1511→   $ psql "$ADL_POSTGRES_URL" -c "SELECT count(*) FROM point_events;"
+  1512→   # Record this number
+  1513→
+  1514→4. Test on staging first
+  1515→   $ gh workflow run migration.yml \
+  1516→       -f environment=staging \
+  1517→       -f dry_run=true
+  1518→
+  1519→5. Review dry run output, then apply to staging
+  1520→   $ gh workflow run migration.yml \
+  1521→       -f environment=staging \
+  1522→       -f dry_run=false
+  1523→
+  1524→6. Verify staging works with new schema
+  1525→   $ curl -s https://adl-staging.vercel.app/api/health | jq .
+  1526→
+  1527→PRODUCTION MIGRATION
+  1528→====================
+  1529→7. Schedule migration during low-traffic window (02:00-04:00 UTC)
+  1530→
+  1531→8. Dry run on production
+  1532→   $ gh workflow run migration.yml \
+  1533→       -f environment=production \
+  1534→       -f dry_run=true
+  1535→
+  1536→9. Apply to production
+  1537→   $ gh workflow run migration.yml \
+  1538→       -f environment=production \
+  1539→       -f dry_run=false
+  1540→
+  1541→10. Verify production
+  1542→    $ curl -s https://africandatalayer.vercel.app/api/health?deep=true | jq .
+  1543→    $ psql "$ADL_POSTGRES_URL" -c "SELECT count(*) FROM point_events;"
+  1544→    # Should match pre-migration count
+  1545→
+  1546→11. Deploy code that uses the new schema
+  1547→    - Merge the application code PR to main
+  1548→    - Wait for CI/CD to complete
+  1549→    - Verify new functionality works
+  1550→
+  1551→POST-MIGRATION
+  1552→==============
+  1553→12. Update migration documentation
+  1554→13. Clean up any temporary backwards-compatibility code (schedule for next release)
+  1555→```
+  1556→
+  1557→### 5.4 Rollback Runbook
+  1558→
+  1559→```
+  1560→APPLICATION ROLLBACK (instant, < 1 minute)
+  1561→==========================================
+  1562→1. List recent production deployments
+  1563→   $ vercel ls --prod --limit 5
+  1564→
+  1565→2. Identify last known-good deployment
+  1566→   (The one before the current broken one)
+  1567→
+  1568→3. Rollback
+  1569→   $ vercel rollback <deployment-url> --prod
+  1570→
+  1571→4. Verify
+  1572→   $ curl -s https://africandatalayer.vercel.app/api/health | jq .
+  1573→
+  1574→5. Investigate root cause on the broken deployment
+  1575→   $ vercel logs <broken-deployment-url> --follow
+  1576→
+  1577→DATABASE ROLLBACK (write a reverse migration)
+  1578→=============================================
+  1579→1. Identify what changed
+  1580→   $ cat supabase/migrations/<problematic-migration>.sql
+  1581→
+  1582→2. Write reverse migration
+  1583→   $ cat > supabase/migrations/$(date +%Y%m%d)_revert_<description>.sql << 'EOF'
+  1584→   -- Revert: <description>
+  1585→   -- This reverses migration <original-file>
+  1586→   <reverse SQL statements>
+  1587→   EOF
+  1588→
+  1589→3. Apply reverse migration following section 5.3
+  1590→
+  1591→4. If data loss occurred: follow DR Runbook section 4.5
+  1592→```
+  1593→
+  1594→### 5.5 Incident Response Runbook (First 15 Minutes)
+  1595→
+  1596→```
+  1597→INCIDENT RESPONSE -- FIRST 15 MINUTES
+  1598→======================================
+  1599→
+  1600→MINUTE 0-2: DETECT & CLASSIFY
+  1601→==============================
+  1602→- Source: Health check alert / user report / error spike in Sentry
+  1603→- Classify severity:
+  1604→
+  1605→  P1 (Critical): Service completely down. No users can access.
+  1606→  P2 (High):     Major feature broken. Submissions failing.
+  1607→  P3 (Medium):   Degraded performance. Non-critical feature broken.
+  1608→  P4 (Low):      Cosmetic issue. No functional impact.
+  1609→
+  1610→MINUTE 2-5: ASSESS
+  1611→===================
+  1612→1. Check health endpoint
+  1613→   $ curl -s https://africandatalayer.vercel.app/api/health | jq .
+  1614→
+  1615→2. Check Vercel status
+  1616→   $ open https://www.vercel-status.com/
+  1617→
+  1618→3. Check Supabase status
+  1619→   $ open https://status.supabase.com/
+  1620→
+  1621→4. Check recent deployments
+  1622→   $ vercel ls --prod --limit 3
+  1623→
+  1624→5. Check recent errors
+  1625→   $ vercel logs --prod --follow  # look for patterns
+  1626→
+  1627→MINUTE 5-10: MITIGATE
+  1628→======================
+  1629→If caused by bad deployment:
+  1630→  $ vercel rollback --prod
+  1631→  [Go to POST-MITIGATION]
+  1632→
+  1633→If caused by database:
+  1634→  Check Supabase dashboard for connection count, CPU, memory
+  1635→  If connection exhaustion:
+  1636→    $ psql "$ADL_POSTGRES_URL" -c "SELECT count(*) FROM pg_stat_activity;"
+  1637→    $ psql "$ADL_POSTGRES_URL" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'idle' AND query_start < now() - interval '5 minutes';"
+  1638→
+  1639→If caused by external service (ipapi.co, Google OAuth):
+  1640→  These are non-critical. The app should degrade gracefully.
+  1641→  fetchIpLocation() has a 3-second timeout.
+  1642→  If OAuth is down: credential login still works.
+  1643→
+  1644→If unknown cause:
+  1645→  Enable maintenance mode via Edge Config:
+  1646→  { "maintenance_mode": true }
+  1647→
+  1648→MINUTE 10-15: COMMUNICATE
+  1649→==========================
+  1650→- Update status page
+  1651→- Notify team leads
+  1652→- If P1: notify all users via in-app banner (set Edge Config flag)
+  1653→
+  1654→POST-MITIGATION
+  1655→===============
+  1656→- Confirm service restored (health check green)
+  1657→- Monitor for 30 minutes
+  1658→- Write incident report within 24 hours
+  1659→- Schedule follow-up to fix root cause
+  1660→```
+  1661→
+  1662→### 5.6 Scale-Up Runbook (Traffic Spike Handling)
+  1663→
+  1664→```
+  1665→TRAFFIC SPIKE HANDLING
+  1666→======================
+  1667→
+  1668→DETECTION
+  1669→=========
+  1670→Signals:
+  1671→- Vercel dashboard shows function invocation spike
+  1672→- /api/health response time > 5 seconds
+  1673→- Database connection count approaching max (5 in current config)
+  1674→
+  1675→IMMEDIATE ACTIONS (0-5 minutes)
+  1676→===============================
+  1677→1. Increase database connection pool
+  1678→   Update Vercel env var:
+  1679→   POSTGRES_POOL_MAX=15
+  1680→
+  1681→   Note: Requires redeployment to take effect:
+  1682→   $ vercel --prod --force
+  1683→
+  1684→2. Verify Vercel auto-scaling is handling the load
+  1685→   Vercel Functions auto-scale. No manual action needed for compute.
+  1686→
+  1687→3. Enable aggressive caching
+  1688→   If read traffic is the bottleneck:
+  1689→   - Increase s-maxage on public endpoints
+  1690→   - POST /api/submissions cache is never used (correct)
+  1691→
+  1692→MEDIUM-TERM ACTIONS (5-30 minutes)
+  1693→===================================
+  1694→4. If database is the bottleneck:
+  1695→   - Check for slow queries:
+  1696→     $ psql "$ADL_POSTGRES_URL" -c "
+  1697→       SELECT query, calls, mean_exec_time, total_exec_time
+  1698→       FROM pg_stat_statements
+  1699→       ORDER BY total_exec_time DESC
+  1700→       LIMIT 10;"
+  1701→
+  1702→   - Refresh materialized view if stale:
+  1703→     $ psql "$ADL_POSTGRES_URL" -c "REFRESH MATERIALIZED VIEW CONCURRENTLY point_projections;"
+  1704→
+  1705→5. If blob upload is the bottleneck:
+  1706→   - Reduce MAX_SUBMISSION_IMAGE_BYTES temporarily:
+  1707→     Set env var MAX_SUBMISSION_IMAGE_BYTES=4194304  (4 MB instead of 8 MB)
+  1708→   - This reduces upload payload size
+  1709→
+  1710→6. If a specific API route is overwhelmed:
+  1711→   - Enable Edge Config rate limiting flag
+  1712→   - Reduce rate limits temporarily
+  1713→
+  1714→LONG-TERM FOLLOW-UP
+  1715→====================
+  1716→7. Analyze traffic pattern:
+  1717→   - Was it organic growth or a bot/attack?
+  1718→   - If bot: implement stricter rate limiting
+  1719→   - If organic: proceed with scaling plan from architect's document
+  1720→
+  1721→8. If consistently > 1000 requests/minute:
+  1722→   - Upgrade to Supabase Pro for connection pooling via PgBouncer
+  1723→   - Implement the materialized view (section 1.2)
+  1724→   - Add read replica for GET endpoints
+  1725→```
+  1726→
+  1727→---
+  1728→
+  1729→## 6. Security Hardening
+  1730→
+  1731→### 6.1 Vercel Security Headers Configuration
+  1732→
+  1733→Already defined in the enhanced `vercel.json` in section 1.1. Summary of headers:
+  1734→
+  1735→| Header | Value | Purpose |
+  1736→|--------|-------|---------|
+  1737→| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` | Force HTTPS for 2 years |
+  1738→| `X-Content-Type-Options` | `nosniff` | Prevent MIME sniffing |
+  1739→| `X-Frame-Options` | `DENY` | Prevent clickjacking |
+  1740→| `X-XSS-Protection` | `0` | Disable legacy XSS filter (CSP is better) |
+  1741→| `Referrer-Policy` | `strict-origin-when-cross-origin` | Limit referrer leakage |
+  1742→| `Permissions-Policy` | `camera=(self), geolocation=(self), microphone=()` | Allow camera/GPS for submissions, deny mic |
+  1743→
+  1744→### 6.2 Content Security Policy (CSP)
+  1745→
+  1746→**CSP for the React SPA:**
+  1747→
+  1748→Add to the `/(.*)`  headers block in `vercel.json`:
+  1749→
+  1750→```json
+  1751→{
+  1752→  "key": "Content-Security-Policy",
+  1753→  "value": "default-src 'self'; script-src 'self' https://va.vercel-scripts.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://*.tile.openstreetmap.org; connect-src 'self' https://*.supabase.co https://ipapi.co https://generativelanguage.googleapis.com https://va.vercel-scripts.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+  1754→}
+  1755→```
+  1756→
+  1757→**CSP breakdown:**
+  1758→- `script-src 'self' https://va.vercel-scripts.com` -- App scripts + Vercel Analytics
+  1759→- `style-src 'self' 'unsafe-inline'` -- React inline styles need `unsafe-inline`
+  1760→- `img-src ... blob.vercel-storage.com ...openstreetmap.org` -- Photo display + Leaflet map tiles
+  1761→- `connect-src` -- API calls to Supabase, ipapi.co, Gemini, Vercel Analytics
+  1762→- `frame-ancestors 'none'` -- Same as X-Frame-Options DENY
+  1763→- `upgrade-insecure-requests` -- Force HTTPS for all subresources
+  1764→
+  1765→### 6.3 API Rate Limiting Implementation
+  1766→
+  1767→**No rate limiting currently exists.** This is the highest-priority security gap per the system design doc (section 2.2).
+  1768→
+  1769→**Implementation with Vercel Edge Middleware + Upstash Redis:**
+  1770→
+  1771→```bash
+  1772→npm install @upstash/ratelimit @upstash/redis
+  1773→```
+  1774→
+  1775→**`middleware.ts` (Vercel Edge Middleware at project root):**
+  1776→
+  1777→```typescript
+  1778→import { Ratelimit } from "@upstash/ratelimit";
+  1779→import { Redis } from "@upstash/redis";
+  1780→
+  1781→const redis = new Redis({
+  1782→  url: process.env.UPSTASH_REDIS_REST_URL!,
+  1783→  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  1784→});
+  1785→
+  1786→const rateLimiters = {
+  1787→  submission_write: new Ratelimit({
+  1788→    redis,
+  1789→    limiter: Ratelimit.slidingWindow(10, "1 m"),  // 10 submissions/min
+  1790→    prefix: "rl:sub:write",
+  1791→  }),
+  1792→  auth_register: new Ratelimit({
+  1793→    redis,
+  1794→    limiter: Ratelimit.slidingWindow(5, "1 m"),   // 5 registrations/min
+  1795→    prefix: "rl:auth:reg",
+  1796→  }),
+  1797→  auth_signin: new Ratelimit({
+  1798→    redis,
+  1799→    limiter: Ratelimit.slidingWindow(10, "1 m"),  // 10 login attempts/min
+  1800→    prefix: "rl:auth:sign",
+  1801→  }),
+  1802→  api_read: new Ratelimit({
+  1803→    redis,
+  1804→    limiter: Ratelimit.slidingWindow(100, "1 m"), // 100 reads/min
+  1805→    prefix: "rl:api:read",
+  1806→  }),
+  1807→};
+  1808→
+  1809→function getClientIp(request: Request): string {
+  1810→  return (
+  1811→    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+  1812→    request.headers.get("x-real-ip") ??
+  1813→    "unknown"
+  1814→  );
+  1815→}
+  1816→
+  1817→function getRateLimiter(pathname: string, method: string) {
+  1818→  if (pathname === "/api/submissions" && method === "POST") return rateLimiters.submission_write;
+  1819→  if (pathname === "/api/auth/register" && method === "POST") return rateLimiters.auth_register;
+  1820→  if (pathname.startsWith("/api/auth/") && method === "POST") return rateLimiters.auth_signin;
+  1821→  if (pathname.startsWith("/api/") && method === "GET") return rateLimiters.api_read;
+  1822→  return null;
+  1823→}
+  1824→
+  1825→export default async function middleware(request: Request): Promise<Response | undefined> {
+  1826→  const url = new URL(request.url);
+  1827→  const limiter = getRateLimiter(url.pathname, request.method);
+  1828→  if (!limiter) return undefined;  // pass through
+  1829→
+  1830→  const ip = getClientIp(request);
+  1831→  const { success, limit, remaining, reset } = await limiter.limit(ip);
+  1832→
+  1833→  if (!success) {
+  1834→    return new Response(
+  1835→      JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+  1836→      {
+  1837→        status: 429,
+  1838→        headers: {
+  1839→          "Content-Type": "application/json",
+  1840→          "X-RateLimit-Limit": String(limit),
+  1841→          "X-RateLimit-Remaining": "0",
+  1842→          "X-RateLimit-Reset": String(reset),
+  1843→          "Retry-After": String(Math.ceil((reset - Date.now()) / 1000)),
+  1844→        },
+  1845→      }
+  1846→    );
+  1847→  }
+  1848→
+  1849→  return undefined;  // pass through, Vercel adds rate limit headers
+  1850→}
+  1851→
+  1852→export const config = {
+  1853→  matcher: ["/api/:path*"],
+  1854→};
+  1855→```
+  1856→
+  1857→**New environment variables needed:**
+  1858→- `UPSTASH_REDIS_REST_URL` -- from Upstash dashboard (free tier: 10K commands/day)
+  1859→- `UPSTASH_REDIS_REST_TOKEN` -- from Upstash dashboard
+  1860→
+  1861→### 6.4 Dependency Vulnerability Scanning
+  1862→
+  1863→**Automated in CI (section 2.6).** Additional measures:
+  1864→
+  1865→1. **Dependabot configuration** -- `.github/dependabot.yml`:
+  1866→
+  1867→```yaml
+  1868→version: 2
+  1869→updates:
+  1870→  - package-ecosystem: "npm"
+  1871→    directory: "/"
+  1872→    schedule:
+  1873→      interval: "weekly"
+  1874→      day: "monday"
+  1875→    open-pull-requests-limit: 5
+  1876→    labels:
+  1877→      - "dependencies"
+  1878→    reviewers:
+  1879→      - "adl-team"
+  1880→    groups:
+  1881→      production:
+  1882→        patterns:
+  1883→          - "*"
+  1884→        exclude-patterns:
+  1885→          - "@types/*"
+  1886→          - "typescript"
+  1887→          - "vite"
+  1888→      dev:
+  1889→        patterns:
+  1890→          - "@types/*"
+  1891→          - "typescript"
+  1892→          - "vite"
+  1893→          - "@vitejs/*"
+  1894→```
+  1895→
+  1896→2. **GitHub security advisories:** Enabled automatically when Dependabot is configured.
+  1897→
+  1898→3. **Lock file hygiene:** `package-lock.json` MUST be committed. `npm ci` (not `npm install`) in CI to ensure reproducible builds.
+  1899→
+  1900→### 6.5 Secret Rotation Procedures
+  1901→
+  1902→| Secret | Rotation Frequency | Procedure |
+  1903→|--------|-------------------|-----------|
+  1904→| `AUTH_SECRET` | Every 90 days | 1. Generate new secret: `openssl rand -hex 32`. 2. Update in Vercel env vars. 3. Redeploy. 4. Active sessions will require re-login. |
+  1905→| `POSTGRES_URL` | On credential compromise only | 1. Rotate password in Supabase dashboard. 2. Update connection string in Vercel env vars. 3. Redeploy. |
+  1906→| `BLOB_READ_WRITE_TOKEN` | Every 90 days | 1. Generate new token in Vercel dashboard > Storage. 2. Update env var. 3. Redeploy. |
+  1907→| `GOOGLE_CLIENT_SECRET` | On compromise only | 1. Rotate in Google Cloud Console. 2. Update env var. 3. Redeploy. |
+  1908→| `GEMINI_API_KEY` | Every 90 days | 1. Generate new key in Google AI Studio. 2. Update env var. 3. Redeploy. |
+  1909→| `UPSTASH_REDIS_REST_TOKEN` | Every 90 days | 1. Rotate in Upstash dashboard. 2. Update env var. 3. Redeploy. |
+  1910→| `CRON_SECRET` | Every 90 days | 1. Generate: `openssl rand -hex 16`. 2. Update env var. 3. Redeploy. |
+  1911→
+  1912→**Rotation checklist (run quarterly):**
+  1913→
+  1914→```bash
+  1915→# 1. Generate new secrets
+  1916→NEW_AUTH_SECRET=$(openssl rand -hex 32)
+  1917→NEW_CRON_SECRET=$(openssl rand -hex 16)
+  1918→
+  1919→# 2. Update Vercel env vars (via CLI)
+  1920→vercel env rm AUTH_SECRET production
+  1921→echo "$NEW_AUTH_SECRET" | vercel env add AUTH_SECRET production
+  1922→
+  1923→vercel env rm CRON_SECRET production
+  1924→echo "$NEW_CRON_SECRET" | vercel env add CRON_SECRET production
+  1925→
+  1926→# 3. Redeploy
+  1927→vercel --prod
+  1928→
+  1929→# 4. Verify
+  1930→curl -s https://africandatalayer.vercel.app/api/health | jq .
+  1931→
+  1932→# 5. Record rotation in audit log
+  1933→echo "[secret-rotation] AUTH_SECRET, CRON_SECRET rotated at $(date -u)"
+  1934→```
+  1935→
+  1936→---
+  1937→
+  1938→## 7. Performance Engineering
+  1939→
+  1940→### 7.1 Vercel Function Optimization
+  1941→
+  1942→**Cold start mitigation:**
+  1943→
+  1944→| Strategy | Implementation | Impact |
+  1945→|----------|---------------|--------|
+  1946→| Minimal dependencies | `api/health/index.ts` imports only `db.js` -- keep it lean | -200ms cold start |
+  1947→| Lazy imports | Heavy modules (exifr, bcryptjs) loaded only when needed in handlers | -300ms on health check paths |
+  1948→| Connection pooling | `lib/server/db.ts` uses `pg.Pool` with module-level singleton | Reuse across warm invocations |
+  1949→| Region co-location | `regions: ["cdg1"]` in vercel.json -- same region as Supabase | -50ms per DB round-trip |
+  1950→
+  1951→**Per-function configuration (from enhanced vercel.json):**
+  1952→
+  1953→| Function | Memory | Max Duration | Rationale |
+  1954→|----------|--------|-------------|-----------|
+  1955→| `api/health/index.ts` | 128 MB | 10s | Simple SELECT 1 |
+  1956→| `api/leaderboard/index.ts` | 256 MB | 30s | Aggregation query |
+  1957→| `api/submissions/index.ts` | 512 MB | 45s | Photo upload + EXIF + fraud check |
+  1958→| `api/user/index.ts` | 256 MB | 15s | Simple CRUD |
+  1959→| `api/auth/*.ts` | 256 MB | 30s | bcrypt is CPU-intensive |
+  1960→| All others | 256 MB | 30s | Default |
+  1961→
+  1962→**Critical optimization -- move EXIF extraction off the hot path:**
+  1963→
+  1964→Currently, `api/submissions/index.ts` does EXIF extraction synchronously:
+  1965→```
+  1966→Request -> Validate -> Extract EXIF -> Upload Photo -> Fraud Check -> Insert DB -> Return 201
+  1967→```
+  1968→
+  1969→Phase 2 architecture (per Cloud Architect section 5.3):
+  1970→```
+  1971→Request -> Validate -> Upload Photo -> Insert DB (status=pending) -> Return 201
+  1972→QStash -> Extract EXIF -> Fraud Check -> Update DB -> Notify Admin
+  1973→```
+  1974→
+  1975→This reduces POST latency from ~5-15s to ~2-3s.
+  1976→
+  1977→### 7.2 Database Query Optimization
+  1978→
+  1979→**Problem 1: Full table scan on every GET request**
+  1980→
+  1981→`postgresStore.ts` line 290-297:
+  1982→```sql
+  1983→SELECT id, point_id, event_type, user_id, category, latitude, longitude,
+  1984→       details, photo_url, created_at, source, external_id
+  1985→FROM point_events
+  1986→ORDER BY created_at asc
+  1987→```
+  1988→
+  1989→This loads ALL events into Node.js memory, then `projectPointsFromEvents()` aggregates them in JavaScript. At 10K events this is already slow; at 100K it will timeout.
+  1990→
+  1991→**Fix: Use the materialized view (section 1.2):**
+  1992→
+  1993→```sql
+  1994→-- Replace getPointEvents() for projection reads with:
+  1995→SELECT point_id, category, latitude, longitude, details, photo_url, created_at, source, external_id
+  1996→FROM point_projections
+  1997→WHERE latitude BETWEEN $1 AND $2
+  1998→  AND longitude BETWEEN $3 AND $4;
+  1999→```
+  2000→
+  2001→**Refresh strategy:**
+  2002→```sql
+  2003→-- Cron job every 10 minutes (api/cron/refresh-projections):
+  2004→REFRESH MATERIALIZED VIEW CONCURRENTLY point_projections;
+  2005→```
+  2006→
+  2007→The `CONCURRENTLY` keyword allows reads during refresh (requires the `UNIQUE INDEX` on `point_id` defined in section 1.2).
+  2008→
+  2009→**Problem 2: Leaderboard aggregation in memory**
+  2010→
+  2011→`api/leaderboard/index.ts` loads all events to compute XP. Replace with SQL:
+  2012→
+  2013→```sql
+  2014→-- Leaderboard query (push aggregation to PostgreSQL)
+  2015→SELECT
+  2016→  pe.user_id,
+  2017→  count(*) as contributions,
+  2018→  sum(COALESCE((pe.details->>'xpAwarded')::int, 5)) as xp,
+  2019→  max(pe.created_at) as last_contribution_at
+  2020→FROM point_events pe
+  2021→GROUP BY pe.user_id
+  2022→ORDER BY xp DESC, contributions DESC
+  2023→LIMIT 100;
+  2024→```
+  2025→
+  2026→**Problem 3: Missing indexes for common queries**
+  2027→
+  2028→Additional indexes to create:
+  2029→
+  2030→```sql
+  2031→-- Geospatial bounding box queries (used by isWithinBonamoussadi filter)
+  2032→CREATE INDEX IF NOT EXISTS idx_point_events_location
+  2033→  ON public.point_events (latitude, longitude);
+  2034→
+  2035→-- Category filter (used in admin queue views)
+  2036→CREATE INDEX IF NOT EXISTS idx_point_events_category
+  2037→  ON public.point_events (category);
+  2038→
+  2039→-- Composite index for user submissions page
+  2040→CREATE INDEX IF NOT EXISTS idx_point_events_user_category
+  2041→  ON public.point_events (user_id, category, created_at DESC);
+  2042→```
+  2043→
+  2044→### 7.3 CDN Caching Optimization
+  2045→
+  2046→**Current caching (already implemented):**
+  2047→- Public submissions GET: `public, s-maxage=30, stale-while-revalidate=300`
+  2048→- Leaderboard GET: `public, s-maxage=30, stale-while-revalidate=300`
+  2049→- Static assets: No explicit cache header (Vercel defaults apply)
+  2050→
+  2051→**Enhanced caching strategy:**
+  2052→
+  2053→| Resource | Cache-Control | Rationale |
+  2054→|----------|--------------|-----------|
+  2055→| `/assets/*` (Vite hashed) | `public, max-age=31536000, immutable` | Content-hash in filename ensures cache-bust on change |
+  2056→| `/api/submissions` (GET, unauth) | `public, s-maxage=30, stale-while-revalidate=300` | Keep existing: 30s fresh, 5 min stale |
+  2057→| `/api/leaderboard` (GET) | `public, s-maxage=60, stale-while-revalidate=600` | Increase to 60s -- leaderboard does not need second-level freshness |
+  2058→| `/api/submissions` (GET, auth) | `private, no-cache` | Per-user data, must revalidate |
+  2059→| `/api/health` | `no-cache, no-store` | Always fresh |
+  2060→| Photo blobs (`*.public.blob.vercel-storage.com`) | `public, max-age=86400` | Photos are immutable once uploaded |
+  2061→| `/index.html` | `public, max-age=0, must-revalidate` | HTML shell must always be fresh for SPA version check |
+  2062→
+  2063→### 7.4 Bundle Size Optimization
+  2064→
+  2065→**Current state:** The `dist/assets/` directory contains route-level code-split chunks:
+  2066→
+  2067→```
+  2068→index-QrY-Hdyj.js              # Main bundle (React, router, core)
+  2069→HomeMap-BBvX59tx.js             # Map page (Leaflet)
+  2070→ContributionFlow-C0OtjrQ7.js   # Submission form
+  2071→AdminQueue-CIwAkFN4.js         # Admin review
+  2072→Analytics-Biu7dnSs.js           # Analytics page
+  2073→Profile-BBU3pMSi.js             # Profile page
+  2074→Settings-oeachGDZ.js            # Settings page
+  2075→Auth-BTl58sT6.js                # Login/register
+  2076→Details-Ddn_dClY.js             # Submission detail
+  2077→QualityInfo-DgX-tEJp.js         # Quality info
+  2078→RewardsCatalog-CCmD9cPF.js     # Rewards page
+  2079→```
+  2080→
+  2081→**This is already well code-split by Vite.** Key optimizations:
+  2082→
+  2083→1. **Analyze bundle contents:**
+  2084→   ```bash
+  2085→   npx vite-bundle-visualizer
+  2086→   ```
+  2087→
+  2088→2. **Largest dependency risk: Leaflet + react-leaflet**
+  2089→   - Leaflet is ~40KB gzipped. Already route-split into `HomeMap-*.js`.
+  2090→   - Consider lazy-loading Leaflet only when map view is active (already done via code splitting).
+  2091→
+  2092→3. **Recharts (charting library)**
+  2093→   - ~50KB gzipped. Only used in `Analytics-*.js`.
+  2094→   - Already code-split. No action needed.
+  2095→
+  2096→4. **lucide-react (icons)**
+  2097→   - Tree-shakeable. Import individual icons only (which the codebase does).
+  2098→   - Verify no barrel imports: `import { ... } from 'lucide-react'` should import specific icons.
+  2099→
+  2100→5. **Vite build optimization in `vite.config.ts`:**
+  2101→
+  2102→   ```typescript
+  2103→   // Add to vite.config.ts
+  2104→   build: {
+  2105→     target: 'es2020',
+  2106→     minify: 'terser',
+  2107→     terserOptions: {
+  2108→       compress: {
+  2109→         drop_console: true,  // Remove console.log in production
+  2110→         drop_debugger: true,
+  2111→       },
+  2112→     },
+  2113→     rollupOptions: {
+  2114→       output: {
+  2115→         manualChunks: {
+  2116→           'vendor-react': ['react', 'react-dom'],
+  2117→           'vendor-leaflet': ['leaflet', 'react-leaflet'],
+  2118→           'vendor-recharts': ['recharts'],
+  2119→         },
+  2120→       },
+  2121→     },
+  2122→   },
+  2123→   ```
+  2124→
+  2125→   This ensures React, Leaflet, and Recharts are in separate cached vendor chunks that do not change when application code changes.
+  2126→
+  2127→### 7.5 Image Optimization Pipeline
+  2128→
+  2129→**Current:** Photos uploaded as-is (JPEG/PNG/WebP/HEIC up to 8 MB). No server-side optimization.
+  2130→
+  2131→**Phase 1 (Now) -- Client-side optimization before upload:**
+  2132→
+  2133→The client should compress images before base64-encoding. Add to `lib/client/imageUtils.ts`:
+  2134→
+  2135→```typescript
+  2136→export async function compressImage(
+  2137→  file: File,
+  2138→  maxWidth: number = 1200,
+  2139→  quality: number = 0.8,
+  2140→): Promise<Blob> {
+  2141→  return new Promise((resolve, reject) => {
+  2142→    const img = new Image();
+  2143→    const url = URL.createObjectURL(file);
+  2144→    img.onload = () => {
+  2145→      URL.revokeObjectURL(url);
+  2146→      const canvas = document.createElement("canvas");
+  2147→      let { width, height } = img;
+  2148→      if (width > maxWidth) {
+  2149→        height = Math.round((height * maxWidth) / width);
+  2150→        width = maxWidth;
+  2151→      }
+  2152→      canvas.width = width;
+  2153→      canvas.height = height;
+  2154→      const ctx = canvas.getContext("2d");
+  2155→      if (!ctx) return reject(new Error("Canvas context unavailable"));
+  2156→      ctx.drawImage(img, 0, 0, width, height);
+  2157→      canvas.toBlob(
+  2158→        (blob) => {
+  2159→          if (!blob) return reject(new Error("Compression failed"));
+  2160→          resolve(blob);
+  2161→        },
+  2162→        "image/jpeg",
+  2163→        quality,
+  2164→      );
+  2165→    };
+  2166→    img.onerror = () => reject(new Error("Failed to load image"));
+  2167→    img.src = url;
+  2168→  });
+  2169→}
+  2170→```
+  2171→
+  2172→**Impact:** Reduces average upload payload from ~3-5 MB to ~200-500 KB. Critical for 2G/3G networks in Africa.
+  2173→
+  2174→**Phase 2 -- Server-side thumbnail generation:**
+  2175→
+  2176→After upload, generate thumbnails asynchronously:
+  2177→
+  2178→```typescript
+  2179→// api/internal/process-photo.ts (triggered by QStash)
+  2180→// 1. Download original from Vercel Blob
+  2181→// 2. Generate 200px thumbnail
+  2182→// 3. Generate 800px preview
+  2183→// 4. Upload variants to Vercel Blob
+  2184→// 5. Update point_events.details with variant URLs
+  2185→```
+  2186→
+  2187→**Variant URL pattern:**
+  2188→```
+  2189→Original:  submissions/{eventId}-{ts}.jpg
+  2190→Preview:   submissions/{eventId}-{ts}-800w.jpg
+  2191→Thumbnail: submissions/{eventId}-{ts}-200w.jpg
+  2192→```
+  2193→
+  2194→---
+  2195→
+  2196→## Appendix A: Environment Setup Checklist
+  2197→
+  2198→New developer onboarding checklist:
+  2199→
+  2200→```bash
+  2201→# 1. Clone repo
+  2202→git clone git@github.com:<org>/africandatalayer.git
+  2203→cd africandatalayer
+  2204→
+  2205→# 2. Install dependencies
+  2206→npm ci
+  2207→
+  2208→# 3. Copy environment template
+  2209→cp .env.example .env.local
+  2210→
+  2211→# 4. Fill in required variables
+  2212→# ADL_POSTGRES_URL=<get from team lead>
+  2213→# AUTH_SECRET=<generate: openssl rand -hex 32>
+  2214→# BLOB_READ_WRITE_TOKEN=<get from Vercel dashboard>
+  2215→
+  2216→# 5. Run database migrations locally
+  2217→# (requires a local or remote Postgres instance)
+  2218→psql $ADL_POSTGRES_URL < supabase/migrations/20260219_init_adl.sql
+  2219→psql $ADL_POSTGRES_URL < supabase/migrations/20260224_phone_identifier.sql
+  2220→
+  2221→# 6. Start development server
+  2222→npm run dev
+  2223→
+  2224→# 7. Run tests
+  2225→node --test tests/*.test.ts
+  2226→
+  2227→# 8. Verify health
+  2228→curl http://localhost:5173/api/health
+  2229→```
+  2230→
+  2231→## Appendix B: Cost of Observability Stack
+  2232→
+  2233→| Tool | Tier | Monthly Cost | Purpose |
+  2234→|------|------|-------------|---------|
+  2235→| Vercel Analytics | Included in Pro | $0 | Web Vitals, page views |
+  2236→| Vercel Speed Insights | Included in Pro | $0 | Real User Monitoring |
+  2237→| Sentry | Free (5K errors/mo) | $0 | Error tracking, alerting |
+  2238→| Upstash Redis | Free (10K commands/day) | $0 | Rate limiting |
+  2239→| Axiom | Free (Vercel integration) | $0 | Log aggregation (when needed) |
+  2240→| **Total** | | **$0** | |
+  2241→
+  2242→All observability tools are on free tiers for MVP. First paid upgrade will be Sentry Team ($26/mo) when error volume exceeds 5K/month.
+  2243→
+  2244→## Appendix C: File Manifest
+  2245→
+  2246→Files referenced or proposed in this document:
+  2247→
+  2248→| File | Status | Section |
+  2249→|------|--------|---------|
+  2250→| `vercel.json` | ENHANCE | 1.1 |
+  2251→| `vite.config.ts` | MODIFY (remove client-side API key) | 1.3 |
+  2252→| `supabase/migrations/20260227_audit_log.sql` | NEW | 1.2 |
+  2253→| `supabase/migrations/20260227_idempotency_keys.sql` | NEW | 1.2 |
+  2254→| `supabase/migrations/20260227_point_projections.sql` | NEW | 1.2 |
+  2255→| `supabase/migrations/20260227_rls_policies.sql` | NEW | 1.2 |
+  2256→| `supabase/config.toml` | NEW | 1.5 |
+  2257→| `.github/workflows/ci.yml` | NEW | 2.1 |
+  2258→| `.github/workflows/migration.yml` | NEW | 2.1 |
+  2259→| `.github/workflows/security-scan.yml` | NEW | 2.6 |
+  2260→| `.github/dependabot.yml` | NEW | 6.4 |
+  2261→| `lib/server/logger.ts` | NEW | 3.1 |
+  2262→| `lib/server/requestContext.ts` | NEW | 3.4 |
+  2263→| `lib/server/sentry.ts` | NEW | 3.7 |
+  2264→| `lib/client/imageUtils.ts` | NEW | 7.5 |
+  2265→| `middleware.ts` | NEW | 6.3 |
+  2266→| `api/health/index.ts` | ENHANCE | 3.5 |
+  2267→| `api/cron/backup-export.ts` | NEW | 4.1 |
+  2268→| `api/cron/health-deep.ts` | NEW | 1.1 (cron) |
+  2269→| `api/cron/refresh-projections.ts` | NEW | 7.2 |
+  2270→| `scripts/backup-export.sh` | NEW | 4.1 |
+  2271→

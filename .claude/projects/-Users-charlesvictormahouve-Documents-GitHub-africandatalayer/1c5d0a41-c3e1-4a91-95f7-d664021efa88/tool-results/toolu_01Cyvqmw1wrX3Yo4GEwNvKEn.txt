@@ -1,0 +1,1589 @@
+     1→# System Design: End-to-End Data Collection & Management for Bonamoussadi
+     2→
+     3→**Teammate 2 -- System Design Expert**
+     4→**Target Area:** Bonamoussadi, Douala V, Cameroon
+     5→**Date:** 2026-03-03
+     6→**Verticals:** Billboards, Alcohol Outlets, Census, Fuel Stations, Mobile Money, Pharmacy, Transport/Roads
+     7→
+     8→---
+     9→
+    10→## Table of Contents
+    11→
+    12→1. [Universal Data Model](#1-universal-data-model)
+    13→2. [Entity ID System](#2-entity-id-system)
+    14→3. [Baseline vs. Snapshot Logic](#3-baseline-vs-snapshot-logic)
+    15→4. [Delta Computation Rules](#4-delta-computation-rules)
+    16→5. [Data Quality Scoring](#5-data-quality-scoring)
+    17→6. [Temporal Model](#6-temporal-model)
+    18→
+    19→---
+    20→
+    21→## 1. Universal Data Model
+    22→
+    23→### 1.1 Entity Hierarchy
+    24→
+    25→The existing ADL codebase uses an event-sourced architecture built around `PointEvent` objects that are projected into `ProjectedPoint` entities. The design below extends this architecture to accommodate all 7 verticals, including the 2 new ones (census and transport/roads) that do not yet exist in the codebase.
+    26→
+    27→```
+    28→                              +-------------------+
+    29→                              |      Zone         |
+    30→                              | (survey boundary) |
+    31→                              +--------+----------+
+    32→                                       |
+    33→                                       | contains 1..*
+    34→                                       v
+    35→                              +-------------------+
+    36→                              |    Location       |
+    37→                              | (physical place)  |
+    38→                              +--------+----------+
+    39→                                       |
+    40→                                       | hosts 1..*
+    41→                                       v
+    42→                              +-------------------+
+    43→                              |     Entity        |
+    44→                              | (business/asset)  |
+    45→                              +--------+----------+
+    46→                                       |
+    47→                          +------------+------------+
+    48→                          |                         |
+    49→                          | observed by 0..*        | has 0..*
+    50→                          v                         v
+    51→                  +---------------+         +---------------+
+    52→                  | Observation   |         |    Media      |
+    53→                  | (field visit) |         | (photo/video) |
+    54→                  +-------+-------+         +---------------+
+    55→                          |
+    56→                          | produces 0..*
+    57→                          v
+    58→                  +---------------+
+    59→                  |    Delta      |
+    60→                  | (computed     |
+    61→                  |  change)      |
+    62→                  +---------------+
+    63→
+    64→                  +---------------+
+    65→                  |    Agent      |
+    66→                  | (field worker)|
+    67→                  +---------------+
+    68→```
+    69→
+    70→**Relationship to existing code:**
+    71→- `Location` is implicit today (stored as lat/lng on `PointEvent`)
+    72→- `Entity` maps to `ProjectedPoint` (the materialized view of all events for a `point_id`)
+    73→- `Observation` maps to `PointEvent` (CREATE_EVENT or ENRICH_EVENT)
+    74→- `Delta` maps to rows in `snapshot_deltas`
+    75→- `Agent` maps to `UserProfile`
+    76→- `Media` is currently a single `photo_url` on `PointEvent`; this design promotes it to a first-class entity
+    77→
+    78→### 1.2 Core Entity Schemas
+    79→
+    80→#### 1.2.1 Zone
+    81→
+    82→A bounded geographic area that defines the scope of a survey campaign. For the initial deployment, there is one zone: Bonamoussadi.
+    83→
+    84→```sql
+    85→CREATE TABLE IF NOT EXISTS zones (
+    86→  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    87→  name          text NOT NULL,                      -- 'Bonamoussadi'
+    88→  slug          text NOT NULL UNIQUE,               -- 'bonamoussadi'
+    89→  city          text NOT NULL,                      -- 'Douala'
+    90→  country_code  text NOT NULL DEFAULT 'CM',         -- ISO 3166-1 alpha-2
+    91→  bounds_south  double precision NOT NULL,          -- 4.0755
+    92→  bounds_west   double precision NOT NULL,          -- 9.7185
+    93→  bounds_north  double precision NOT NULL,          -- 4.0999
+    94→  bounds_east   double precision NOT NULL,          -- 9.7602
+    95→  center_lat    double precision NOT NULL,          -- 4.0877
+    96→  center_lng    double precision NOT NULL,          -- 9.7394
+    97→  timezone      text NOT NULL DEFAULT 'Africa/Douala',
+    98→  status        text NOT NULL DEFAULT 'active'
+    99→                CHECK (status IN ('active', 'archived', 'planned')),
+   100→  created_at    timestamptz NOT NULL DEFAULT now(),
+   101→  updated_at    timestamptz NOT NULL DEFAULT now()
+   102→);
+   103→```
+   104→
+   105→**Example row:**
+   106→```json
+   107→{
+   108→  "id": "a1b2c3d4-...",
+   109→  "name": "Bonamoussadi",
+   110→  "slug": "bonamoussadi",
+   111→  "city": "Douala",
+   112→  "country_code": "CM",
+   113→  "bounds_south": 4.0755,
+   114→  "bounds_west": 9.7185,
+   115→  "bounds_north": 4.0999,
+   116→  "bounds_east": 9.7602,
+   117→  "center_lat": 4.0877,
+   118→  "center_lng": 9.7394,
+   119→  "timezone": "Africa/Douala"
+   120→}
+   121→```
+   122→
+   123→This replaces the hardcoded `BONAMOUSSADI_BOUNDS` and `BONAMOUSSADI_CENTER` constants in `shared/geofence.ts` with a database-driven approach, enabling multi-zone expansion without code changes.
+   124→
+   125→#### 1.2.2 Location
+   126→
+   127→A physical place identified by GPS coordinates and contextual landmarks. This is a NEW entity -- the current codebase embeds coordinates directly on events.
+   128→
+   129→```sql
+   130→CREATE TABLE IF NOT EXISTS locations (
+   131→  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   132→  zone_id         uuid NOT NULL REFERENCES zones(id),
+   133→  latitude        double precision NOT NULL,
+   134→  longitude       double precision NOT NULL,
+   135→  accuracy_m      real,                             -- GPS accuracy in meters
+   136→  altitude_m      real,                             -- altitude if available
+   137→  geohash_6       text NOT NULL,                    -- 6-char geohash for proximity queries
+   138→  landmark_desc   text,                             -- 'En face du marche de Bonamoussadi'
+   139→  street_name     text,                             -- informal name if known
+   140→  quartier        text,                             -- sub-neighborhood
+   141→  created_at      timestamptz NOT NULL DEFAULT now(),
+   142→  updated_at      timestamptz NOT NULL DEFAULT now()
+   143→);
+   144→
+   145→CREATE INDEX idx_locations_geohash ON locations (geohash_6);
+   146→CREATE INDEX idx_locations_zone ON locations (zone_id);
+   147→CREATE INDEX idx_locations_coords ON locations USING gist (
+   148→  point(longitude, latitude)
+   149→);
+   150→```
+   151→
+   152→**Why geohash_6?** A 6-character geohash covers approximately 1.2 km x 0.6 km. This is the right granularity for proximity queries in a dense neighborhood like Bonamoussadi without requiring PostGIS. Two entities at the same geohash_6 + same business name are candidate duplicates.
+   153→
+   154→**Example row:**
+   155→```json
+   156→{
+   157→  "id": "loc_7f3a2b...",
+   158→  "zone_id": "a1b2c3d4-...",
+   159→  "latitude": 4.0842,
+   160→  "longitude": 9.7351,
+   161→  "accuracy_m": 8.5,
+   162→  "geohash_6": "s10tg6",
+   163→  "landmark_desc": "A cote de Total Bonamoussadi",
+   164→  "quartier": "Bonamoussadi Centre"
+   165→}
+   166→```
+   167→
+   168→#### 1.2.3 Entity
+   169→
+   170→The business or asset at a location. This corresponds to the current `ProjectedPoint` concept. Entities are the materialized state of all observations.
+   171→
+   172→```sql
+   173→CREATE TABLE IF NOT EXISTS entities (
+   174→  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   175→  -- Composite natural key for deduplication
+   176→  point_id        text NOT NULL UNIQUE,             -- maps to existing point_id
+   177→  location_id     uuid REFERENCES locations(id),
+   178→  zone_id         uuid NOT NULL REFERENCES zones(id),
+   179→  vertical_id     text NOT NULL,                    -- 'pharmacy', 'fuel_station', etc.
+   180→  -- Core identity fields
+   181→  name            text,                             -- 'Pharmacie du Rond-Point'
+   182→  brand           text,                             -- 'Total', 'Orange', etc.
+   183→  operator        text,                             -- who runs it
+   184→  -- Spatial
+   185→  latitude        double precision NOT NULL,
+   186→  longitude       double precision NOT NULL,
+   187→  geohash_6       text NOT NULL,
+   188→  -- State
+   189→  status          text NOT NULL DEFAULT 'active'
+   190→                  CHECK (status IN ('active', 'closed', 'demolished',
+   191→                                     'under_construction', 'seasonal', 'unknown')),
+   192→  -- Vertical-specific data stored as JSONB
+   193→  details         jsonb NOT NULL DEFAULT '{}',
+   194→  -- Provenance
+   195→  source          text,                             -- 'field_agent', 'csv_import', 'seed'
+   196→  external_id     text,                             -- external reference
+   197→  -- Quality
+   198→  confidence      real NOT NULL DEFAULT 0.0
+   199→                  CHECK (confidence >= 0 AND confidence <= 1),
+   200→  gaps            text[] DEFAULT '{}',              -- missing enrichable fields
+   201→  events_count    integer NOT NULL DEFAULT 0,
+   202→  -- Media
+   203→  photo_url       text,
+   204→  -- Timestamps
+   205→  first_seen_at   timestamptz NOT NULL,
+   206→  last_seen_at    timestamptz NOT NULL,
+   207→  created_at      timestamptz NOT NULL DEFAULT now(),
+   208→  updated_at      timestamptz NOT NULL DEFAULT now()
+   209→);
+   210→
+   211→CREATE INDEX idx_entities_vertical ON entities (vertical_id);
+   212→CREATE INDEX idx_entities_zone ON entities (zone_id);
+   213→CREATE INDEX idx_entities_geohash ON entities (geohash_6);
+   214→CREATE INDEX idx_entities_status ON entities (status) WHERE status != 'active';
+   215→CREATE INDEX idx_entities_confidence ON entities (confidence);
+   216→```
+   217→
+   218→**Relationship to existing code:** This is the persisted equivalent of `ProjectedPoint` from `lib/server/pointProjection.ts`. Today, projected points are computed on every read by replaying all events. This table caches the materialized state.
+   219→
+   220→#### 1.2.4 Observation (extends existing `point_events`)
+   221→
+   222→An observation is a single field visit or data capture event. This maps directly to the existing `point_events` table with extensions.
+   223→
+   224→```sql
+   225→-- The existing point_events table remains the source of truth.
+   226→-- New columns extend it for the 7-vertical strategy:
+   227→
+   228→ALTER TABLE point_events ADD COLUMN IF NOT EXISTS
+   229→  zone_id uuid REFERENCES zones(id);
+   230→
+   231→ALTER TABLE point_events ADD COLUMN IF NOT EXISTS
+   232→  observation_type text NOT NULL DEFAULT 'field_visit'
+   233→  CHECK (observation_type IN (
+   234→    'field_visit',       -- agent physically present
+   235→    'remote_update',     -- satellite/API data
+   236→    'csv_import',        -- bulk import
+   237→    'community_report',  -- citizen tip
+   238→    'automated_sensor'   -- IoT/traffic sensor
+   239→  ));
+   240→
+   241→ALTER TABLE point_events ADD COLUMN IF NOT EXISTS
+   242→  gps_accuracy_m real;
+   243→
+   244→ALTER TABLE point_events ADD COLUMN IF NOT EXISTS
+   245→  confidence real DEFAULT 0.5
+   246→  CHECK (confidence >= 0 AND confidence <= 1);
+   247→
+   248→ALTER TABLE point_events ADD COLUMN IF NOT EXISTS
+   249→  device_clock_at timestamptz;  -- raw device time, for clock drift detection
+   250→
+   251→ALTER TABLE point_events ADD COLUMN IF NOT EXISTS
+   252→  server_received_at timestamptz DEFAULT now(); -- when server first saw it
+   253→```
+   254→
+   255→**TypeScript interface (extending existing `PointEvent`):**
+   256→
+   257→```typescript
+   258→interface ObservationEvent extends PointEvent {
+   259→  zoneId: string;
+   260→  observationType:
+   261→    | 'field_visit'
+   262→    | 'remote_update'
+   263→    | 'csv_import'
+   264→    | 'community_report'
+   265→    | 'automated_sensor';
+   266→  gpsAccuracyM: number | null;
+   267→  confidence: number;            // 0.0 to 1.0
+   268→  deviceClockAt: string | null;  // ISO 8601
+   269→  serverReceivedAt: string;      // ISO 8601
+   270→}
+   271→```
+   272→
+   273→#### 1.2.5 Delta (extends existing `snapshot_deltas`)
+   274→
+   275→The existing `snapshot_deltas` table is well-designed. Extensions for the 7-vertical strategy:
+   276→
+   277→```sql
+   278→ALTER TABLE snapshot_deltas ADD COLUMN IF NOT EXISTS
+   279→  severity text DEFAULT 'low'
+   280→  CHECK (severity IN ('critical', 'high', 'medium', 'low', 'info'));
+   281→
+   282→ALTER TABLE snapshot_deltas ADD COLUMN IF NOT EXISTS
+   283→  confidence real DEFAULT 0.5
+   284→  CHECK (confidence >= 0 AND confidence <= 1);
+   285→
+   286→ALTER TABLE snapshot_deltas ADD COLUMN IF NOT EXISTS
+   287→  zone_id uuid REFERENCES zones(id);
+   288→
+   289→ALTER TABLE snapshot_deltas ADD COLUMN IF NOT EXISTS
+   290→  requires_verification boolean DEFAULT false;
+   291→```
+   292→
+   293→**TypeScript interface (extending existing `SnapshotDelta`):**
+   294→
+   295→```typescript
+   296→interface ExtendedSnapshotDelta extends SnapshotDelta {
+   297→  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+   298→  confidence: number;
+   299→  zoneId: string;
+   300→  requiresVerification: boolean;
+   301→}
+   302→```
+   303→
+   304→#### 1.2.6 Agent (extends existing `user_profiles`)
+   305→
+   306→```sql
+   307→ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS
+   308→  agent_type text DEFAULT 'contributor'
+   309→  CHECK (agent_type IN ('contributor', 'field_agent', 'team_lead', 'validator'));
+   310→
+   311→ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS
+   312→  trust_score real DEFAULT 0.5
+   313→  CHECK (trust_score >= 0 AND trust_score <= 1);
+   314→
+   315→ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS
+   316→  assigned_zone_id uuid REFERENCES zones(id);
+   317→
+   318→ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS
+   319→  total_observations integer DEFAULT 0;
+   320→
+   321→ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS
+   322→  validation_accuracy real;  -- % of their observations confirmed by validators
+   323→
+   324→ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS
+   325→  preferred_verticals text[];  -- ['pharmacy', 'fuel_station']
+   326→
+   327→ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS
+   328→  device_fingerprints jsonb DEFAULT '[]';  -- known devices
+   329→
+   330→ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS
+   331→  last_active_at timestamptz;
+   332→```
+   333→
+   334→#### 1.2.7 Media
+   335→
+   336→Currently a single `photo_url` on the event. Promoted to a first-class entity to support multi-photo observations, video for road conditions, and billboard photo evidence.
+   337→
+   338→```sql
+   339→CREATE TABLE IF NOT EXISTS media (
+   340→  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   341→  event_id        uuid NOT NULL REFERENCES point_events(id),
+   342→  entity_id       text,                             -- point_id reference
+   343→  zone_id         uuid REFERENCES zones(id),
+   344→  -- File info
+   345→  url             text NOT NULL,                    -- Vercel Blob URL
+   346→  media_type      text NOT NULL DEFAULT 'photo'
+   347→                  CHECK (media_type IN ('photo', 'video', 'audio', 'document')),
+   348→  mime_type       text,                             -- 'image/jpeg'
+   349→  file_size_bytes integer,
+   350→  width_px        integer,
+   351→  height_px       integer,
+   352→  -- EXIF / metadata
+   353→  exif_gps_lat    double precision,
+   354→  exif_gps_lng    double precision,
+   355→  exif_captured_at timestamptz,
+   356→  exif_device     text,                             -- 'Samsung Galaxy A14'
+   357→  exif_status     text DEFAULT 'missing'
+   358→                  CHECK (exif_status IN ('ok', 'missing', 'parse_error',
+   359→                                          'unsupported_format', 'fallback_recovered')),
+   360→  -- Role
+   361→  role            text DEFAULT 'primary'
+   362→                  CHECK (role IN ('primary', 'secondary', 'evidence',
+   363→                                   'panoramic', 'closeup', 'context')),
+   364→  -- Fraud signals
+   365→  gps_match       boolean,
+   366→  gps_distance_km real,
+   367→  -- Timestamps
+   368→  created_at      timestamptz NOT NULL DEFAULT now()
+   369→);
+   370→
+   371→CREATE INDEX idx_media_event ON media (event_id);
+   372→CREATE INDEX idx_media_entity ON media (entity_id);
+   373→```
+   374→
+   375→### 1.3 Vertical-Specific Extensions
+   376→
+   377→Each vertical stores its specific data in the `details` JSONB column on both `entities` and `point_events`. The existing `shared/verticals.ts` already defines per-vertical `enrichableFields` and `createRequiredFields`. Below are the schemas for ALL 7 verticals, including the two new ones.
+   378→
+   379→#### Billboard
+   380→```typescript
+   381→interface BillboardDetails {
+   382→  name: string;                    // description of the billboard
+   383→  brand: string | null;            // advertiser brand
+   384→  size: 'small' | 'medium' | 'large' | 'mega' | null;
+   385→  format: 'static' | 'digital' | 'painted' | 'banner' | null;
+   386→  condition: 'good' | 'faded' | 'damaged' | 'blank' | null;
+   387→  illuminated: boolean | null;
+   388→  contentCategory: string | null;  // 'telecom', 'beverage', 'political', etc.
+   389→  ownerCompany: string | null;     // billboard owner/operator
+   390→  facingDirection: string | null;  // 'N', 'SE', etc.
+   391→  heightAboveGround: number | null; // meters
+   392→  visibilityScore: number | null;  // 1-5
+   393→}
+   394→```
+   395→
+   396→**Vertical config addition for `shared/verticals.ts`:**
+   397→```typescript
+   398→billboard: {
+   399→  enrichableFields: ["brand", "size", "format", "condition",
+   400→                     "illuminated", "contentCategory", "ownerCompany"],
+   401→  createRequiredFields: ["name"],
+   402→}
+   403→```
+   404→
+   405→#### Alcohol Outlet
+   406→```typescript
+   407→interface AlcoholOutletDetails {
+   408→  name: string;
+   409→  brand: string | null;           // primary brand sold
+   410→  outletType: 'bar' | 'off_licence' | 'restaurant' | 'nightclub'
+   411→            | 'informal_stand' | 'wholesale' | null;
+   412→  openingHours: string | null;
+   413→  paymentMethods: string[] | null;
+   414→  servesFood: boolean | null;
+   415→  hasSeating: boolean | null;
+   416→  estimatedCapacity: number | null;
+   417→  primaryBrands: string[] | null; // ['33 Export', 'Castel', 'Guinness']
+   418→  licenseVisible: boolean | null;
+   419→}
+   420→```
+   421→
+   422→#### Census (NEW vertical)
+   423→```typescript
+   424→interface CensusDetails {
+   425→  structureType: 'residential' | 'commercial' | 'mixed' | 'institutional'
+   426→               | 'religious' | 'industrial' | 'vacant_lot' | 'under_construction';
+   427→  storeyCount: number | null;
+   428→  estimatedUnits: number | null;     // dwelling units or business units
+   429→  estimatedOccupants: number | null;
+   430→  roofMaterial: 'concrete' | 'zinc' | 'tile' | 'thatch' | 'other' | null;
+   431→  wallMaterial: 'concrete_block' | 'brick' | 'wood' | 'metal' | 'other' | null;
+   432→  hasElectricity: boolean | null;
+   433→  hasRunningWater: boolean | null;
+   434→  accessRoad: 'paved' | 'unpaved' | 'footpath' | null;
+   435→  condition: 'good' | 'fair' | 'poor' | 'derelict' | null;
+   436→  landUse: string | null;           // 'residential', 'commercial', etc.
+   437→  occupancyStatus: 'occupied' | 'vacant' | 'partial' | 'unknown' | null;
+   438→}
+   439→```
+   440→
+   441→**New vertical config entry:**
+   442→```typescript
+   443→census: {
+   444→  id: "census",
+   445→  labelEn: "Census Structure",
+   446→  labelFr: "Structure recensement",
+   447→  pluralEn: "Census Structures",
+   448→  pluralFr: "Structures de recensement",
+   449→  icon: "building-2",
+   450→  color: "#718096",
+   451→  bgColor: "#edf2f7",
+   452→  enrichableFields: ["storeyCount", "estimatedUnits", "roofMaterial",
+   453→                     "wallMaterial", "hasElectricity", "hasRunningWater",
+   454→                     "condition", "occupancyStatus"],
+   455→  createRequiredFields: ["structureType"],
+   456→  normalizeDetails: identityNormalize,
+   457→}
+   458→```
+   459→
+   460→#### Fuel Station
+   461→*(Already exists -- extending the current `normalizeFuelStation` in `shared/verticals.ts`)*
+   462→```typescript
+   463→interface FuelStationDetails {
+   464→  name: string;
+   465→  brand: string | null;            // 'Total', 'Tradex', 'MRS'
+   466→  hasFuelAvailable: boolean;
+   467→  fuelTypes: string[];             // ['Super', 'Diesel', 'Gas']
+   468→  pricesByFuel: Record<string, number>; // { "Super": 720, "Diesel": 650 }
+   469→  fuelPrice: number | null;        // legacy single price
+   470→  quality: string | null;
+   471→  paymentMethods: string[];
+   472→  openingHours: string | null;
+   473→  hasCarWash: boolean | null;
+   474→  hasConvenienceStore: boolean | null;
+   475→  queueLength: string | null;      // 'none', 'short', 'long'
+   476→  lastDeliveryDate: string | null;
+   477→}
+   478→```
+   479→
+   480→#### Mobile Money
+   481→*(Already exists -- as defined in `normalizeMobileMoney`)*
+   482→```typescript
+   483→interface MobileMoneyDetails {
+   484→  name: string | null;
+   485→  providers: string[];             // ['MTN', 'Orange']
+   486→  hasMin50000XafAvailable: boolean | null;
+   487→  merchantIdByProvider: Record<string, string>;
+   488→  paymentMethods: string[];
+   489→  openingHours: string | null;
+   490→  reliability: string | null;
+   491→  phone: string | null;
+   492→}
+   493→```
+   494→
+   495→#### Pharmacy
+   496→*(Already exists -- as defined in `normalizePharmacy`)*
+   497→```typescript
+   498→interface PharmacyDetails {
+   499→  name: string;
+   500→  isOpenNow: boolean;
+   501→  isOnDuty: boolean | null;        // pharmacie de garde
+   502→  openingHours: string | null;
+   503→  phone: string | null;
+   504→  hasDriveThrough: boolean | null;
+   505→}
+   506→```
+   507→
+   508→#### Transport / Roads (NEW vertical)
+   509→```typescript
+   510→interface TransportRoadDetails {
+   511→  name: string;                     // road name or intersection description
+   512→  roadType: 'primary' | 'secondary' | 'tertiary' | 'residential'
+   513→           | 'footpath' | 'intersection' | null;
+   514→  surfaceType: 'paved' | 'unpaved' | 'gravel' | 'earth' | null;
+   515→  condition: 'good' | 'fair' | 'poor' | 'impassable' | null;
+   516→  isBlocked: boolean | null;
+   517→  blockageType: 'flood' | 'construction' | 'accident' | 'market_encroachment'
+   518→              | 'permanent_obstacle' | 'temporary' | null;
+   519→  blockageSince: string | null;     // ISO date
+   520→  estimatedClearDate: string | null;
+   521→  alternateRoute: string | null;    // description
+   522→  trafficLevel: 'free_flow' | 'moderate' | 'congested' | 'gridlock' | null;
+   523→  hasStreetLights: boolean | null;
+   524→  hasDrainage: boolean | null;
+   525→  laneCount: number | null;
+   526→  // For intersections
+   527→  hasTrafficLight: boolean | null;
+   528→  hasSpeedBump: boolean | null;
+   529→}
+   530→```
+   531→
+   532→**New vertical config entry:**
+   533→```typescript
+   534→transport_road: {
+   535→  id: "transport_road",
+   536→  labelEn: "Road / Transport",
+   537→  labelFr: "Route / Transport",
+   538→  pluralEn: "Roads & Transport Points",
+   539→  pluralFr: "Routes & Points de transport",
+   540→  icon: "route",
+   541→  color: "#4a5568",
+   542→  bgColor: "#e2e8f0",
+   543→  enrichableFields: ["condition", "isBlocked", "blockageType",
+   544→                     "surfaceType", "trafficLevel", "hasStreetLights"],
+   545→  createRequiredFields: ["name", "roadType"],
+   546→  normalizeDetails: identityNormalize,
+   547→}
+   548→```
+   549→
+   550→---
+   551→
+   552→## 2. Entity ID System
+   553→
+   554→### 2.1 ID Generation Strategy
+   555→
+   556→The existing codebase uses `crypto.randomUUID()` (UUID v4) for event IDs and point IDs. This is adequate but has two problems: (1) UUIDs are not sortable by time, (2) there is no human-readable prefix to identify entity type at a glance.
+   557→
+   558→**Proposed: Prefixed UUID v7**
+   559→
+   560→UUID v7 encodes a Unix timestamp in the first 48 bits, making IDs naturally sortable by creation time. A human-readable prefix identifies the entity type.
+   561→
+   562→```
+   563→Format: {prefix}_{uuid_v7}
+   564→
+   565→Examples:
+   566→  evt_019502a8-3c4e-7b2d-9f3a-1c2b3d4e5f6a   (observation/event)
+   567→  ent_019502a8-4d5f-7c3e-a04b-2d3c4e5f6a7b   (entity)
+   568→  loc_019502a8-5e60-7d4f-b15c-3e4d5f6a7b8c   (location)
+   569→  med_019502a8-6f71-7e50-c26d-4f5e6a7b8c9d   (media)
+   570→  agt_019502a8-7082-7f61-d37e-5060718293a4   (agent)
+   571→  dlt_019502a8-8193-7072-e48f-61728394a5b6   (delta)
+   572→  zon_019502a8-92a4-7183-f590-7283a4b5c6d7   (zone)
+   573→  snp_019502a8-a3b5-7294-06a1-8394b5c6d7e8   (snapshot)
+   574→```
+   575→
+   576→**Offline generation:** UUID v7 uses the device clock + random bits. Two devices generating IDs at the same millisecond will still produce unique IDs because of the random component (74 bits of randomness). Collision probability is negligible even at scale.
+   577→
+   578→**Implementation:**
+   579→
+   580→```typescript
+   581→// lib/shared/id.ts
+   582→const PREFIXES = {
+   583→  event: 'evt',
+   584→  entity: 'ent',
+   585→  location: 'loc',
+   586→  media: 'med',
+   587→  agent: 'agt',
+   588→  delta: 'dlt',
+   589→  zone: 'zon',
+   590→  snapshot: 'snp',
+   591→} as const;
+   592→
+   593→type EntityType = keyof typeof PREFIXES;
+   594→
+   595→export function generateId(type: EntityType): string {
+   596→  // UUID v7: timestamp (48 bits) + version (4 bits) + random (12 bits)
+   597→  //          + variant (2 bits) + random (62 bits)
+   598→  const now = Date.now();
+   599→  const bytes = new Uint8Array(16);
+   600→  crypto.getRandomValues(bytes);
+   601→
+   602→  // Encode timestamp in first 6 bytes (48 bits)
+   603→  bytes[0] = (now / 2**40) & 0xff;
+   604→  bytes[1] = (now / 2**32) & 0xff;
+   605→  bytes[2] = (now / 2**24) & 0xff;
+   606→  bytes[3] = (now / 2**16) & 0xff;
+   607→  bytes[4] = (now / 2**8) & 0xff;
+   608→  bytes[5] = now & 0xff;
+   609→
+   610→  // Set version 7
+   611→  bytes[6] = (bytes[6] & 0x0f) | 0x70;
+   612→  // Set variant 10
+   613→  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+   614→
+   615→  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+   616→  const uuid = [
+   617→    hex.slice(0, 8),
+   618→    hex.slice(8, 12),
+   619→    hex.slice(12, 16),
+   620→    hex.slice(16, 20),
+   621→    hex.slice(20, 32),
+   622→  ].join('-');
+   623→
+   624→  return `${PREFIXES[type]}_${uuid}`;
+   625→}
+   626→```
+   627→
+   628→**Backward compatibility:** The existing `point_id` (UUID v4 strings) remain valid. The `normalizeEventId` function in `postgresStore.ts` already handles non-UUID inputs via deterministic SHA-1 hashing. New IDs coexist with old ones.
+   629→
+   630→### 2.2 Deduplication: "Same Entity Seen by Two Different Agents"
+   631→
+   632→This is the central challenge in Bonamoussadi where no formal address system exists.
+   633→
+   634→**Three-layer deduplication strategy:**
+   635→
+   636→```
+   637→Layer 1: GPS Proximity
+   638→  |  Within 25 meters?
+   639→  |  No  -> Definitely different entities
+   640→  |  Yes -> Proceed to Layer 2
+   641→  v
+   642→Layer 2: Name Fuzzy Match
+   643→  |  Normalized name similarity > 0.7?
+   644→  |  No  -> Probably different entities (flag for review)
+   645→  |  Yes -> Proceed to Layer 3
+   646→  v
+   647→Layer 3: Vertical + Contextual Match
+   648→  |  Same vertical?
+   649→  |  Same brand / provider / distinguishing attribute?
+   650→  |  Yes -> Merge candidate (auto-merge if confidence > 0.85)
+   651→  |  No  -> Flag for manual review
+   652→  v
+   653→Output: MERGE | DISTINCT | REVIEW_NEEDED
+   654→```
+   655→
+   656→**Implementation:**
+   657→
+   658→```typescript
+   659→// lib/server/deduplication.ts
+   660→
+   661→interface DeduplicationCandidate {
+   662→  entityA: string;     // point_id
+   663→  entityB: string;     // point_id
+   664→  gpsDistanceM: number;
+   665→  nameSimilarity: number;
+   666→  verticalMatch: boolean;
+   667→  brandMatch: boolean | null;
+   668→  mergeConfidence: number;
+   669→  decision: 'auto_merge' | 'distinct' | 'review_needed';
+   670→}
+   671→
+   672→const GPS_PROXIMITY_THRESHOLD_M = 25;
+   673→const NAME_SIMILARITY_THRESHOLD = 0.7;
+   674→const AUTO_MERGE_CONFIDENCE = 0.85;
+   675→
+   676→function haversineMeters(a: SubmissionLocation, b: SubmissionLocation): number {
+   677→  return haversineKm(a, b) * 1000;
+   678→}
+   679→
+   680→function normalizeEntityName(name: string): string {
+   681→  return name
+   682→    .toLowerCase()
+   683→    .replace(/\s+/g, ' ')
+   684→    .replace(/[^\w\s]/g, '')
+   685→    .replace(
+   686→      /\b(pharmacie|pharmacy|station|service|kiosque|kiosk|mobile money|boutique)\b/g,
+   687→      ''
+   688→    )
+   689→    .trim();
+   690→}
+   691→
+   692→// Jaro-Winkler similarity (0 to 1)
+   693→function nameSimilarity(a: string, b: string): number {
+   694→  const na = normalizeEntityName(a);
+   695→  const nb = normalizeEntityName(b);
+   696→  if (na === nb) return 1.0;
+   697→  if (!na || !nb) return 0.0;
+   698→  return jaroWinkler(na, nb); // standard string similarity algorithm
+   699→}
+   700→
+   701→function computeMergeConfidence(
+   702→  distanceM: number,
+   703→  nameSim: number,
+   704→  verticalMatch: boolean,
+   705→  brandMatch: boolean | null,
+   706→): number {
+   707→  let score = 0;
+   708→
+   709→  // GPS proximity (0 to 0.4)
+   710→  if (distanceM < 5) score += 0.4;
+   711→  else if (distanceM < 10) score += 0.35;
+   712→  else if (distanceM < 15) score += 0.25;
+   713→  else if (distanceM < 25) score += 0.15;
+   714→
+   715→  // Name similarity (0 to 0.3)
+   716→  score += nameSim * 0.3;
+   717→
+   718→  // Vertical match (0 or 0.2)
+   719→  if (verticalMatch) score += 0.2;
+   720→
+   721→  // Brand/provider match (0 or 0.1)
+   722→  if (brandMatch === true) score += 0.1;
+   723→
+   724→  return Math.min(1.0, score);
+   725→}
+   726→```
+   727→
+   728→**Merge queue table:**
+   729→
+   730→```sql
+   731→CREATE TABLE IF NOT EXISTS merge_candidates (
+   732→  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   733→  entity_a_id     text NOT NULL,
+   734→  entity_b_id     text NOT NULL,
+   735→  gps_distance_m  real NOT NULL,
+   736→  name_similarity real NOT NULL,
+   737→  vertical_match  boolean NOT NULL,
+   738→  brand_match     boolean,
+   739→  merge_confidence real NOT NULL,
+   740→  decision        text NOT NULL DEFAULT 'review_needed'
+   741→                  CHECK (decision IN ('auto_merge', 'distinct', 'review_needed',
+   742→                                       'merged', 'rejected')),
+   743→  resolved_by     text,           -- agent who resolved
+   744→  resolved_at     timestamptz,
+   745→  created_at      timestamptz NOT NULL DEFAULT now()
+   746→);
+   747→```
+   748→
+   749→**When deduplication runs:**
+   750→1. On every CREATE_EVENT: check new entity against existing entities in the same geohash_6
+   751→2. During weekly snapshot: batch scan for unresolved candidates
+   752→3. Admin queue: human review of `review_needed` candidates
+   753→
+   754→### 2.3 Entity Identity Without Formal Addresses
+   755→
+   756→Since Bonamoussadi has no formal address system, entity identity is established through a composite fingerprint:
+   757→
+   758→```
+   759→Entity Fingerprint = {
+   760→  geohash_6,          -- approximate location bucket
+   761→  vertical_id,        -- what type of entity
+   762→  normalized_name,    -- fuzzy-matched name
+   763→  brand,              -- if applicable
+   764→  floor_level,        -- for multi-story buildings (census)
+   765→  distinguishing_attr -- provider for mobile money, fuel brand for stations
+   766→}
+   767→```
+   768→
+   769→The fingerprint is NOT the primary key -- the UUID is. The fingerprint is used only for deduplication scoring.
+   770→
+   771→---
+   772→
+   773→## 3. Baseline vs. Snapshot Logic
+   774→
+   775→### 3.1 Definitions
+   776→
+   777→The existing codebase already implements a snapshot system via `runWeeklySnapshot()` in `lib/server/snapshotEngine.ts`. The design below formalizes and extends it.
+   778→
+   779→```
+   780→BASELINE: The first complete survey of a zone+vertical combination.
+   781→           It establishes the "ground truth" entity set at time T0.
+   782→
+   783→SNAPSHOT: Any subsequent observation cycle that captures the state
+   784→          of all known entities in a zone+vertical at time Tn.
+   785→
+   786→PARTIAL BASELINE: A baseline where the zone was surveyed but the
+   787→                  agent did not cover all areas or all verticals.
+   788→```
+   789→
+   790→**Formal state machine:**
+   791→
+   792→```
+   793→                  +----------------+
+   794→                  |   PLANNED      |  Zone exists but no data collected
+   795→                  +-------+--------+
+   796→                          |
+   797→                          | First observation received
+   798→                          v
+   799→                  +----------------+
+   800→                  | PARTIAL_BASE   |  Baseline in progress; < threshold coverage
+   801→                  +-------+--------+
+   802→                          |
+   803→                          | Coverage >= threshold (e.g., 70% of zone area walked)
+   804→                          v
+   805→                  +----------------+
+   806→                  |   BASELINE     |  First complete survey
+   807→                  +-------+--------+
+   808→                          |
+   809→                          | Weekly snapshot cycle
+   810→                          v
+   811→                  +----------------+
+   812→                  |   SNAPSHOT_N   |  Subsequent observations
+   813→                  +-------+--------+
+   814→                          |
+   815→                          | Repeat weekly
+   816→                          v
+   817→                        (...)
+   818→```
+   819→
+   820→### 3.2 Baseline Tracking Table
+   821→
+   822→```sql
+   823→CREATE TABLE IF NOT EXISTS survey_campaigns (
+   824→  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   825→  zone_id         uuid NOT NULL REFERENCES zones(id),
+   826→  vertical_id     text NOT NULL,
+   827→  campaign_type   text NOT NULL DEFAULT 'baseline'
+   828→                  CHECK (campaign_type IN ('baseline', 'snapshot', 'targeted')),
+   829→  status          text NOT NULL DEFAULT 'planned'
+   830→                  CHECK (status IN ('planned', 'in_progress', 'partial',
+   831→                                     'complete', 'archived')),
+   832→  -- Coverage tracking
+   833→  target_area_km2   real,
+   834→  covered_area_km2  real DEFAULT 0,
+   835→  coverage_pct      real DEFAULT 0
+   836→                    CHECK (coverage_pct >= 0 AND coverage_pct <= 100),
+   837→  target_entities   integer,          -- expected entity count (estimate)
+   838→  observed_entities integer DEFAULT 0,
+   839→  -- Temporal
+   840→  started_at      timestamptz,
+   841→  completed_at    timestamptz,
+   842→  snapshot_date   date,               -- the date this becomes a snapshot row
+   843→  -- Agents
+   844→  assigned_agents text[],
+   845→  -- Quality
+   846→  avg_confidence  real DEFAULT 0,
+   847→  created_at      timestamptz NOT NULL DEFAULT now(),
+   848→  updated_at      timestamptz NOT NULL DEFAULT now(),
+   849→  UNIQUE(zone_id, vertical_id, snapshot_date)
+   850→);
+   851→```
+   852→
+   853→### 3.3 Handling Partial Baselines
+   854→
+   855→A partial baseline occurs when:
+   856→- An agent surveys only some streets in the zone
+   857→- A vertical is partially covered (e.g., pharmacies found but not all mobile money kiosks)
+   858→- Bad weather or time constraints end a survey early
+   859→
+   860→**Rules:**
+   861→1. A baseline is "complete" when `coverage_pct >= 70` AND `observed_entities >= target_entities * 0.6`
+   862→2. Below that threshold, it remains "partial" and deltas are computed with a `partial_baseline` flag
+   863→3. Partial baselines are valid for presence checks ("this entity exists") but NOT for absence checks ("this entity was removed") -- because absence may mean "agent didn't walk that street"
+   864→
+   865→**In the existing `computeDeltas()` function**, this means:
+   866→
+   867→```typescript
+   868→// In snapshotEngine.ts, before computing deltas:
+   869→if (campaign.status === 'partial') {
+   870→  // Do NOT generate 'removed' deltas for partial baselines.
+   871→  // An entity missing from a partial survey may simply not have been visited.
+   872→  deltas = deltas.filter(d => d.deltaType !== 'removed');
+   873→  // Flag all deltas from partial baselines
+   874→  deltas.forEach(d => {
+   875→    d.confidence *= 0.6; // reduce confidence
+   876→    d.deltaSummary = `[PARTIAL] ${d.deltaSummary}`;
+   877→  });
+   878→}
+   879→```
+   880→
+   881→### 3.4 Versioning Strategy
+   882→
+   883→Entity state over time is already captured by the snapshot system. Each `snapshots` row is a point-in-time record of an entity's state. To query historical state:
+   884→
+   885→```sql
+   886→-- What was entity X on date Y?
+   887→SELECT * FROM snapshots
+   888→WHERE point_id = $1
+   889→  AND snapshot_date <= $2
+   890→ORDER BY snapshot_date DESC
+   891→LIMIT 1;
+   892→
+   893→-- Full history of entity X
+   894→SELECT * FROM snapshots
+   895→WHERE point_id = $1
+   896→ORDER BY snapshot_date ASC;
+   897→```
+   898→
+   899→**Version numbering convention:**
+   900→
+   901→```
+   902→Entity Version = snapshot_date ordinal for that entity
+   903→
+   904→Example:
+   905→  ent_abc... was first seen on 2026-03-03 -> v1 (baseline)
+   906→  Observed again on 2026-03-10            -> v2
+   907→  Changed on 2026-03-17                   -> v3
+   908→  Not seen on 2026-03-24                  -> v3 (unchanged; no new version)
+   909→  Marked removed on 2026-03-31            -> v4 (terminal)
+   910→```
+   911→
+   912→No explicit version column is needed because the `(point_id, snapshot_date)` composite key already provides versioning. The `snapshots` table is an append-only time-series.
+   913→
+   914→---
+   915→
+   916→## 4. Delta Computation Rules
+   917→
+   918→### 4.1 Per-Vertical Delta Definitions
+   919→
+   920→The existing `computeDeltas()` function in `snapshotEngine.ts` already handles the 4 delta types (new, removed, changed, unchanged) with field-level diffing. Below are the vertical-specific rules for what constitutes a meaningful delta and its severity.
+   921→
+   922→#### Billboard
+   923→
+   924→| Change | Delta Type | Severity | Min Interval |
+   925→|--------|-----------|----------|--------------|
+   926→| New billboard installed | new | medium | -- |
+   927→| Billboard removed/demolished | removed | high | -- |
+   928→| Advertiser/content changed | changed | high | 7 days |
+   929→| Condition degraded (good->faded) | changed | low | 7 days |
+   930→| Blank/unused billboard | changed | medium | 7 days |
+   931→| Illumination status changed | changed | low | 7 days |
+   932→
+   933→```typescript
+   934→const BILLBOARD_DELTA_RULES: DeltaRules = {
+   935→  significantFields: ['brand', 'contentCategory', 'condition'],
+   936→  criticalFields: [],
+   937→  highFields: ['brand', 'contentCategory'],
+   938→  mediumFields: ['format', 'size'],
+   939→  lowFields: ['condition', 'illuminated', 'facingDirection'],
+   940→  minObservationIntervalDays: 7,
+   941→};
+   942→```
+   943→
+   944→#### Alcohol Outlet
+   945→
+   946→| Change | Delta Type | Severity | Min Interval |
+   947→|--------|-----------|----------|--------------|
+   948→| New outlet opened | new | medium | -- |
+   949→| Outlet closed permanently | removed | high | -- |
+   950→| Type changed (bar->nightclub) | changed | medium | 14 days |
+   951→| Hours changed | changed | low | 7 days |
+   952→| New brand offered | changed | low | 7 days |
+   953→
+   954→#### Census
+   955→
+   956→| Change | Delta Type | Severity | Min Interval |
+   957→|--------|-----------|----------|--------------|
+   958→| New structure detected | new | high | -- |
+   959→| Structure demolished | removed | critical | -- |
+   960→| Occupancy changed (occupied->vacant) | changed | high | 30 days |
+   961→| Infrastructure change (electricity added) | changed | medium | 30 days |
+   962→| Condition change (good->poor) | changed | medium | 30 days |
+   963→| Storey count changed (expansion) | changed | high | 30 days |
+   964→
+   965→```typescript
+   966→const CENSUS_DELTA_RULES: DeltaRules = {
+   967→  significantFields: ['structureType', 'occupancyStatus', 'storeyCount'],
+   968→  criticalFields: [],  // removal is always critical
+   969→  highFields: ['structureType', 'occupancyStatus', 'storeyCount', 'estimatedUnits'],
+   970→  mediumFields: ['condition', 'hasElectricity', 'hasRunningWater'],
+   971→  lowFields: ['roofMaterial', 'wallMaterial', 'accessRoad'],
+   972→  minObservationIntervalDays: 30,
+   973→};
+   974→```
+   975→
+   976→#### Fuel Station
+   977→
+   978→| Change | Delta Type | Severity | Min Interval |
+   979→|--------|-----------|----------|--------------|
+   980→| New station opened | new | high | -- |
+   981→| Station closed | removed | critical | -- |
+   982→| Price changed (> 5 XAF) | changed | critical | 1 day |
+   983→| Fuel availability changed | changed | high | 1 day |
+   984→| Fuel type added/removed | changed | medium | 7 days |
+   985→| Queue length changed | changed | low | 1 day |
+   986→
+   987→```typescript
+   988→const FUEL_DELTA_RULES: DeltaRules = {
+   989→  significantFields: ['pricesByFuel', 'hasFuelAvailable', 'fuelTypes'],
+   990→  criticalFields: ['pricesByFuel'],
+   991→  highFields: ['hasFuelAvailable'],
+   992→  mediumFields: ['fuelTypes', 'paymentMethods'],
+   993→  lowFields: ['queueLength', 'openingHours', 'quality'],
+   994→  minObservationIntervalDays: 1,
+   995→  // Fuel prices: only flag if change > 5 XAF
+   996→  numericThresholds: {
+   997→    'pricesByFuel.*': 5,
+   998→  },
+   999→};
+  1000→```
+  1001→
+  1002→#### Mobile Money
+  1003→
+  1004→| Change | Delta Type | Severity | Min Interval |
+  1005→|--------|-----------|----------|--------------|
+  1006→| New kiosk opened | new | medium | -- |
+  1007→| Kiosk closed | removed | medium | -- |
+  1008→| Cash availability changed | changed | high | 1 day |
+  1009→| Provider added/removed | changed | medium | 7 days |
+  1010→| Merchant ID changed | changed | low | 7 days |
+  1011→
+  1012→#### Pharmacy
+  1013→
+  1014→| Change | Delta Type | Severity | Min Interval |
+  1015→|--------|-----------|----------|--------------|
+  1016→| New pharmacy opened | new | high | -- |
+  1017→| Pharmacy closed | removed | critical | -- |
+  1018→| On-duty status changed | changed | critical | 1 day |
+  1019→| Opening hours changed | changed | medium | 7 days |
+  1020→
+  1021→#### Transport / Roads
+  1022→
+  1023→| Change | Delta Type | Severity | Min Interval |
+  1024→|--------|-----------|----------|--------------|
+  1025→| New road observed | new | medium | -- |
+  1026→| Road permanently closed | removed | critical | -- |
+  1027→| Road blocked | changed | critical | 0 days (immediate) |
+  1028→| Road unblocked | changed | critical | 0 days (immediate) |
+  1029→| Condition changed | changed | medium | 7 days |
+  1030→| Traffic level changed | changed | low | 1 day |
+  1031→
+  1032→```typescript
+  1033→const TRANSPORT_DELTA_RULES: DeltaRules = {
+  1034→  significantFields: ['isBlocked', 'condition', 'blockageType'],
+  1035→  criticalFields: ['isBlocked', 'blockageType'],
+  1036→  highFields: ['condition'],
+  1037→  mediumFields: ['surfaceType', 'laneCount'],
+  1038→  lowFields: ['trafficLevel', 'hasStreetLights', 'hasDrainage'],
+  1039→  minObservationIntervalDays: 0, // real-time for blockages
+  1040→};
+  1041→```
+  1042→
+  1043→### 4.2 Severity Scoring
+  1044→
+  1045→```typescript
+  1046→type DeltaSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+  1047→
+  1048→function computeDeltaSeverity(
+  1049→  verticalId: string,
+  1050→  deltaType: DeltaType,
+  1051→  deltaField: string | null,
+  1052→  deltaMagnitude: number | null,
+  1053→): DeltaSeverity {
+  1054→  const rules = DELTA_RULES_BY_VERTICAL[verticalId];
+  1055→
+  1056→  // Removals are always at least 'high'
+  1057→  if (deltaType === 'removed') {
+  1058→    return rules.criticalFields.length > 0 ? 'critical' : 'high';
+  1059→  }
+  1060→
+  1061→  // New entities
+  1062→  if (deltaType === 'new') return 'medium';
+  1063→
+  1064→  // Unchanged
+  1065→  if (deltaType === 'unchanged') return 'info';
+  1066→
+  1067→  // Changed: check field-level severity
+  1068→  if (!deltaField) return 'low';
+  1069→
+  1070→  if (rules.criticalFields.includes(deltaField)) return 'critical';
+  1071→  if (rules.highFields.includes(deltaField)) return 'high';
+  1072→  if (rules.mediumFields.includes(deltaField)) return 'medium';
+  1073→  return 'low';
+  1074→}
+  1075→```
+  1076→
+  1077→### 4.3 Minimum Observation Interval
+  1078→
+  1079→To prevent noisy deltas from rapid re-observations, each vertical defines a minimum interval. The existing `computeDeltas()` compares snapshots which are weekly, so the minimum interval is already 7 days. For verticals with real-time needs (fuel prices, road blockages), the system supports intra-week "micro-snapshots":
+  1080→
+  1081→```typescript
+  1082→function isValidDelta(
+  1083→  observation: ObservationEvent,
+  1084→  previousObservation: ObservationEvent | null,
+  1085→  rules: DeltaRules,
+  1086→): boolean {
+  1087→  if (!previousObservation) return true; // first observation
+  1088→
+  1089→  const elapsed = Date.now() - new Date(previousObservation.createdAt).getTime();
+  1090→  const minIntervalMs = rules.minObservationIntervalDays * 24 * 60 * 60 * 1000;
+  1091→
+  1092→  return elapsed >= minIntervalMs;
+  1093→}
+  1094→```
+  1095→
+  1096→### 4.4 Distinguishing Real Change from Observation Error
+  1097→
+  1098→```
+  1099→Decision tree:
+  1100→  1. Same agent, same entity, < 1 hour apart?
+  1101→     -> Likely a CORRECTION, not a delta.
+  1102→        Keep the later observation. Mark earlier as superseded.
+  1103→
+  1104→  2. Different agents, same entity, same day, conflicting values?
+  1105→     -> Likely an OBSERVATION ERROR.
+  1106→        Use the higher-confidence observation.
+  1107→        Flag for validator review.
+  1108→
+  1109→  3. Same entity, > minInterval apart, values differ?
+  1110→     -> REAL DELTA. Compute and store.
+  1111→
+  1112→  4. Values differ by < numericThreshold?
+  1113→     -> Insignificant change. Store as 'unchanged'.
+  1114→        (e.g., fuel price changes by 1 XAF are noise)
+  1115→```
+  1116→
+  1117→**Implementation as an extension to the existing `detectChangedFields()` in `snapshotEngine.ts`:**
+  1118→
+  1119→```typescript
+  1120→function isSignificantChange(
+  1121→  field: string,
+  1122→  prevValue: unknown,
+  1123→  currValue: unknown,
+  1124→  verticalId: string,
+  1125→): boolean {
+  1126→  const rules = DELTA_RULES_BY_VERTICAL[verticalId];
+  1127→  if (!rules) return true; // unknown vertical -> always significant
+  1128→
+  1129→  // Check numeric thresholds
+  1130→  if (typeof prevValue === 'number' && typeof currValue === 'number') {
+  1131→    const thresholdKey = Object.keys(rules.numericThresholds ?? {})
+  1132→      .find(k => field === k || field.startsWith(k.replace('.*', '')));
+  1133→    if (thresholdKey) {
+  1134→      const threshold = rules.numericThresholds![thresholdKey];
+  1135→      if (Math.abs(currValue - prevValue) < threshold) return false;
+  1136→    }
+  1137→  }
+  1138→
+  1139→  return true;
+  1140→}
+  1141→```
+  1142→
+  1143→### 4.5 Delta Aggregation
+  1144→
+  1145→Individual deltas roll up to area-level change reports. The existing `snapshot_stats` table already aggregates by vertical per snapshot date. The extension adds zone-level aggregation:
+  1146→
+  1147→```sql
+  1148→-- Zone-level aggregate view
+  1149→CREATE OR REPLACE VIEW zone_delta_summary AS
+  1150→SELECT
+  1151→  s.snapshot_date,
+  1152→  z.slug AS zone_slug,
+  1153→  s.vertical_id,
+  1154→  SUM(s.total_points) AS total_points,
+  1155→  SUM(s.new_count) AS new_count,
+  1156→  SUM(s.removed_count) AS removed_count,
+  1157→  SUM(s.changed_count) AS changed_count,
+  1158→  SUM(s.unchanged_count) AS unchanged_count,
+  1159→  ROUND(AVG(s.completion_rate), 2) AS avg_completion_rate,
+  1160→  -- Churn rate: (new + removed) / total
+  1161→  CASE WHEN SUM(s.total_points) > 0
+  1162→    THEN ROUND(
+  1163→      (SUM(s.new_count) + SUM(s.removed_count))::numeric
+  1164→      / SUM(s.total_points) * 100, 2
+  1165→    )
+  1166→    ELSE 0
+  1167→  END AS churn_rate_pct
+  1168→FROM snapshot_stats s
+  1169→JOIN zones z ON z.id = s.zone_id
+  1170→GROUP BY s.snapshot_date, z.slug, s.vertical_id
+  1171→ORDER BY s.snapshot_date DESC, z.slug, s.vertical_id;
+  1172→```
+  1173→
+  1174→---
+  1175→
+  1176→## 5. Data Quality Scoring
+  1177→
+  1178→### 5.1 Per-Observation Confidence Score
+  1179→
+  1180→Each observation receives a confidence score between 0.0 and 1.0, computed from multiple signals. The existing `submissionFraud.ts` already computes GPS match scores; this extends the approach.
+  1181→
+  1182→```typescript
+  1183→interface ObservationConfidenceFactors {
+  1184→  gpsAccuracy: number;      // 0 to 0.25
+  1185→  photoQuality: number;     // 0 to 0.20
+  1186→  agentReliability: number; // 0 to 0.25
+  1187→  dataCompleteness: number; // 0 to 0.15
+  1188→  temporalFreshness: number;// 0 to 0.10
+  1189→  fraudSignal: number;      // -0.30 to 0.05
+  1190→}
+  1191→
+  1192→function computeObservationConfidence(
+  1193→  event: ObservationEvent,
+  1194→  agent: UserProfile,
+  1195→  fraudCheck: SubmissionFraudCheck | null,
+  1196→): number {
+  1197→  let score = 0;
+  1198→
+  1199→  // 1. GPS Accuracy (0 to 0.25)
+  1200→  const accuracyM = event.gpsAccuracyM ?? 50;
+  1201→  if (accuracyM <= 5) score += 0.25;
+  1202→  else if (accuracyM <= 10) score += 0.22;
+  1203→  else if (accuracyM <= 20) score += 0.18;
+  1204→  else if (accuracyM <= 50) score += 0.12;
+  1205→  else score += 0.05;
+  1206→
+  1207→  // 2. Photo Quality (0 to 0.20)
+  1208→  if (event.photoUrl) {
+  1209→    score += 0.10; // photo exists
+  1210→    if (fraudCheck?.primaryPhoto?.exifStatus === 'ok') score += 0.05;
+  1211→    if (fraudCheck?.primaryPhoto?.gps) score += 0.05;
+  1212→  }
+  1213→
+  1214→  // 3. Agent Reliability (0 to 0.25)
+  1215→  const agentTrust = agent.trust_score ?? 0.5;
+  1216→  score += agentTrust * 0.25;
+  1217→
+  1218→  // 4. Data Completeness (0 to 0.15)
+  1219→  // What fraction of enrichable fields were filled?
+  1220→  const vertical = getVertical(event.category);
+  1221→  const totalFields = vertical.enrichableFields.length + vertical.createRequiredFields.length;
+  1222→  const filledFields = totalFields - (event.gaps?.length ?? totalFields);
+  1223→  const completeness = totalFields > 0 ? filledFields / totalFields : 0;
+  1224→  score += completeness * 0.15;
+  1225→
+  1226→  // 5. Temporal Freshness (0 to 0.10)
+  1227→  // How recently was the EXIF timestamp relative to submission?
+  1228→  if (fraudCheck?.primaryPhoto?.capturedAt) {
+  1229→    const capturedAt = new Date(fraudCheck.primaryPhoto.capturedAt).getTime();
+  1230→    const submittedAt = new Date(event.createdAt).getTime();
+  1231→    const ageMinutes = (submittedAt - capturedAt) / (1000 * 60);
+  1232→    if (ageMinutes < 5) score += 0.10;
+  1233→    else if (ageMinutes < 30) score += 0.08;
+  1234→    else if (ageMinutes < 60) score += 0.05;
+  1235→    else score += 0.02;
+  1236→  }
+  1237→
+  1238→  // 6. Fraud Signal (-0.30 to 0.05)
+  1239→  if (fraudCheck?.primaryPhoto?.submissionGpsMatch === false) {
+  1240→    score -= 0.30; // photo GPS doesn't match submission location
+  1241→  } else if (fraudCheck?.primaryPhoto?.submissionGpsMatch === true) {
+  1242→    score += 0.05;
+  1243→  }
+  1244→
+  1245→  return Math.max(0, Math.min(1, score));
+  1246→}
+  1247→```
+  1248→
+  1249→### 5.2 Per-Entity Confidence Score
+  1250→
+  1251→Entity confidence is an aggregate of all observations for that entity.
+  1252→
+  1253→```typescript
+  1254→function computeEntityConfidence(
+  1255→  entity: ProjectedPoint,
+  1256→  observations: ObservationEvent[],
+  1257→): number {
+  1258→  if (observations.length === 0) return 0;
+  1259→
+  1260→  // Weighted average of observation confidences, with recency bias
+  1261→  const now = Date.now();
+  1262→  let weightedSum = 0;
+  1263→  let totalWeight = 0;
+  1264→
+  1265→  for (const obs of observations) {
+  1266→    const ageMs = now - new Date(obs.createdAt).getTime();
+  1267→    const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  1268→
+  1269→    // Exponential decay: half-life of 30 days
+  1270→    const recencyWeight = Math.pow(0.5, ageDays / 30);
+  1271→    const weight = recencyWeight;
+  1272→
+  1273→    weightedSum += obs.confidence * weight;
+  1274→    totalWeight += weight;
+  1275→  }
+  1276→
+  1277→  let baseConfidence = totalWeight > 0 ? weightedSum / totalWeight : 0;
+  1278→
+  1279→  // Bonus for multiple observers (corroboration)
+  1280→  const uniqueAgents = new Set(observations.map(o => o.userId)).size;
+  1281→  if (uniqueAgents >= 3) baseConfidence += 0.10;
+  1282→  else if (uniqueAgents >= 2) baseConfidence += 0.05;
+  1283→
+  1284→  // Bonus for observation count
+  1285→  if (observations.length >= 5) baseConfidence += 0.05;
+  1286→  else if (observations.length >= 3) baseConfidence += 0.03;
+  1287→
+  1288→  // Penalty for gaps
+  1289→  const gapPenalty = (entity.gaps?.length ?? 0) * 0.02;
+  1290→  baseConfidence -= gapPenalty;
+  1291→
+  1292→  return Math.max(0, Math.min(1, baseConfidence));
+  1293→}
+  1294→```
+  1295→
+  1296→### 5.3 Per-Delta Confidence Score
+  1297→
+  1298→Delta confidence depends on the quality of both the "before" and "after" observations.
+  1299→
+  1300→```typescript
+  1301→function computeDeltaConfidence(
+  1302→  beforeObservation: { confidence: number } | null,
+  1303→  afterObservation: { confidence: number },
+  1304→  deltaType: DeltaType,
+  1305→): number {
+  1306→  if (deltaType === 'new') {
+  1307→    // New entity: confidence is just the observation confidence
+  1308→    return afterObservation.confidence;
+  1309→  }
+  1310→
+  1311→  if (deltaType === 'removed') {
+  1312→    // Removed: we need to be confident it was there before AND
+  1313→    // confident we surveyed the area (it's not just a partial baseline miss)
+  1314→    return (beforeObservation?.confidence ?? 0) * 0.8;
+  1315→  }
+  1316→
+  1317→  if (deltaType === 'unchanged') {
+  1318→    return Math.min(
+  1319→      beforeObservation?.confidence ?? 0,
+  1320→      afterObservation.confidence,
+  1321→    );
+  1322→  }
+  1323→
+  1324→  // Changed: minimum of before and after
+  1325→  const before = beforeObservation?.confidence ?? 0;
+  1326→  const after = afterObservation.confidence;
+  1327→  return Math.min(before, after);
+  1328→}
+  1329→```
+  1330→
+  1331→### 5.4 Agent Trust Score
+  1332→
+  1333→Agent trust evolves over time based on their track record.
+  1334→
+  1335→```typescript
+  1336→function updateAgentTrustScore(
+  1337→  agent: UserProfile,
+  1338→  validationResult: 'confirmed' | 'corrected' | 'rejected',
+  1339→): number {
+  1340→  const current = agent.trust_score ?? 0.5;
+  1341→  const total = agent.total_observations ?? 0;
+  1342→
+  1343→  // Bayesian update with prior of 0.5
+  1344→  const priorWeight = 10; // pseudo-count (how many observations before prior fades)
+  1345→  const priorSum = 0.5 * priorWeight;
+  1346→
+  1347→  let confirmed = (current * (total + priorWeight)) - priorSum + priorWeight * 0.5;
+  1348→  // This is approximate; the real approach:
+  1349→
+  1350→  switch (validationResult) {
+  1351→    case 'confirmed':
+  1352→      return Math.min(1.0, current + (1 - current) * 0.02);
+  1353→    case 'corrected':
+  1354→      return Math.max(0.1, current - 0.03);
+  1355→    case 'rejected':
+  1356→      return Math.max(0.05, current - 0.10);
+  1357→  }
+  1358→}
+  1359→```
+  1360→
+  1361→---
+  1362→
+  1363→## 6. Temporal Model
+  1364→
+  1365→### 6.1 Time Representation
+  1366→
+  1367→**Rule: All timestamps stored as `timestamptz` (UTC internally). All API responses include ISO 8601 with timezone offset.**
+  1368→
+  1369→The existing codebase already uses ISO 8601 strings (e.g., `new Date().toISOString()` produces `2026-03-03T12:00:00.000Z`). This is correct.
+  1370→
+  1371→For display purposes, the Cameroon timezone offset is `UTC+01:00` (WAT, West Africa Time). Cameroon does not observe daylight saving time, so the offset is constant.
+  1372→
+  1373→```typescript
+  1374→// lib/shared/time.ts
+  1375→
+  1376→const CAMEROON_TZ = 'Africa/Douala'; // UTC+01:00, no DST
+  1377→
+  1378→export function toLocalDisplay(isoString: string, language: 'en' | 'fr'): string {
+  1379→  const date = new Date(isoString);
+  1380→  return date.toLocaleString(language === 'fr' ? 'fr-CM' : 'en-CM', {
+  1381→    timeZone: CAMEROON_TZ,
+  1382→    dateStyle: 'medium',
+  1383→    timeStyle: 'short',
+  1384→  });
+  1385→}
+  1386→
+  1387→export function toSnapshotDate(date: Date = new Date()): string {
+  1388→  // Snapshot dates are always in local Cameroon time
+  1389→  // to avoid confusion (a Monday 03:00 UTC snapshot is
+  1390→  // still Monday 04:00 WAT)
+  1391→  return date.toLocaleDateString('en-CA', { timeZone: CAMEROON_TZ });
+  1392→  // Returns YYYY-MM-DD
+  1393→}
+  1394→```
+  1395→
+  1396→### 6.2 "As-Of" Queries
+  1397→
+  1398→"What was the state of Bonamoussadi billboards on 2026-02-15?"
+  1399→
+  1400→The snapshot system already supports this. The `snapshots` table stores point-in-time state per entity per week.
+  1401→
+  1402→```sql
+  1403→-- All billboard entities as of a specific date
+  1404→SELECT
+  1405→  s.point_id,
+  1406→  s.site_name,
+  1407→  s.latitude,
+  1408→  s.longitude,
+  1409→  s.details,
+  1410→  s.gaps,
+  1411→  s.events_count,
+  1412→  s.snapshot_date AS state_as_of
+  1413→FROM snapshots s
+  1414→WHERE s.vertical_id = 'billboard'
+  1415→  AND s.snapshot_date = (
+  1416→    SELECT MAX(snapshot_date)
+  1417→    FROM snapshots
+  1418→    WHERE vertical_id = 'billboard'
+  1419→      AND snapshot_date <= '2026-02-15'
+  1420→  );
+  1421→```
+  1422→
+  1423→For entity-level history:
+  1424→
+  1425→```sql
+  1426→-- Full history of a specific entity
+  1427→SELECT
+  1428→  s.snapshot_date,
+  1429→  s.details,
+  1430→  d.delta_type,
+  1431→  d.delta_field,
+  1432→  d.previous_value,
+  1433→  d.current_value,
+  1434→  d.delta_summary
+  1435→FROM snapshots s
+  1436→LEFT JOIN snapshot_deltas d
+  1437→  ON d.point_id = s.point_id
+  1438→  AND d.snapshot_date = s.snapshot_date
+  1439→WHERE s.point_id = $1
+  1440→ORDER BY s.snapshot_date ASC;
+  1441→```
+  1442→
+  1443→### 6.3 Clock Drift on Offline Mobile Devices
+  1444→
+  1445→Mobile devices in Bonamoussadi may have incorrect system clocks (wrong timezone, NTP not synced, manual time set). The design handles this through three mechanisms:
+  1446→
+  1447→**Mechanism 1: Dual timestamps**
+  1448→
+  1449→Every observation stores both:
+  1450→- `device_clock_at`: The raw time from the device when the observation was recorded
+  1451→- `server_received_at`: The time the server first received the data (set server-side, always accurate)
+  1452→- `created_at`: The canonical timestamp, which uses server time when available
+  1453→
+  1454→```typescript
+  1455→// In offlineQueue.ts, when enqueueing:
+  1456→const item: QueueItem = {
+  1457→  // ...existing fields...
+  1458→  payload: {
+  1459→    ...payload,
+  1460→    details: {
+  1461→      ...(payload.details ?? {}),
+  1462→      _deviceClockAt: new Date().toISOString(),
+  1463→    },
+  1464→  },
+  1465→};
+  1466→```
+  1467→
+  1468→**Mechanism 2: Clock drift detection**
+  1469→
+  1470→```typescript
+  1471→function detectClockDrift(
+  1472→  deviceClockAt: string | null,
+  1473→  serverReceivedAt: string,
+  1474→): { driftMs: number; driftSeverity: 'none' | 'minor' | 'major' } {
+  1475→  if (!deviceClockAt) return { driftMs: 0, driftSeverity: 'none' };
+  1476→
+  1477→  const deviceTime = new Date(deviceClockAt).getTime();
+  1478→  const serverTime = new Date(serverReceivedAt).getTime();
+  1479→  const driftMs = deviceTime - serverTime;
+  1480→  const absDriftMs = Math.abs(driftMs);
+  1481→
+  1482→  let driftSeverity: 'none' | 'minor' | 'major';
+  1483→  if (absDriftMs < 5 * 60 * 1000) driftSeverity = 'none';       // < 5 min
+  1484→  else if (absDriftMs < 60 * 60 * 1000) driftSeverity = 'minor'; // < 1 hour
+  1485→  else driftSeverity = 'major';                                    // > 1 hour
+  1486→
+  1487→  return { driftMs, driftSeverity };
+  1488→}
+  1489→```
+  1490→
+  1491→**Mechanism 3: EXIF cross-reference**
+  1492→
+  1493→The existing `submissionFraud.ts` already extracts EXIF `DateTimeOriginal` from photos. Compare the photo capture time with both device clock and server time to triangulate the true observation time.
+  1494→
+  1495→```
+  1496→If EXIF time is close to server time but far from device clock:
+  1497→  -> Device clock is wrong. Use server time.
+  1498→
+  1499→If EXIF time is close to device clock but far from server time:
+  1500→  -> Data was collected offline and synced later. Use EXIF time.
+  1501→
+  1502→If all three times are close:
+  1503→  -> No drift. Use server time.
+  1504→
+  1505→If all three times differ:
+  1506→  -> Use server_received_at minus estimated transit delay.
+  1507→```
+  1508→
+  1509→### 6.4 Retention and Archival Policies
+  1510→
+  1511→| Data Type | Hot Storage | Warm Storage | Cold/Archive |
+  1512→|-----------|-------------|--------------|--------------|
+  1513→| `point_events` (observations) | Last 12 months | 12-36 months | 36+ months |
+  1514→| `snapshots` (weekly state) | Last 52 weeks | 2-5 years | 5+ years |
+  1515→| `snapshot_deltas` (changes) | Last 52 weeks | 2-5 years | 5+ years |
+  1516→| `snapshot_stats` (aggregates) | All time | -- | -- |
+  1517→| `media` (photos/videos) | Last 6 months full-res | 6-24 months (thumbnails) | Deleted after 24 months |
+  1518→| `merge_candidates` (resolved) | Last 3 months | 3-12 months | Deleted |
+  1519→
+  1520→**Implementation via database partitioning:**
+  1521→
+  1522→```sql
+  1523→-- Example: partition snapshots by quarter
+  1524→-- (not needed at current scale, but ready for growth)
+  1525→
+  1526→-- For now, a simple archival policy:
+  1527→-- Run monthly via Vercel Cron
+  1528→
+  1529→-- Archive observations older than 12 months to cold storage
+  1530→-- (In practice, move to a separate Postgres schema or S3 export)
+  1531→
+  1532→-- Delete resolved merge candidates older than 3 months
+  1533→DELETE FROM merge_candidates
+  1534→WHERE decision IN ('merged', 'rejected', 'distinct')
+  1535→  AND resolved_at < now() - interval '3 months';
+  1536→```
+  1537→
+  1538→**Compliance note (Law No. 2024/017):** Personal data (agent profiles, phone numbers, photos with faces) must be deletable upon request. The design supports this because:
+  1539→1. Agent identity is stored separately in `user_profiles`
+  1540→2. Observations reference agents by `user_id`, which can be anonymized
+  1541→3. Photos are stored in Vercel Blob with deterministic URLs, enabling bulk deletion
+  1542→4. A `data_deletion_requests` table tracks GDPR/local-law deletion requests
+  1543→
+  1544→```sql
+  1545→CREATE TABLE IF NOT EXISTS data_deletion_requests (
+  1546→  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  1547→  user_id         text NOT NULL,
+  1548→  request_type    text NOT NULL CHECK (request_type IN ('anonymize', 'delete_all')),
+  1549→  status          text NOT NULL DEFAULT 'pending'
+  1550→                  CHECK (status IN ('pending', 'in_progress', 'completed', 'failed')),
+  1551→  requested_at    timestamptz NOT NULL DEFAULT now(),
+  1552→  completed_at    timestamptz,
+  1553→  details         jsonb DEFAULT '{}'
+  1554→);
+  1555→```
+  1556→
+  1557→---
+  1558→
+  1559→## Summary: What Changes in the Existing Codebase
+  1560→
+  1561→The design above is intentionally additive. It builds on the existing architecture rather than replacing it.
+  1562→
+  1563→**New files to create:**
+  1564→- `lib/shared/id.ts` -- UUID v7 generation with prefixes
+  1565→- `lib/shared/time.ts` -- timezone utilities
+  1566→- `lib/server/deduplication.ts` -- entity deduplication engine
+  1567→- `lib/server/confidenceScoring.ts` -- quality scoring functions
+  1568→
+  1569→**Existing files to extend:**
+  1570→- `shared/verticals.ts` -- add `census` and `transport_road` vertical configs
+  1571→- `shared/types.ts` -- add new TypeScript interfaces (CensusDetails, TransportRoadDetails, etc.)
+  1572→- `shared/geofence.ts` -- migrate hardcoded bounds to database-driven zone lookup
+  1573→- `lib/server/snapshotEngine.ts` -- add severity scoring, confidence scoring, partial baseline handling
+  1574→- `lib/server/pointProjection.ts` -- add entity confidence computation
+  1575→- `lib/client/offlineQueue.ts` -- add device clock timestamp to queued items
+  1576→
+  1577→**New database migrations:**
+  1578→- `20260304_zones_table.sql` -- zones table
+  1579→- `20260304_locations_table.sql` -- locations table
+  1580→- `20260304_entities_table.sql` -- materialized entities table
+  1581→- `20260304_media_table.sql` -- media table
+  1582→- `20260304_extend_point_events.sql` -- new columns on point_events
+  1583→- `20260304_extend_user_profiles.sql` -- agent trust scoring columns
+  1584→- `20260304_extend_snapshot_deltas.sql` -- severity and confidence columns
+  1585→- `20260304_merge_candidates.sql` -- deduplication queue
+  1586→- `20260304_survey_campaigns.sql` -- baseline tracking
+  1587→- `20260304_data_deletion_requests.sql` -- compliance
+  1588→- `20260304_add_new_verticals.sql` -- add census and transport_road to category CHECK constraint
+  1589→

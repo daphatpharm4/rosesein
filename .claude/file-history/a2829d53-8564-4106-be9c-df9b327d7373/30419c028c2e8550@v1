@@ -1,0 +1,168 @@
+# Plan: Implement Remaining Research UI Features
+
+## Context
+The research document (`research/08-ui-ux-design-research.md`) describes a comprehensive UI/UX spec. About 60% is implemented. The user wants all remaining features built, with the hard constraint of staying under Vercel's 12 serverless function limit (currently 9). **All features below are frontend-only — zero new API routes.**
+
+---
+
+## Phase 1: ContributionFlow Enhancements (5 features, all in one file)
+> File: `components/Screens/ContributionFlow.tsx`
+
+### 1A. GPS Confidence Indicator [S]
+- Store `gpsAccuracy` state from `navigator.geolocation` (switch `getCurrentPosition` → `watchPosition` or capture `coords.accuracy`)
+- In `renderCommonLocationBlock()`, render 5 dots below GPS readout: filled = `bg-[#4c7c59]`, empty = `bg-gray-200`
+- Thresholds: ≤10m=5, ≤25m=4, ≤50m=3, ≤100m=2, >100m=1
+- Bilingual label: Excellent/Good/Fair/Poor
+
+### 1B. Photo Overlay Guides + Vertical Tips [M]
+- Add `PHOTO_GUIDE_CONFIG` constant keyed by vertical ID with `{ frameLabel: {en,fr}, tips: Array<{en,fr}> }`
+  - pharmacy: "Capture the green cross sign and full storefront"
+  - mobile_money: "Show the provider logo and agent booth"
+  - fuel_station: "Capture the brand sign and pump area"
+  - alcohol_outlet: "Show the business sign and entrance"
+  - billboard: "Capture the full billboard face including frame"
+  - transport_road: "Capture the road surface and any blockage"
+  - census_proxy: "Capture the full building from ground to roof"
+- In `renderPhotoBlock()` when `!photoPreview`: overlay a dashed border guide frame (`absolute inset-4 border-2 border-dashed border-white/60 rounded-xl`) with centered vertical name
+- Below photo block: render 2-3 bullet tips from config in `text-xs text-gray-500`
+
+### 1C. Smart Defaults / Auto-fill [S]
+- Read `localStorage.getItem('adl_last_vertical')` on mount as default vertical
+- Save to localStorage on successful submission
+- Default `isOpenNow` based on time: `true` if 8am-6pm, `false` otherwise
+
+### 1D. Quality Preview Before Submit [M]
+- New `renderQualityPreview()` function rendering a card before the submit button
+- GPS accuracy score: map `gpsAccuracy` to 0-100 (≤10m=100, ≤25m=80, ≤50m=60, ≤100m=40, else 20)
+- Photo score: 100 if photo exists, 0 otherwise
+- Completeness: count filled required fields vs `VERTICALS[vertical].createRequiredFields`
+- Estimated XP: `BASE_EVENT_XP` (from `shared/xp.ts`) + quality estimate
+- Render as 2x2 grid with color-coded indicators
+- **Depends on**: 1A (gpsAccuracy state)
+
+### 1E. Voice Input [M]
+- Create inline `VoiceMicButton` component (or `components/shared/VoiceMicButton.tsx`)
+- Check `window.SpeechRecognition || window.webkitSpeechRecognition` availability
+- Props: `onResult`, `language`, `disabled`
+- Use `lang: 'fr-CM'` with fallback to `'fr-FR'` then `'fr'`
+- Render `Mic` icon (lucide-react), red pulse when listening
+- Graceful degradation: don't render if API unavailable
+- Add next to text inputs in `renderCreateFields()` and `renderEnrichFieldInput()`
+
+---
+
+## Phase 2: Profile & Map Enhancements (4 features)
+
+### 2A. Weekly Target Visualization [S]
+> File: `components/Screens/Profile.tsx`
+- `WEEKLY_TARGET = 50` constant
+- Add a full-width card after the stats grid showing: `"This week: {pointsThisWeek}/50 target"` with progress bar
+- Progress bar: `bg-gradient-to-r from-[#0f2b46] to-[#4c7c59]`
+- Bonus text: "Complete 50 this week for a 20 XP bonus!"
+
+### 2B. Proximity Bar on Map [M]
+> Files: `components/Screens/HomeMap.tsx`, `components/Screens/Home.tsx`
+- Add `nearbyEnrichCount` prop to HomeMap
+- Render bottom overlay bar (`absolute bottom-4 inset-x-4 z-20`) when count > 0
+- In Home.tsx: compute count using Haversine distance (agent geolocation vs points within 200m that have enrichable gaps)
+- Pass computed count as prop to HomeMap
+
+### 2C. Assignment Zone Overlay [S]
+> Files: `components/Screens/HomeMap.tsx`, `components/Screens/Home.tsx`
+- `CollectionAssignment` has `zoneBounds: { south, west, north, east }` — render as react-leaflet `<Rectangle>` with `fillColor: '#c86b4a'`, `fillOpacity: 0.1`, `weight: 2`
+- Add `assignmentZones` prop to HomeMap
+- Pass from Home.tsx using `assignments` state data
+
+### 2D. Map Heat Map Layer [M]
+> Files: `components/Screens/HomeMap.tsx`, `package.json`
+- Install `leaflet.heat` package
+- Add toggle button (Layers icon) in top-right map overlay
+- When toggled: render heatmap from `mapPointGroups` as `[lat, lng, 1]` array
+- Use `useMap()` hook in a `HeatmapLayer` child component to add/remove layer
+- Add `declare module 'leaflet.heat'` type stub if needed
+
+---
+
+## Phase 3: XP & Engagement (2 features)
+
+### 3A. XP Popup Animations [S]
+> Files: `components/XPPopup.tsx`, `index.html`
+- Add CSS keyframes to `index.html`:
+  - `xp-count-up`: translateY(20px) + scale(0.8) → normal
+  - `xp-slide-in`: translateX(-20px) → normal (staggered delays for 3 breakdown cards)
+  - `xp-pulse`: subtle scaleX pulse on level progress bar
+- Apply animations via `style={{ animation: '...' }}` on XPPopup elements
+
+### 3B. Level-Up Celebration [M]
+> Files: new `components/LevelUpCelebration.tsx`, `components/Screens/ContributionFlow.tsx`, `index.html`
+- Full-screen overlay: `fixed inset-0 z-50 bg-[#0f2b46]/90 backdrop-blur`
+- Content: large level number with scale-in animation, "LEVEL UP!" text, CSS confetti particles (20-30 divs with randomized fall animations)
+- Auto-dismiss after 3s or on tap
+- Level calculation: `Math.floor(totalXp / 100) + 1`
+- Track previous XP in localStorage, compare after submission to detect level-up
+- Show celebration before XPPopup, transition on dismiss
+- Add `confetti-fall` and `level-scale-in` keyframes to `index.html`
+
+---
+
+## Phase 4: Admin Enhancements (2 features)
+
+### 4A. Admin Split-Panel for Desktop [M]
+> File: `components/Screens/AdminQueue.tsx`
+- Wrap main content in `lg:flex lg:gap-4` container
+- Left panel (`lg:w-[380px] lg:shrink-0 lg:overflow-y-auto lg:h-[calc(100%-200px)]`): queue list
+- Right panel (`lg:flex-1 lg:overflow-y-auto`): detail view (currently selectedGroup block)
+- On mobile (< lg): keep current stacked layout unchanged
+- "Select an item" placeholder when nothing selected on desktop
+
+### 4B. Admin Bulk Approve with Checkboxes [M]
+> File: `components/Screens/AdminQueue.tsx`
+- Add `selectedForBulk: Set<string>` state
+- Checkbox on each queue list item toggling set membership
+- "Select All Low-Risk" toggle button
+- Modify existing `handleBulkApproveLowRisk` to use selection if non-empty
+- Show selected count in button label
+
+---
+
+## Phase 5: Nice-to-Have (1 feature, defer if time-constrained)
+
+### 5A. Offline Map Tiles [L]
+> Files: new `public/sw.js`, `index.html` or `index.tsx`
+- Service worker intercepting tile requests for `tile.openstreetmap.org`
+- Pre-cache Bonamoussadi area at zoom 14-17 (~200 tiles) on first load
+- Cache-first strategy for tiles, network-first for API
+- **Complex, consider deferring or making opt-in via Settings**
+
+---
+
+## Files Modified Summary
+| File | Features |
+|------|----------|
+| `components/Screens/ContributionFlow.tsx` | 1A, 1B, 1C, 1D, 1E, 3B |
+| `components/Screens/Profile.tsx` | 2A |
+| `components/Screens/HomeMap.tsx` | 2B, 2C, 2D |
+| `components/Screens/Home.tsx` | 2B, 2C |
+| `components/XPPopup.tsx` | 3A |
+| `components/Screens/AdminQueue.tsx` | 4A, 4B |
+| `index.html` | 3A, 3B (CSS keyframes) |
+| `package.json` | 2D (leaflet.heat) |
+| **New:** `components/LevelUpCelebration.tsx` | 3B |
+| **New:** `components/shared/VoiceMicButton.tsx` | 1E (optional extraction) |
+| **New (defer):** `public/sw.js` | 5A |
+
+## Reuse References
+- `shared/xp.ts` → `BASE_EVENT_XP`, `getEffectiveEventXp()`
+- `shared/verticals.ts` → `VERTICALS`, `createRequiredFields`, vertical colors/labels
+- `shared/types.ts` → `CollectionAssignment.zoneBounds: ZoneBounds { south, west, north, east }`
+- Existing `t()` pattern for bilingual strings
+- Card pattern: `bg-white p-4 rounded-2xl border border-gray-100 shadow-sm`
+- Label pattern: `text-[10px] font-bold uppercase tracking-widest`
+
+## Verification
+1. Run `npx vite build` — must succeed with no new errors
+2. Confirm serverless function count unchanged: `find api -name "*.ts" | wc -l` → 9
+3. Manual testing on iPhone Safari: GPS indicator visible, photo overlay renders, step dots accurate
+4. Test ContributionFlow: select vertical → see overlay → capture photo → see GPS bar → see quality preview → submit → see XP animation → (level-up if threshold crossed)
+5. Test Admin on desktop: split panel layout at ≥1024px, bulk checkboxes work
+6. Test HomeMap: agent blue dot, assignment zone rectangle, proximity bar, heatmap toggle

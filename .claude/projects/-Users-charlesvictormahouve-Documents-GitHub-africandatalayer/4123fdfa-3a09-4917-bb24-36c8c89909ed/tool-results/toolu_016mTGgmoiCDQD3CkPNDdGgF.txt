@@ -1,0 +1,1662 @@
+     1→# ADL UI/UX Design Research: Field Capture App Layout & Design System
+     2→## Bonamoussadi, Douala, Cameroon
+     3→
+     4→**Teammate 8 -- UI/UX Designer Deliverable**
+     5→**Date:** March 2026
+     6→
+     7→---
+     8→
+     9→## Table of Contents
+    10→
+    11→1. [User Research Summary](#1-user-research-summary)
+    12→2. [Design Principles & System](#2-design-principles--system)
+    13→3. [Field Capture App Layout](#3-field-capture-app-layout)
+    14→4. [Capture Flow Optimization](#4-capture-flow-optimization)
+    15→5. [Admin Dashboard Layout](#5-admin-dashboard-layout)
+    16→6. [Client-Facing Dashboard](#6-client-facing-dashboard)
+    17→7. [Gamification & Engagement](#7-gamification--engagement)
+    18→8. [Benchmark Research](#8-benchmark-research)
+    19→
+    20→---
+    21→
+    22→## Relationship to Prior Deliverables
+    23→
+    24→This document builds on the work of Teammates 1-7 and the existing codebase:
+    25→
+    26→- **Teammate 1 (Local Context):** The 7 verticals (pharmacy, fuel, mobile money, alcohol, billboard, transport road, census proxy), Bonamoussadi's middle-class character, ~560 businesses, seasonal flooding (June-October), and the dominance of the informal sector all shape the UI requirements. Mobile network coverage is strong (MTN, Orange), supporting a PWA approach.
+    27→- **Teammate 2 (System Design):** The event-sourced data model (`point_events` with `CREATE_EVENT` / `ENRICH_EVENT`), projected points, weekly snapshots, delta computation, and per-vertical field schemas define exactly what the UI must capture. The `enrichableFields` and `createRequiredFields` per vertical directly inform form design.
+    28→- **Teammate 6 (Anti-Fraud):** GPS integrity checks, EXIF validation, photo deduplication, velocity analysis, and confidence scoring all have UI implications. The agent must see fraud check results, trust scores, and quality indicators. Client-side mock location detection and sensor data collection happen transparently during capture.
+    29→- **Teammate 7 (Marketing):** The three user personas (field agent, admin reviewer, data consumer/client) and the commercial value of delta reports shape the dashboard designs for each audience.
+    30→- **Existing Codebase:** The app is built as a React PWA (Vite, not Next.js) with Tailwind CSS, using lucide-react icons. Current screens include: Splash, Home (map + list toggle), Details, ContributionFlow, Profile, Analytics, Settings, QualityInfo, RewardsCatalog, AdminQueue, and DeltaDashboard. Navigation uses a 4-tab bottom bar (Explore, Contribute, Leaderboard/Impact, Profile). The brand colors are navy `#0f2b46`, gold `#f4c317`, terracotta `#c86b4a`, and forest green `#4c7c59`. Bilingual support (EN/FR) is implemented throughout.
+    31→
+    32→---
+    33→
+    34→## 1. User Research Summary
+    35→
+    36→### 1.1 Field Agent Persona
+    37→
+    38→```
+    39→┌─────────────────────────────────────────────────────┐
+    40→│  PERSONA: Field Agent                               │
+    41→│  "Jean-Paul" / "Marie-Claire"                       │
+    42→├─────────────────────────────────────────────────────┤
+    43→│  Age:           20-35 years old                     │
+    44→│  Education:     Secondary school / early university │
+    45→│  Tech Literacy: Medium (comfortable with WhatsApp,  │
+    46→│                 M-Pesa/Orange Money, basic camera)   │
+    47→│  Device:        Mid-range Android (Samsung A-series, │
+    48→│                 Tecno, Infinix). 5.5-6.5" screen.   │
+    49→│                 2-4GB RAM. Android 10-13.            │
+    50→│  Language:      French primary, some English         │
+    51→│  Daily Routine:                                     │
+    52→│    06:30  Wake up, check assignments on phone       │
+    53→│    07:30  Travel to assigned zone by moto-taxi      │
+    54→│    08:00  Begin field capture, walk commercial      │
+    55→│           corridors on foot                         │
+    56→│    12:00  Lunch break, sync data if WiFi available  │
+    57→│    13:00  Continue capture in afternoon zone        │
+    58→│    17:00  Final sync, review daily stats            │
+    59→│    17:30  Travel home                               │
+    60→│  Submissions/day: 30-60 POIs                        │
+    61→│  Weekly Target:  150-300 submissions                │
+    62→│  Monthly Income: 80,000-150,000 XAF ($130-250 USD) │
+    63→└─────────────────────────────────────────────────────┘
+    64→```
+    65→
+    66→**Key Pain Points:**
+    67→1. **Bright sunlight** -- Cannot read screen between 10am-3pm under direct equatorial sun. Needs maximum contrast.
+    68→2. **One-handed use** -- Often carrying a bag, umbrella (rainy season), or holding onto a moto-taxi. Needs thumb-reachable controls.
+    69→3. **Intermittent connectivity** -- Even in well-connected Bonamoussadi, signal drops in alleys, inside buildings, during rain. Must never lose data.
+    70→4. **Battery anxiety** -- Mid-range phones last 6-8 hours with GPS + camera active. Agents fear losing a day's work to a dead battery.
+    71→5. **Repetitive data entry fatigue** -- Capturing 50+ POIs per day with similar fields leads to frustration and shortcuts.
+    72→6. **French accent characters** -- Needs proper support for e, e with accents, c-cedilla, etc. on standard Android keyboards.
+    73→7. **Heat and sweat** -- Touchscreens become less responsive with wet/sweaty fingers. Needs larger touch targets.
+    74→
+    75→**Accessibility Requirements:**
+    76→- Minimum 48dp touch targets (Android Material Design guideline; 44pt for iOS)
+    77→- Minimum 16sp body text, 14sp minimum for secondary text
+    78→- WCAG AA contrast ratio (4.5:1 for normal text, 3:1 for large text)
+    79→- Screen brightness auto-adjustment support
+    80→- Haptic feedback on successful actions
+    81→- Audio confirmation tones (optional, for eyes-free operation)
+    82→
+    83→---
+    84→
+    85→### 1.2 Admin / Reviewer Persona
+    86→
+    87→```
+    88→┌─────────────────────────────────────────────────────┐
+    89→│  PERSONA: Admin Reviewer                            │
+    90→│  "Victor" / "Francine"                              │
+    91→├─────────────────────────────────────────────────────┤
+    92→│  Age:           25-40 years old                     │
+    93→│  Education:     University degree (data/GIS/IT)     │
+    94→│  Tech Literacy: High (comfortable with dashboards,  │
+    95→│                 spreadsheets, GIS tools)             │
+    96→│  Device:        Laptop (Chrome) + mid-range phone   │
+    97→│  Language:      French and English bilingual         │
+    98→│  Daily Routine:                                     │
+    99→│    09:00  Review overnight submissions              │
+   100→│    10:00  Process fraud flagged items                │
+   101→│    11:00  Assign weekly collection zones             │
+   102→│    14:00  Generate delta reports for clients         │
+   103→│    16:00  Monitor agent performance metrics          │
+   104→│  Reviews/day:   50-200 submissions                  │
+   105→│  Role:          Part-time (may also be a manager)   │
+   106→└─────────────────────────────────────────────────────┘
+   107→```
+   108→
+   109→**Key Pain Points:**
+   110→1. **Volume overwhelm** -- Reviewing 200 submissions/day requires fast keyboard-driven workflows, not click-heavy interfaces.
+   111→2. **Fraud detection fatigue** -- Reviewing photo evidence, GPS coordinates, and EXIF metadata side-by-side is cognitively demanding.
+   112→3. **Context switching** -- Moving between map view, photo view, and data fields requires too many clicks.
+   113→4. **No batch operations** -- Approving/rejecting one at a time is slow. Needs bulk approve for low-risk, auto-flagged items.
+   114→5. **Mobile review** -- Sometimes reviews on phone during commute. Admin interface must be responsive.
+   115→
+   116→---
+   117→
+   118→### 1.3 Data Consumer / Client Persona
+   119→
+   120→```
+   121→┌─────────────────────────────────────────────────────┐
+   122→│  PERSONA: Data Consumer                             │
+   123→│  "Rodrigue" (Brand Manager at SABC)                 │
+   124→│  "Aissatou" (GIS Analyst at Orange Cameroon)        │
+   125→├─────────────────────────────────────────────────────┤
+   126→│  Age:           30-50 years old                     │
+   127→│  Education:     MBA / Masters in relevant field     │
+   128→│  Tech Literacy: Medium-High (Excel/PowerBI, some   │
+   129→│                 SQL, comfortable with dashboards)    │
+   130→│  Device:        Laptop primary, phone secondary     │
+   131→│  Language:      French primary, English for tech    │
+   132→│  Usage Pattern:                                     │
+   133→│    Weekly:  Check delta reports, download CSV/PDF   │
+   134→│    Monthly: Deep-dive into vertical dashboards      │
+   135→│    Quarterly: Present insights to management        │
+   136→│  Budget:        CFA 2-15M/year ($3,300-$25,000)    │
+   137→└─────────────────────────────────────────────────────┘
+   138→```
+   139→
+   140→**Key Pain Points:**
+   141→1. **"Show me the delta"** -- Clients do not want raw data; they want change reports. "What opened/closed this week?"
+   142→2. **Export friction** -- Needs one-click CSV, GeoJSON, and PDF report generation, not complex query interfaces.
+   143→3. **Trust verification** -- Wants to see confidence scores, photo evidence, and verification status inline.
+   144→4. **Map-first thinking** -- Expects interactive maps with filtering, not tables of coordinates.
+   145→5. **Presentation-ready visuals** -- Needs charts and maps that can go directly into PowerPoint slides.
+   146→
+   147→---
+   148→
+   149→## 2. Design Principles & System
+   150→
+   151→### 2.1 Core Design Principles
+   152→
+   153→| # | Principle | Rationale |
+   154→|---|---|---|
+   155→| 1 | **Offline-first, always** | Connectivity in Douala is unreliable. Every interaction must work without a network connection. Sync status must be permanently visible. |
+   156→| 2 | **3-tap capture** | The most common action (adding a new POI) should complete in 3 taps: Select Vertical > Take Photo > Confirm. All other fields use smart defaults. |
+   157→| 3 | **Thumb-zone priority** | Critical actions (capture button, submit, confirm) must be in the bottom 60% of the screen, within thumb reach on a 6" phone held one-handed. |
+   158→| 4 | **Sunlight-readable** | Use high-contrast color combinations (dark text on light backgrounds, or white text on dark backgrounds). Avoid mid-tone grays for critical information. |
+   159→| 5 | **Progressive disclosure** | Show only essential fields first. Advanced/optional fields appear on expansion. Reduce cognitive load for low-literacy agents. |
+   160→| 6 | **Visual over textual** | Use icons, color codes, and photos as primary information carriers. Text is secondary. Supports low-literacy and bilingual usage. |
+   161→| 7 | **Forgiving interactions** | All destructive actions require confirmation. No data loss on accidental back-navigation. Undo available for recent actions. |
+   162→| 8 | **Honest feedback** | Never hide sync status, errors, or fraud flags. Trust is built through transparency with agents about their data quality. |
+   163→
+   164→### 2.2 Color Palette
+   165→
+   166→The existing codebase establishes a strong brand identity. The palette below formalizes and extends it for field use.
+   167→
+   168→#### Primary Colors
+   169→
+   170→| Role | Hex | Swatch | Usage |
+   171→|---|---|---|---|
+   172→| **Navy (Brand Primary)** | `#0f2b46` | Dark navy | Headers, primary buttons, navigation active state, brand identity |
+   173→| **Gold (Brand Accent)** | `#f4c317` | Warm gold | Brand logo layer, highlight alerts, premium features |
+   174→| **Terracotta (CTA)** | `#c86b4a` | Warm orange | Call-to-action buttons (Contribute, Add New), urgent indicators |
+   175→| **Forest Green (Success)** | `#4c7c59` | Muted green | Success states, verified badges, trust scores, sync complete |
+   176→
+   177→#### Semantic Colors
+   178→
+   179→| Role | Hex | Usage |
+   180→|---|---|---|
+   181→| **Error Red** | `#c53030` | Fraud flags, sync failures, validation errors |
+   182→| **Warning Amber** | `#d69e2e` | Offline banner, low battery, pending review |
+   183→| **Info Blue** | `#2b6cb0` | Informational tooltips, help text |
+   184→| **Neutral Background** | `#f9fafb` | Page backgrounds (existing) |
+   185→| **Card Background** | `#ffffff` | Card surfaces (existing) |
+   186→| **Border Light** | `#e5e7eb` | Card borders, dividers |
+   187→| **Text Primary** | `#1f2933` | Headings, primary content |
+   188→| **Text Secondary** | `#6b7280` | Descriptions, metadata |
+   189→| **Text Tertiary** | `#9ca3af` | Timestamps, labels |
+   190→
+   191→#### Vertical-Specific Colors (from existing `shared/verticals.ts`)
+   192→
+   193→| Vertical | Color | Background | Icon |
+   194→|---|---|---|---|
+   195→| Pharmacy | `#2f855a` | `#eaf3ee` | `pill` |
+   196→| Mobile Money | `#0f2b46` | `#e7eef4` | `landmark` |
+   197→| Fuel Station | `#c86b4a` | `#f7e8e1` | `fuel` |
+   198→| Alcohol Outlet | `#9b2c2c` | `#fde8e8` | `wine` |
+   199→| Billboard | `#d69e2e` | `#fefcbf` | `rectangle-horizontal` |
+   200→| Transport Road | `#718096` | `#edf2f7` | `route` |
+   201→| Census Proxy | `#4a5568` | `#e2e8f0` | `building-2` |
+   202→
+   203→#### Sunlight Readability Combinations
+   204→
+   205→For outdoor use, the following combinations maintain WCAG AAA contrast (7:1+):
+   206→
+   207→| Foreground | Background | Ratio | Use Case |
+   208→|---|---|---|---|
+   209→| `#1f2933` on `#ffffff` | 15.4:1 | Primary text on cards |
+   210→| `#ffffff` on `#0f2b46` | 13.2:1 | Text on navy headers/buttons |
+   211→| `#ffffff` on `#c86b4a` | 4.8:1 | Text on terracotta CTA (AA) |
+   212→| `#0f2b46` on `#f4c317` | 8.7:1 | Navy text on gold highlights |
+   213→| `#c53030` on `#ffffff` | 7.1:1 | Error text on white |
+   214→| `#1f2933` on `#f9fafb` | 14.8:1 | Text on page background |
+   215→
+   216→**Avoid in sunlight:** Mid-tone gray text (`#9ca3af`) on white backgrounds -- contrast drops below 3:1 under direct sunlight. Use `#6b7280` minimum for any readable text outdoors.
+   217→
+   218→### 2.3 Typography
+   219→
+   220→```
+   221→FONT STACK
+   222→──────────
+   223→Primary:    Inter (already loaded via Vite build)
+   224→Fallback:   -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif
+   225→
+   226→SCALE (Mobile)
+   227→──────────────
+   228→Display:    24px / 32px line-height / Bold (800)   -- Screen titles
+   229→Heading:    18px / 24px / Bold (700)                -- Section headers
+   230→Subheading: 14px / 20px / Semibold (600)            -- Card titles
+   231→Body:       14px / 20px / Regular (400)             -- Descriptions
+   232→Caption:    12px / 16px / Medium (500)              -- Metadata, labels
+   233→Micro:      10px / 14px / Bold (700)                -- Badges, status indicators
+   234→                                                       (UPPERCASE, tracking-widest)
+   235→
+   236→FRENCH LANGUAGE SUPPORT
+   237→───────────────────────
+   238→Inter supports full Latin Extended character set:
+   239→  e with acute, e with grave, a with grave, a with circumflex,
+   240→  c-cedilla, o with circumflex, u with grave, i with diaeresis, etc.
+   241→
+   242→All text fields use UTF-8 encoding.
+   243→Input fields must accept accented characters natively.
+   244→```
+   245→
+   246→**Typography rules for field use:**
+   247→- Never use font-weight below 400 for outdoor-readable text
+   248→- Body text minimum 14px (matches current codebase's `text-sm` = 14px)
+   249→- Touch-target labels minimum 12px
+   250→- Status badges and micro-text use 10px UPPERCASE BOLD TRACKING-WIDEST (already established pattern in codebase)
+   251→- Line height minimum 1.4x font size for readability
+   252→
+   253→### 2.4 Icon System
+   254→
+   255→The existing codebase uses `lucide-react` icons consistently. This is the correct choice:
+   256→
+   257→**Why lucide-react works for ADL:**
+   258→- 1,400+ icons in a consistent 24x24 grid
+   259→- SVG-based (scales without pixelation on any screen density)
+   260→- Tree-shakeable (only imported icons are bundled)
+   261→- No network dependency (works offline)
+   262→- Language-independent (universal visual symbols)
+   263→
+   264→**Vertical Icon Mapping (from existing `VerticalIcon.tsx`):**
+   265→
+   266→| Vertical | Icon | Visual Meaning |
+   267→|---|---|---|
+   268→| Pharmacy | `Pill` | Medicine capsule -- universal |
+   269→| Mobile Money | `Landmark` | Bank/institution -- financial service |
+   270→| Fuel Station | `Fuel` | Gas pump -- universal |
+   271→| Alcohol | `Wine` | Wine glass -- beverage |
+   272→| Billboard | `RectangleHorizontal` | Rectangular board |
+   273→| Transport Road | `Bus` / `Truck` | Vehicle / transport (note: `route` in verticals.ts config but `bus` in icon map) |
+   274→| Census | `Building2` | Multi-story building |
+   275→
+   276→**Recommendation:** Add missing icons to `VerticalIcon.tsx` for `route` (used in verticals.ts for transport_road) to maintain consistency.
+   277→
+   278→**Additional icon usage patterns (already established):**
+   279→- `ArrowLeft` -- Back navigation
+   280→- `MapPin` -- Location indicator
+   281→- `Camera` -- Photo capture
+   282→- `ShieldCheck` -- Verification / security status
+   283→- `Plus` / `PlusCircle` -- Add new / contribute
+   284→- `ChevronDown` -- Expandable menus
+   285→- `AlertTriangle` -- Warnings / errors
+   286→- `Award` -- XP / achievements
+   287→- `BadgeCheck` -- Trust verification
+   288→
+   289→### 2.5 Spacing & Touch Targets
+   290→
+   291→```
+   292→SPACING SCALE (Tailwind-aligned)
+   293→────────────────────────────────
+   294→4px   (p-1)   -- Icon padding, tight spacing
+   295→8px   (p-2)   -- Inner card padding, icon margins
+   296→12px  (p-3)   -- Field spacing within forms
+   297→16px  (p-4)   -- Card padding, section spacing
+   298→24px  (p-6)   -- Section separation
+   299→32px  (p-8)   -- Major section breaks
+   300→48px  (p-12)  -- Bottom safe area spacing
+   301→
+   302→TOUCH TARGETS
+   303→─────────────
+   304→Minimum:     48x48dp (12x12 Tailwind = h-12 w-12)
+   305→Preferred:   56x56dp (14x14 Tailwind = h-14 w-14)
+   306→CTA Buttons: 56dp height minimum (h-14)
+   307→Nav Items:   64dp height (h-16, matching current nav)
+   308→Form Fields: 44dp minimum height (h-11)
+   309→
+   310→SPACING BETWEEN TOUCH TARGETS
+   311→──────────────────────────────
+   312→Minimum gap: 8dp between adjacent touchable elements
+   313→Preferred:   12dp gap for form fields
+   314→```
+   315→
+   316→**Rationale for 48dp minimum:** Standard Android Material Design recommends 48dp. In Douala's humid climate (80-95% humidity year-round), sweaty fingers reduce touch precision. Field agents may be walking while tapping. The 48dp minimum compensates for these conditions.
+   317→
+   318→### 2.6 Dark/Light Mode Strategy
+   319→
+   320→**Recommendation: Do NOT implement dark mode for v1.**
+   321→
+   322→Rationale:
+   323→1. **Sunlight readability is the priority.** Dark mode is harder to read in bright sunlight. The primary use case is outdoor field capture between 7am-5pm.
+   324→2. **Cognitive consistency.** Agents switch between the app and their camera frequently. Maintaining one consistent visual mode reduces disorientation.
+   325→3. **Development cost.** Dark mode doubles the testing surface for contrast ratios, color accessibility, and visual hierarchy.
+   326→
+   327→**Instead, implement:**
+   328→- **Auto-brightness support:** Ensure the app does not override system brightness settings
+   329→- **High-contrast mode:** A settings toggle that increases all text to bold weight and switches to maximum-contrast color pairs (pure black on white)
+   330→- **Night capture mode (future):** For alcohol outlet agents working evening shifts, a true dark theme could be added later when the use case is validated
+   331→
+   332→---
+   333→
+   334→## 3. Field Capture App Layout
+   335→
+   336→### 3.1 Screen Architecture (Current vs. Proposed)
+   337→
+   338→The existing app has a solid screen architecture. The proposals below refine rather than replace it.
+   339→
+   340→```
+   341→CURRENT SCREEN ARCHITECTURE (from App.tsx)
+   342→──────────────────────────────────────────
+   343→Splash ──> Home (Map + List) ──> Details ──> ContributionFlow
+   344→                │                                    │
+   345→                ├──> Analytics/Leaderboard            │
+   346→                ├──> Profile ──> Settings             │
+   347→                │              ├──> RewardsCatalog    │
+   348→                │              └──> QualityInfo       │
+   349→                ├──> Auth                             │
+   350→                ├──> AdminQueue (admin only)           │
+   351→                └──> DeltaDashboard (admin only)      │
+   352→                                                      │
+   353→Bottom Nav: [Explore] [Contribute] [Impact] [Profile] │
+   354→            Hidden during: Splash, Auth, Contribute    │
+   355→
+   356→PROPOSED REFINEMENTS
+   357→────────────────────
+   358→1. Add "Submission Queue" to Profile (offline queue visibility)
+   359→2. Add "Batch Capture Mode" toggle to ContributionFlow
+   360→3. Add sync status banner to ALL screens (not just offline)
+   361→4. Add "Nearby Assignments" card to Home screen
+   362→5. Restructure ContributionFlow to be step-based wizard
+   363→```
+   364→
+   365→### 3.2 Home / Dashboard Screen
+   366→
+   367→The current Home screen is well-designed. Key refinements for field optimization:
+   368→
+   369→```
+   370→┌──────────────────────────────────────────┐
+   371→│  ┌──────────────────────────────────────┐│  <- Status bar (system)
+   372→│  │ ■ African Data Layer     [Admin] (●) ││  <- Header with brand logo
+   373→│  │ GPS Locked • Bonamoussadi, Douala    ││     (●) = avatar/profile
+   374→│  └──────────────────────────────────────┘│
+   375→│  ┌──────────────────────────────────────┐│
+   376→│  │ ● 3 Pending  ● 12 Synced  ● 2 Failed││  <- Sync status bar (NEW)
+   377→│  └──────────────────────────────────────┘│     Always visible
+   378→│  ┌──────────────────────────────────────┐│
+   379→│  │ ▼ Vertical: Pharmacie           [▼] ││  <- Vertical picker (existing)
+   380→│  └──────────────────────────────────────┘│
+   381→│  ┌──────────────────────────────────────┐│
+   382→│  │ TODAY'S ASSIGNMENTS                  ││  <- Assignment card (NEW)
+   383→│  │ Zone B-3 • 8/15 points • Due Fri    ││
+   384→│  │ [Start Capture ──────────────>]      ││
+   385→│  └──────────────────────────────────────┘│
+   386→│  ┌──────────────────────────────────────┐│
+   387→│  │                                      ││
+   388→│  │            MAP VIEW                  ││  <- Leaflet map (existing)
+   389→│  │         (with POI pins)              ││
+   390→│  │                                      ││
+   391→│  │  ●  ●     ●                          ││  <- Colored by vertical
+   392→│  │        ●       ●                     ││
+   393→│  │     ●              ●                 ││
+   394→│  │                                      ││
+   395→│  └──────────────────────────────────────┘│
+   396→│                                          │
+   397→│       [■ List View]          [+ ]        │  <- Toggle + FAB (existing)
+   398→│                                          │
+   399→│  ┌────┬────────┬──────────┬─────────────┐│
+   400→│  │ 🗺️  │   ➕    │   🏆     │    👤       ││  <- Bottom nav (existing)
+   401→│  │Expl │Contri │Impact   │Profile      ││
+   402→│  └────┴────────┴──────────┴─────────────┘│
+   403→└──────────────────────────────────────────┘
+   404→```
+   405→
+   406→**New elements explained:**
+   407→
+   408→1. **Sync Status Bar** (always visible, below header):
+   409→   - Shows count of pending, synced, and failed submissions
+   410→   - Color-coded: Green dot = synced, Amber dot = pending, Red dot = failed
+   411→   - Tapping opens the detailed Submission Queue
+   412→   - Replaces the current offline-only amber banner with an always-present status
+   413→
+   414→2. **Today's Assignments Card** (below vertical picker):
+   415→   - Shows current active assignment with progress bar
+   416→   - One-tap to begin route-guided capture
+   417→   - Collapses when no active assignments
+   418→   - Already partially implemented in Profile screen -- surfaces it on Home for quick access
+   419→
+   420→### 3.3 Map View (Existing -- Refinements)
+   421→
+   422→```
+   423→┌──────────────────────────────────────────┐
+   424→│  ┌──────────────────────────────────────┐│
+   425→│  │                                      ││
+   426→│  │  MAP TILES (Leaflet/OSM)             ││
+   427→│  │                                      ││
+   428→│  │  [Pharmacy]  ●                       ││  <- Category-colored markers
+   429→│  │        ● ●          ●                ││
+   430→│  │                                      ││
+   431→│  │    ●          ● (3)                  ││  <- Cluster count badge
+   432→│  │              ────                    ││
+   433→│  │         ●                            ││
+   434→│  │                                      ││
+   435→│  │  ┌──────────────────────────────┐    ││
+   436→│  │  │ Pharmacie de Bonamoussadi   │    ││  <- Popup on marker tap
+   437→│  │  │ Ouvert • De garde • 85% ✓  │    ││     (existing behavior)
+   438→│  │  │ Mis a jour il y a 2h        │    ││
+   439→│  │  │ [Voir detail] [Enrichir]    │    ││
+   440→│  │  └──────────────────────────────┘    ││
+   441→│  │                                      ││
+   442→│  │  ┌──────┐                            ││
+   443→│  │  │ ◎ Me │  <- Agent location (NEW)   ││
+   444→│  │  └──────┘                            ││
+   445→│  │                                      ││
+   446→│  └──────────────────────────────────────┘│
+   447→│                                          │
+   448→│  ┌──────────────────────────────────────┐│
+   449→│  │ NEARBY: 3 pharmacies within 200m    ││  <- Proximity bar (NEW)
+   450→│  │ 1 needs enrichment                  ││
+   451→│  └──────────────────────────────────────┘│
+   452→└──────────────────────────────────────────┘
+   453→```
+   454→
+   455→**Proposed map improvements:**
+   456→- **Agent location pin** with accuracy circle
+   457→- **Proximity bar** at bottom showing nearby POIs that need data or enrichment
+   458→- **Assignment zone overlay** -- shaded polygon showing the agent's assigned zone
+   459→- **Color intensity** -- darker markers for older data (needs refresh), brighter for fresh data
+   460→
+   461→### 3.4 Capture Form (ContributionFlow -- Major Redesign)
+   462→
+   463→The current ContributionFlow is a long single-page form. For field use, it should be a step-based wizard.
+   464→
+   465→```
+   466→STEP 1: VERTICAL SELECT (if CREATE mode)
+   467→┌──────────────────────────────────────────┐
+   468→│  [←]    New Data Point                   │
+   469→│                                          │
+   470→│  ┌──────────────────────────────────────┐│
+   471→│  │ What are you looking at?             ││
+   472→│  └──────────────────────────────────────┘│
+   473→│                                          │
+   474→│  ┌────────────────┐ ┌────────────────┐  │
+   475→│  │  💊             │ │  🏦             │  │
+   476→│  │  Pharmacie     │ │  Mobile Money  │  │
+   477→│  │                │ │                │  │
+   478→│  └────────────────┘ └────────────────┘  │
+   479→│  ┌────────────────┐ ┌────────────────┐  │
+   480→│  │  ⛽             │ │  🍷             │  │
+   481→│  │  Station       │ │  Alcool        │  │
+   482→│  │                │ │                │  │
+   483→│  └────────────────┘ └────────────────┘  │
+   484→│  ┌────────────────┐ ┌────────────────┐  │
+   485→│  │  📋             │ │  🛣️             │  │
+   486→│  │  Panneau pub.  │ │  Route         │  │
+   487→│  │                │ │                │  │
+   488→│  └────────────────┘ └────────────────┘  │
+   489→│  ┌────────────────┐                     │
+   490→│  │  🏢             │                     │
+   491→│  │  Batiment      │                     │
+   492→│  │                │                     │
+   493→│  └────────────────┘                     │
+   494→│                                          │
+   495→│  Step 1 of 4  ● ○ ○ ○                   │
+   496→└──────────────────────────────────────────┘
+   497→
+   498→STEP 2: PHOTO CAPTURE
+   499→┌──────────────────────────────────────────┐
+   500→│  [←]    Pharmacie                        │
+   501→│                                          │
+   502→│  ┌──────────────────────────────────────┐│
+   503→│  │                                      ││
+   504→│  │          CAMERA VIEWFINDER           ││
+   505→│  │                                      ││
+   506→│  │    ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐        ││
+   507→│  │    │                       │        ││  <- Overlay guide
+   508→│  │    │   Center the building │        ││     frame
+   509→│  │    │   signage here        │        ││
+   510→│  │    │                       │        ││
+   511→│  │    └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘        ││
+   512→│  │                                      ││
+   513→│  │  GPS: 4.0821°, 9.7354°  ±5m         ││  <- Live GPS readout
+   514→│  │  [                                ]  ││     Accuracy indicator
+   515→│  │                                      ││
+   516→│  └──────────────────────────────────────┘│
+   517→│                                          │
+   518→│         [     ◉ CAPTURE      ]           │  <- Large shutter button
+   519→│                                          │  <- 72dp height for
+   520→│  [Skip Photo]            [Gallery]       │     easy thumb tap
+   521→│                                          │
+   522→│  Step 2 of 4  ● ● ○ ○                   │
+   523→└──────────────────────────────────────────┘
+   524→
+   525→STEP 3: ESSENTIAL FIELDS (3 fields max)
+   526→┌──────────────────────────────────────────┐
+   527→│  [←]    Pharmacie                        │
+   528→│                                          │
+   529→│  ┌──────────────────────────────────────┐│
+   530→│  │ 📸 [Photo thumbnail]  ✓ GPS Locked  ││  <- Evidence summary
+   531→│  └──────────────────────────────────────┘│
+   532→│                                          │
+   533→│  ┌──────────────────────────────────────┐│
+   534→│  │ Nom / Name *                         ││
+   535→│  │ ┌────────────────────────────────┐   ││
+   536→│  │ │ Pharmacie de Bonamoussadi     │   ││  <- Auto-fill from
+   537→│  │ └────────────────────────────────┘   ││     nearby OSM data
+   538→│  └──────────────────────────────────────┘│
+   539→│  ┌──────────────────────────────────────┐│
+   540→│  │ Ouvert maintenant? *                 ││
+   541→│  │                                      ││
+   542→│  │  [  OUI  ✓ ]    [  NON  ]           ││  <- Binary toggle,
+   543→│  │                                      ││     NOT dropdown
+   544→│  └──────────────────────────────────────┘│
+   545→│  ┌──────────────────────────────────────┐│
+   546→│  │ 🎤 Voice input available            ││  <- Voice input hint
+   547→│  └──────────────────────────────────────┘│
+   548→│                                          │
+   549→│  ┌──────────────────────────────────────┐│
+   550→│  │ + More fields (optional)        [▼] ││  <- Progressive disclosure
+   551→│  └──────────────────────────────────────┘│
+   552→│                                          │
+   553→│         [    SUIVANT / NEXT     ]         │
+   554→│                                          │
+   555→│  Step 3 of 4  ● ● ● ○                   │
+   556→└──────────────────────────────────────────┘
+   557→
+   558→STEP 4: REVIEW & SUBMIT
+   559→┌──────────────────────────────────────────┐
+   560→│  [←]    Confirmer                        │
+   561→│                                          │
+   562→│  ┌──────────────────────────────────────┐│
+   563→│  │ RESUME / SUMMARY                     ││
+   564→│  │                                      ││
+   565→│  │ Vertical:  Pharmacie                 ││
+   566→│  │ Nom:       Pharmacie de Bonamoussadi ││
+   567→│  │ Ouvert:    Oui ✓                     ││
+   568→│  │ GPS:       4.0821°, 9.7354°          ││
+   569→│  │ Photo:     ✓ Attached                ││
+   570→│  │ EXIF GPS:  ✓ Match (12m)             ││
+   571→│  │                                      ││
+   572→│  │ [📸 Photo preview]                   ││
+   573→│  └──────────────────────────────────────┘│
+   574→│                                          │
+   575→│  ┌──────────────────────────────────────┐│
+   576→│  │ ⚡ QUALITY CHECK                     ││
+   577→│  │ GPS Accuracy:  ●●●●○  Good           ││
+   578→│  │ Photo Quality: ●●●○○  Fair           ││  <- Real-time quality
+   579→│  │ Completeness:  ●●●●●  100%           ││     score preview
+   580→│  │ Est. XP:       +5 XP                 ││
+   581→│  └──────────────────────────────────────┘│
+   582→│                                          │
+   583→│  ┌──────────────────────────────────────┐│
+   584→│  │                                      ││
+   585→│  │  [    ✓ SOUMETTRE / SUBMIT    ]      ││  <- Full-width submit
+   586→│  │                                      ││     button, 56dp height
+   587→│  │                                      ││
+   588→│  └──────────────────────────────────────┘│
+   589→│                                          │
+   590→│  Step 4 of 4  ● ● ● ●                   │
+   591→└──────────────────────────────────────────┘
+   592→
+   593→POST-SUBMIT CONFIRMATION
+   594→┌──────────────────────────────────────────┐
+   595→│                                          │
+   596→│           ✓                              │
+   597→│                                          │
+   598→│      Soumis avec succes!                 │
+   599→│      Submitted successfully!             │
+   600→│                                          │
+   601→│      +5 XP                               │
+   602→│      ████████░░  Level 12                │
+   603→│                                          │
+   604→│  ┌──────────────────────────────────────┐│
+   605→│  │ [+ Ajouter un autre]                ││  <- Quick add next POI
+   606→│  └──────────────────────────────────────┘│
+   607→│  ┌──────────────────────────────────────┐│
+   608→│  │ [← Retour a la carte]               ││  <- Back to map
+   609→│  └──────────────────────────────────────┘│
+   610→│                                          │
+   611→│  Sync: ● Queued (will sync when online)  │
+   612→│                                          │
+   613→└──────────────────────────────────────────┘
+   614→```
+   615→
+   616→### 3.5 Photo Capture Screen
+   617→
+   618→```
+   619→┌──────────────────────────────────────────┐
+   620→│  ┌──────────────────────────────────────┐│
+   621→│  │                                      ││
+   622→│  │        CAMERA VIEWFINDER             ││
+   623→│  │                                      ││
+   624→│  │   ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐       ││
+   625→│  │   │                         │       ││
+   626→│  │   │    STOREFRONT GUIDE     │       ││
+   627→│  │   │    OVERLAY FRAME        │       ││  <- Semi-transparent
+   628→│  │   │                         │       ││     guide frame
+   629→│  │   │    Show: signage, door, │       ││
+   630→│  │   │    street number        │       ││
+   631→│  │   │                         │       ││
+   632→│  │   └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘       ││
+   633→│  │                                      ││
+   634→│  │   GPS: ●●●●○  4.0821, 9.7354        ││  <- GPS confidence
+   635→│  │   Accuracy: 5m ✓                     ││     indicator
+   636→│  │                                      ││
+   637→│  └──────────────────────────────────────┘│
+   638→│                                          │
+   639→│  ┌──────────────────────────────────────┐│
+   640→│  │ Tips:                                ││
+   641→│  │ • Include the business name sign     ││  <- Context-sensitive
+   642→│  │ • Capture the full facade            ││     tips per vertical
+   643→│  │ • Avoid photographing people         ││
+   644→│  └──────────────────────────────────────┘│
+   645→│                                          │
+   646→│  [Gallery]      [ ◉ ]      [Flash ⚡]    │  <- Shutter: 72dp
+   647→│                                          │     round button
+   648→│  ──────────────────────────────────────  │
+   649→│  After capture:                          │
+   650→│  [Retake]  [Preview ✓]  [Use Photo →]   │
+   651→│                                          │
+   652→└──────────────────────────────────────────┘
+   653→```
+   654→
+   655→**Photo capture guidelines by vertical:**
+   656→
+   657→| Vertical | Overlay Guide | Tip Text |
+   658→|---|---|---|
+   659→| Pharmacy | Rectangular frame with "PHARMACIE" label zone at top | "Capture the green cross sign and full storefront" |
+   660→| Mobile Money | Rectangular frame with provider logo zone | "Include the MTN/Orange branding visible" |
+   661→| Fuel Station | Wide landscape frame | "Capture the brand logo and pump area" |
+   662→| Alcohol | Standard storefront frame | "Show the business sign and entrance" |
+   663→| Billboard | Landscape rectangle with aspect ratio guide | "Capture the full billboard face including frame" |
+   664→| Transport Road | Landscape wide-angle guide | "Capture the road surface and any blockage" |
+   665→| Census | Tall building frame | "Capture the full building from ground to roof" |
+   666→
+   667→### 3.6 Submission Queue Screen
+   668→
+   669→```
+   670→┌──────────────────────────────────────────┐
+   671→│  [←]    File d'attente / Queue           │
+   672→│                                          │
+   673→│  ┌──────────────────────────────────────┐│
+   674→│  │ SYNC STATUS                          ││
+   675→│  │                                      ││
+   676→│  │ ● 3 En attente    ● 42 Synchronise  ││
+   677→│  │ ● 1 Echoue                           ││
+   678→│  │                                      ││
+   679→│  │ Last sync: il y a 15 min             ││
+   680→│  │ [    Forcer la synchronisation    ]  ││
+   681→│  └──────────────────────────────────────┘│
+   682→│                                          │
+   683→│  ECHOUE / FAILED                         │
+   684→│  ┌──────────────────────────────────────┐│
+   685→│  │ ⚠️ Pharmacie du Carrefour            ││
+   686→│  │ Erreur: Photo trop volumineuse       ││
+   687→│  │ GPS: 4.0815°, 9.7341°               ││
+   688→│  │ il y a 2h                            ││
+   689→│  │ [Reessayer]  [Modifier]  [Supprimer] ││
+   690→│  └──────────────────────────────────────┘│
+   691→│                                          │
+   692→│  EN ATTENTE / PENDING                    │
+   693→│  ┌──────────────────────────────────────┐│
+   694→│  │ ⏳ Station Total Makepe              ││
+   695→│  │ Fuel Station • CREATE_EVENT          ││
+   696→│  │ GPS: 4.0839°, 9.7402°               ││
+   697→│  │ il y a 30 min                        ││
+   698→│  └──────────────────────────────────────┘│
+   699→│  ┌──────────────────────────────────────┐│
+   700→│  │ ⏳ Orange Money Agent #12            ││
+   701→│  │ Mobile Money • ENRICH_EVENT          ││
+   702→│  │ GPS: 4.0827°, 9.7365°               ││
+   703→│  │ il y a 45 min                        ││
+   704→│  └──────────────────────────────────────┘│
+   705→│  ┌──────────────────────────────────────┐│
+   706→│  │ ⏳ Mur publicitaire Rue 3            ││
+   707→│  │ Billboard • CREATE_EVENT             ││
+   708→│  │ GPS: 4.0845°, 9.7388°               ││
+   709→│  │ il y a 1h                            ││
+   710→│  └──────────────────────────────────────┘│
+   711→│                                          │
+   712→│  ┌──────────────────────────────────────┐│
+   713→│  │ Storage: 14.2 MB / 50 MB cached     ││
+   714→│  │ ████████████░░░░░  28%               ││
+   715→│  └──────────────────────────────────────┘│
+   716→└──────────────────────────────────────────┘
+   717→```
+   718→
+   719→### 3.7 Profile / Settings Screen
+   720→
+   721→The existing Profile screen is comprehensive. Key refinements:
+   722→
+   723→```
+   724→┌──────────────────────────────────────────┐
+   725→│  [←]    Tableau de bord                  │
+   726→│                                          │
+   727→│  ┌──────────────────────────────────────┐│
+   728→│  │      [Avatar Photo]                  ││
+   729→│  │      Jean-Paul Makongo               ││
+   730→│  │      📍 Bonamoussadi, Douala         ││
+   731→│  │      Contributeur Senior             ││
+   732→│  └──────────────────────────────────────┘│
+   733→│                                          │
+   734→│  ┌──────────────────────────────────────┐│
+   735→│  │  ┌─────────┐  ┌─────────┐           ││
+   736→│  │  │  2,450  │  │   98%   │           ││
+   737→│  │  │   XP    │  │ Trust   │           ││
+   738→│  │  └─────────┘  └─────────┘           ││
+   739→│  │  ┌─────────┐  ┌─────────┐           ││
+   740→│  │  │    7    │  │   142   │           ││
+   741→│  │  │ Badges  │  │ Points  │           ││
+   742→│  │  │         │  │ This Wk │           ││
+   743→│  │  └─────────┘  └─────────┘           ││
+   744→│  └──────────────────────────────────────┘│
+   745→│                                          │
+   746→│  ┌──────────────────────────────────────┐│
+   747→│  │ WEEKLY ASSIGNMENT                    ││
+   748→│  │ Zone B-3 • Due: Vendredi            ││
+   749→│  │ ████████████░░░  8/15 points         ││
+   750→│  │ [Demarrer]  [Voir sur carte]         ││
+   751→│  └──────────────────────────────────────┘│
+   752→│                                          │
+   753→│  ┌──────────────────────────────────────┐│
+   754→│  │ SYNC QUEUE                           ││
+   755→│  │ 3 pending • 1 failed                ││
+   756→│  │ [Voir la file d'attente →]           ││
+   757→│  └──────────────────────────────────────┘│
+   758→│                                          │
+   759→│  ┌──────────────────────────────────────┐│
+   760→│  │ HISTORIQUE RECENT                    ││
+   761→│  │ Pharmacie du Carrefour  +5 XP  2h   ││
+   762→│  │ Orange Money Agent      +5 XP  3h   ││
+   763→│  │ Station Total           +5 XP  4h   ││
+   764→│  │ [Voir tout →]                        ││
+   765→│  └──────────────────────────────────────┘│
+   766→│                                          │
+   767→│  [Echanger XP]    [Recompenses]          │
+   768→│                                          │
+   769→└──────────────────────────────────────────┘
+   770→```
+   771→
+   772→---
+   773→
+   774→## 4. Capture Flow Optimization
+   775→
+   776→### 4.1 Walk-Up-and-Capture Flow
+   777→
+   778→The critical path: Agent arrives at a POI. What happens?
+   779→
+   780→```
+   781→OPTIMAL CAPTURE SEQUENCE (Target: 30-45 seconds per POI)
+   782→=========================================================
+   783→
+   784→1. APPROACH (0s)
+   785→   Agent walks up to a pharmacy.
+   786→   Phone is in hand, app is on Home/Map screen.
+   787→   The map shows their blue dot near an existing POI marker.
+   788→
+   789→2. DECISION POINT (5s)
+   790→   Two paths:
+   791→
+   792→   Path A: EXISTING POI (tap marker on map)
+   793→   ├── Popup shows: "Pharmacie de Bonamoussadi"
+   794→   ├── Popup shows: "Last updated 3 days ago"
+   795→   ├── Popup shows: "Gaps: isOnDuty, openingHours"
+   796→   └── Agent taps [Enrichir / Enrich]
+   797→       ├── Camera opens (EXIF GPS captured)
+   798→       ├── Agent takes photo (1 tap)
+   799→       ├── Form shows ONLY the 2 gap fields
+   800→       ├── Agent fills: isOnDuty = Oui (1 tap)
+   801→       ├── Agent fills: openingHours = "08:00-20:00" (3 taps)
+   802→       └── Agent taps [Soumettre] (1 tap)
+   803→       TOTAL: 6 taps, ~30 seconds
+   804→
+   805→   Path B: NEW POI (tap floating + button)
+   806→   ├── Grid shows 7 verticals
+   807→   ├── Agent taps "Pharmacie" (1 tap)
+   808→   ├── Camera opens with overlay guide
+   809→   ├── Agent takes photo (1 tap)
+   810→   ├── Form shows:
+   811→   │   - Name (auto-filled from nearby data? Or voice input)
+   812→   │   - isOpenNow: [Oui] / [Non] (1 tap)
+   813→   │   - "+ More fields" collapsed
+   814→   ├── Agent taps [Suivant] (1 tap)
+   815→   ├── Review screen shows summary
+   816→   └── Agent taps [Soumettre] (1 tap)
+   817→   TOTAL: 5 taps, ~35 seconds
+   818→
+   819→3. CONFIRMATION (1s)
+   820→   Success animation + XP award.
+   821→   [+ Ajouter un autre] button for rapid next capture.
+   822→```
+   823→
+   824→### 4.2 Progressive Disclosure Strategy
+   825→
+   826→Each vertical has `createRequiredFields` and `enrichableFields` defined in `shared/verticals.ts`. The UI uses this to determine what to show:
+   827→
+   828→```
+   829→PROGRESSIVE DISCLOSURE LEVELS
+   830→──────────────────────────────
+   831→
+   832→Level 1: MANDATORY (always visible)
+   833→  - Photo (camera step)
+   834→  - GPS (auto-captured)
+   835→  - createRequiredFields for the vertical
+   836→
+   837→  Example for Pharmacy:
+   838→    - name (text input)
+   839→    - isOpenNow (binary toggle)
+   840→
+   841→Level 2: RECOMMENDED (collapsed, expandable)
+   842→  - enrichableFields minus createRequiredFields
+   843→  - Shown as "+ X more fields (optional)"
+   844→
+   845→  Example for Pharmacy:
+   846→    - openingHours
+   847→    - isOnDuty
+   848→    - isLicensed
+   849→    - hasPrescriptionService
+   850→    - medicineCategories
+   851→
+   852→Level 3: ADVANCED (hidden, accessible from settings)
+   853→  - Secondary photo
+   854→  - Notes / free text
+   855→  - Override GPS coordinates
+   856→  - Device diagnostics
+   857→```
+   858→
+   859→**Implementation rule:** Level 1 fields use full-width, high-contrast input components. Level 2 fields appear in a collapsible section with a muted background. Level 3 fields are accessible only through a "More options" menu.
+   860→
+   861→### 4.3 Smart Defaults and Auto-Fill
+   862→
+   863→| Auto-Fill Source | What It Fills | How |
+   864→|---|---|---|
+   865→| **GPS coordinates** | Location fields | `navigator.geolocation` with high accuracy mode |
+   866→| **Nearby POI names** | Name field suggestion | Query existing points within 50m radius; suggest as autocomplete |
+   867→| **Previous submission** | Vertical selection | Default to the last-used vertical (if agent is doing a sweep of one type) |
+   868→| **Time of day** | isOpenNow | Default to "Yes" during business hours (8am-6pm), "No" otherwise |
+   869→| **EXIF data** | Photo GPS, timestamp | Extracted by `exifr` library (already in codebase) |
+   870→| **Device sensor** | Mock location flag, accelerometer | Collected via `gpsIntegrity.ts` (from Teammate 6's design) |
+   871→| **OSM seed data** | Name, brand, operator | Cross-reference GPS against `external_id` from OSM imports |
+   872→
+   873→### 4.4 Voice Input Support
+   874→
+   875→For low-literacy agents, voice input is critical for text fields (especially business names).
+   876→
+   877→```
+   878→VOICE INPUT IMPLEMENTATION
+   879→──────────────────────────
+   880→
+   881→Component: VoiceInput button next to text fields
+   882→
+   883→┌──────────────────────────────────────┐
+   884→│ Nom / Name *                         │
+   885→│ ┌──────────────────────────┐  [🎤]  │  <- Microphone button
+   886→│ │ Pharmacie du Carref...   │        │
+   887→│ └──────────────────────────┘        │
+   888→└──────────────────────────────────────┘
+   889→
+   890→On tap [🎤]:
+   891→1. Request microphone permission (one-time)
+   892→2. Use Web Speech API (SpeechRecognition)
+   893→3. Set language to 'fr-CM' (French, Cameroon)
+   894→4. Display real-time transcription
+   895→5. Agent taps [✓] to confirm or [🎤] to retry
+   896→
+   897→Fallback: If Web Speech API is unavailable (some
+   898→Android WebViews), show a keyboard-only input with
+   899→a helper text: "Tapez le nom / Type the name"
+   900→
+   901→Technical note: Web Speech API requires online
+   902→connectivity. For offline use, the field falls back
+   903→to keyboard input. Voice input is a convenience
+   904→feature, not a dependency.
+   905→```
+   906→
+   907→### 4.5 Offline Indicators
+   908→
+   909→The existing codebase has a basic offline banner (`bg-amber-600` bar at top). The proposed system makes sync status omnipresent:
+   910→
+   911→```
+   912→SYNC STATUS STATES
+   913→──────────────────
+   914→
+   915→State 1: ONLINE, ALL SYNCED
+   916→┌──────────────────────────────────────┐
+   917→│ ● 47 synced                     [↻] │  <- Green dot, subtle
+   918→└──────────────────────────────────────┘
+   919→
+   920→State 2: ONLINE, SYNCING
+   921→┌──────────────────────────────────────┐
+   922→│ ◐ Syncing 3 of 5...            [↻] │  <- Animated spinner
+   923→└──────────────────────────────────────┘
+   924→
+   925→State 3: OFFLINE, QUEUE PENDING
+   926→┌──────────────────────────────────────┐
+   927→│ ⚠ HORS LIGNE • 5 en attente    [↻] │  <- Amber background
+   928→└──────────────────────────────────────┘
+   929→
+   930→State 4: ERROR, FAILED SUBMISSIONS
+   931→┌──────────────────────────────────────┐
+   932→│ ✖ 2 echecs • Appuyez pour voir  [↻] │  <- Red background
+   933→└──────────────────────────────────────┘
+   934→```
+   935→
+   936→**Placement:** This bar sits immediately below the header on every screen (except Splash and Auth). It is 28dp tall and does not scroll with content. It is always visible.
+   937→
+   938→### 4.6 Batch Capture Mode
+   939→
+   940→For dense commercial areas (e.g., a row of shops along Carrefour Bonamoussadi), agents need to capture multiple POIs rapidly without returning to the map between each.
+   941→
+   942→```
+   943→BATCH CAPTURE MODE
+   944→──────────────────
+   945→
+   946→Activation: Toggle in ContributionFlow or long-press the + FAB
+   947→
+   948→┌──────────────────────────────────────────┐
+   949→│  [←]    Mode Batch • Pharmacie           │
+   950→│                                          │
+   951→│  ┌──────────────────────────────────────┐│
+   952→│  │ Captured: 4 / ∞                      ││
+   953→│  │ ████████░░░░░░░░░░                   ││
+   954→│  └──────────────────────────────────────┘│
+   955→│                                          │
+   956→│  ┌──────────────────────────────────────┐│
+   957→│  │                                      ││
+   958→│  │        CAMERA VIEWFINDER             ││
+   959→│  │                                      ││
+   960→│  │    ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐        ││
+   961→│  │    │    Pharmacie Guide    │        ││
+   962→│  │    └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘        ││
+   963→│  │                                      ││
+   964→│  │  GPS: 4.0821°, 9.7354°  ●●●●○       ││
+   965→│  │                                      ││
+   966→│  └──────────────────────────────────────┘│
+   967→│                                          │
+   968→│  Quick Fields:                           │
+   969→│  ┌──────────────────────────────────────┐│
+   970→│  │ Nom: [____________]  [🎤]           ││
+   971→│  │ Ouvert: [OUI ✓] [NON]               ││
+   972→│  └──────────────────────────────────────┘│
+   973→│                                          │
+   974→│  [  ◉ CAPTURE & NEXT  ]                 │  <- Captures photo,
+   975→│                                          │     saves with defaults,
+   976→│  [Terminer le batch]                     │     immediately ready
+   977→│                                          │     for next POI
+   978→└──────────────────────────────────────────┘
+   979→```
+   980→
+   981→**Batch mode behavior:**
+   982→- Camera stays active between captures
+   983→- GPS is re-acquired for each capture
+   984→- Only mandatory fields are shown (Level 1)
+   985→- Each capture auto-saves to the offline queue
+   986→- A counter shows progress
+   987→- Agent can end batch anytime with "End batch" button
+   988→- All batch items appear in the submission queue for review before sync
+   989→
+   990→---
+   991→
+   992→## 5. Admin Dashboard Layout
+   993→
+   994→### 5.1 Review Queue (Existing AdminQueue.tsx -- Refinements)
+   995→
+   996→The existing AdminQueue is functional but can be optimized for high-volume review. The key improvement is a split-panel layout on tablet/desktop.
+   997→
+   998→```
+   999→ADMIN REVIEW QUEUE (Mobile)
+  1000→┌──────────────────────────────────────────┐
+  1001→│  [←]    Admin Queue                      │
+  1002→│                                          │
+  1003→│  ┌──────────────────────────────────────┐│
+  1004→│  │ FILTERS                              ││
+  1005→│  │ [All] [Flagged ⚠️ 12] [Pending 38]   ││
+  1006→│  │ [Today ▼]  [Pharmacy ▼]  [Agent ▼]  ││
+  1007→│  └──────────────────────────────────────┘│
+  1008→│                                          │
+  1009→│  ┌──────────────────────────────────────┐│
+  1010→│  │ ⚠️ HIGH RISK                          ││
+  1011→│  │ Pharmacie Sans Nom                   ││
+  1012→│  │ Agent: marie_c • il y a 2h          ││
+  1013→│  │ Fraud Score: 72/100 ████████░░       ││
+  1014→│  │ Flags: GPS mismatch, No EXIF        ││
+  1015→│  │                                      ││
+  1016→│  │ ┌────────┐ ┌──────┐ ┌──────────┐    ││
+  1017→│  │ │📸 Photo│ │🗺️ Map │ │📊 Detail │    ││
+  1018→│  │ └────────┘ └──────┘ └──────────┘    ││
+  1019→│  │                                      ││
+  1020→│  │ [✓ Approve]  [✖ Reject]  [⏸ Hold]  ││
+  1021→│  └──────────────────────────────────────┘│
+  1022→│                                          │
+  1023→│  ┌──────────────────────────────────────┐│
+  1024→│  │ ● LOW RISK                           ││
+  1025→│  │ Station Total Bonamoussadi           ││
+  1026→│  │ Agent: jean_p • il y a 4h           ││
+  1027→│  │ Fraud Score: 15/100 ██░░░░░░░░       ││
+  1028→│  │ [✓ Approve]  [✖ Reject]  [⏸ Hold]  ││
+  1029→│  └──────────────────────────────────────┘│
+  1030→│  ... (scrollable list)                   │
+  1031→│                                          │
+  1032→│  ┌──────────────────────────────────────┐│
+  1033→│  │ BULK ACTIONS                         ││
+  1034→│  │ [Select All Low-Risk (26)]           ││
+  1035→│  │ [✓ Approve Selected]                ││
+  1036→│  └──────────────────────────────────────┘│
+  1037→└──────────────────────────────────────────┘
+  1038→
+  1039→ADMIN REVIEW QUEUE (Desktop - Split Panel)
+  1040→┌────────────────────┬─────────────────────────────┐
+  1041→│ REVIEW QUEUE       │  DETAIL PANEL               │
+  1042→│                    │                             │
+  1043→│ Filters:           │  Pharmacie Sans Nom         │
+  1044→│ [Flagged] [All]    │                             │
+  1045→│                    │  ┌───────────┬────────────┐ │
+  1046→│ ⚠️ Pharmacie Sans  │  │           │ MAP VIEW   │ │
+  1047→│   Nom              │  │  PHOTO    │            │ │
+  1048→│   marie_c • 2h     │  │  EVIDENCE │  ● Submit  │ │
+  1049→│   Fraud: 72 ██████ │  │           │  ○ EXIF    │ │
+  1050→│                    │  │           │  ▲ IP Loc  │ │
+  1051→│ ● Station Total    │  └───────────┴────────────┘ │
+  1052→│   jean_p • 4h      │                             │
+  1053→│   Fraud: 15 ██     │  FRAUD ANALYSIS             │
+  1054→│                    │  GPS Match:     ✖ FAIL      │
+  1055→│ ● Orange Money     │  EXIF Present:  ✖ MISSING   │
+  1056→│   paul_m • 5h      │  Photo Hash:    ✓ UNIQUE    │
+  1057→│   Fraud: 8 █       │  Velocity:      ✓ NORMAL    │
+  1058→│                    │  Device ID:     ✓ KNOWN     │
+  1059→│ ● Mur publicitaire │                             │
+  1060→│   sarah_k • 6h     │  AGENT HISTORY              │
+  1061→│   Fraud: 5 █       │  marie_c: 142 total, 3 flags│
+  1062→│                    │  Trust Score: 78%            │
+  1063→│ [Select All Low-   │                             │
+  1064→│  Risk (26)]        │  [✓ Approve] [✖ Reject]     │
+  1065→│ [✓ Bulk Approve]   │  [⏸ Hold]   [💬 Comment]    │
+  1066→└────────────────────┴─────────────────────────────┘
+  1067→```
+  1068→
+  1069→### 5.2 Map-Based Data Visualization
+  1070→
+  1071→```
+  1072→ADMIN MAP VIEW
+  1073→┌──────────────────────────────────────────────────────┐
+  1074→│  ┌──────────────────────────────────────────────────┐│
+  1075→│  │ [Vertical ▼] [Time Range ▼] [Agent ▼] [Status ▼]││
+  1076→│  └──────────────────────────────────────────────────┘│
+  1077→│  ┌──────────────────────────────────────────────────┐│
+  1078→│  │                                                  ││
+  1079→│  │              LEAFLET MAP                         ││
+  1080→│  │                                                  ││
+  1081→│  │    ● = Verified    ◐ = Pending    ○ = Flagged    ││
+  1082→│  │                                                  ││
+  1083→│  │    Zone A ─────┐                                 ││
+  1084→│  │    │ ● ● ◐ ●  │    Zone B ─────┐                ││
+  1085→│  │    │    ●   ○  │    │ ● ◐ ●    │                ││
+  1086→│  │    │  ●    ●   │    │   ○  ●   │                ││
+  1087→│  │    └───────────┘    └──────────┘                 ││
+  1088→│  │                                                  ││
+  1089→│  │    HEAT MAP LAYER (toggle):                      ││
+  1090→│  │    ░░▒▒▓▓██  Submission density                  ││
+  1091→│  │                                                  ││
+  1092→│  └──────────────────────────────────────────────────┘│
+  1093→│  ┌──────────────────────────────────────────────────┐│
+  1094→│  │ LEGEND                                           ││
+  1095→│  │ Coverage: 78% of assigned zones                  ││
+  1096→│  │ This week: 342 new, 89 enriched, 12 flagged      ││
+  1097→│  └──────────────────────────────────────────────────┘│
+  1098→└──────────────────────────────────────────────────────┘
+  1099→```
+  1100→
+  1101→### 5.3 Delta Reports View
+  1102→
+  1103→```
+  1104→DELTA DASHBOARD (Existing DeltaDashboard.tsx -- Enhanced)
+  1105→┌──────────────────────────────────────────┐
+  1106→│  [←]    Delta Report • Week 10           │
+  1107→│                                          │
+  1108→│  ┌──────────────────────────────────────┐│
+  1109→│  │ PERIOD: Mar 3 - Mar 9, 2026         ││
+  1110→│  │ [◀ Prev]  [Week ▼]  [Next ▶]       ││
+  1111→│  └──────────────────────────────────────┘│
+  1112→│                                          │
+  1113→│  ┌──────────────────────────────────────┐│
+  1114→│  │ SUMMARY                              ││
+  1115→│  │                                      ││
+  1116→│  │ +23 New POIs    -4 Closed            ││
+  1117→│  │ 89 Enriched     12 Flagged           ││
+  1118→│  │                                      ││
+  1119→│  │ NET CHANGE: +19 ▲                    ││
+  1120→│  └──────────────────────────────────────┘│
+  1121→│                                          │
+  1122→│  BY VERTICAL                             │
+  1123→│  ┌──────────────────────────────────────┐│
+  1124→│  │ Pharmacy      +3  -1  = 42 total    ││
+  1125→│  │ ████████████████████████░░░  92%     ││
+  1126→│  │                                      ││
+  1127→│  │ Mobile Money  +8  -2  = 156 total   ││
+  1128→│  │ █████████████████░░░░░░░░░░  68%     ││
+  1129→│  │                                      ││
+  1130→│  │ Fuel Station  +1  -0  = 8 total     ││
+  1131→│  │ ████████████████████████████  100%   ││
+  1132→│  │                                      ││
+  1133→│  │ Alcohol       +6  -1  = 94 total    ││
+  1134→│  │ ██████████████████████░░░░░  78%     ││
+  1135→│  │                                      ││
+  1136→│  │ Billboard     +3  -0  = 35 total    ││
+  1137→│  │ ████████████████████░░░░░░░  72%     ││
+  1138→│  │                                      ││
+  1139→│  │ Road Segment  +2  -0  = 52 total    ││
+  1140→│  │ █████████████████████████░░  88%     ││
+  1141→│  │                                      ││
+  1142→│  │ Census        +0  -0  = 173 total   ││
+  1143→│  │ ████████████████████████████  100%   ││
+  1144→│  └──────────────────────────────────────┘│
+  1145→│                                          │
+  1146→│  [Export CSV]  [Export PDF]  [API Link]   │
+  1147→│                                          │
+  1148→└──────────────────────────────────────────┘
+  1149→```
+  1150→
+  1151→### 5.4 Agent Performance Dashboard
+  1152→
+  1153→```
+  1154→AGENT PERFORMANCE
+  1155→┌──────────────────────────────────────────┐
+  1156→│  [←]    Agent Performance                │
+  1157→│                                          │
+  1158→│  ┌──────────────────────────────────────┐│
+  1159→│  │ TEAM OVERVIEW • This Week            ││
+  1160→│  │                                      ││
+  1161→│  │ Active Agents:    8/10               ││
+  1162→│  │ Total Submissions: 342               ││
+  1163→│  │ Avg. Quality:     87%                ││
+  1164→│  │ Fraud Rate:       3.5%               ││
+  1165→│  └──────────────────────────────────────┘│
+  1166→│                                          │
+  1167→│  ┌──────────────────────────────────────┐│
+  1168→│  │ AGENT        SUB   QUAL   FLAGS     ││
+  1169→│  │ ─────────────────────────────────── ││
+  1170→│  │ jean_p       67    94%    0    ★    ││
+  1171→│  │ marie_c      54    78%    3    ⚠️    ││
+  1172→│  │ paul_m       48    91%    1    ★    ││
+  1173→│  │ sarah_k      43    88%    0    ★    ││
+  1174→│  │ amadou_d     38    72%    5    ⚠️    ││
+  1175→│  │ fatima_n     31    95%    0    ★    ││
+  1176→│  │ eric_t       28    85%    1         ││
+  1177→│  │ alice_m      14    90%    0         ││
+  1178→│  │ [inactive]   0     --     --   ✖    ││
+  1179→│  │ [inactive]   0     --     --   ✖    ││
+  1180→│  └──────────────────────────────────────┘│
+  1181→│                                          │
+  1182→│  Tap agent name for detail view          │
+  1183→│                                          │
+  1184→│  ┌──────────────────────────────────────┐│
+  1185→│  │ QUALITY METRICS                      ││
+  1186→│  │                                      ││
+  1187→│  │ Photo with EXIF:  89%  ████████░░   ││
+  1188→│  │ GPS < 20m:        94%  █████████░   ││
+  1189→│  │ All required:     97%  ██████████   ││
+  1190→│  │ Unique photos:    96%  █████████░   ││
+  1191→│  └──────────────────────────────────────┘│
+  1192→└──────────────────────────────────────────┘
+  1193→```
+  1194→
+  1195→---
+  1196→
+  1197→## 6. Client-Facing Dashboard
+  1198→
+  1199→### 6.1 Vertical-Specific View
+  1200→
+  1201→```
+  1202→CLIENT DASHBOARD: MOBILE MONEY
+  1203→┌──────────────────────────────────────────────────────┐
+  1204→│  ADL                     [Export ▼]  [API Docs]      │
+  1205→│                                                      │
+  1206→│  ┌──────────────────────────────────────────────────┐│
+  1207→│  │ Mobile Money Agents • Bonamoussadi               ││
+  1208→│  │ Last updated: March 7, 2026 at 14:30             ││
+  1209→│  └──────────────────────────────────────────────────┘│
+  1210→│                                                      │
+  1211→│  ┌──────────┬───────────┬───────────┬───────────────┐│
+  1212→│  │  156     │   +8      │   -2      │    87%        ││
+  1213→│  │  Total   │   New     │   Closed  │    Verified   ││
+  1214→│  │  Agents  │   This Wk │   This Wk │    Data       ││
+  1215→│  └──────────┴───────────┴───────────┴───────────────┘│
+  1216→│                                                      │
+  1217→│  ┌──────────────────────────────────────────────────┐│
+  1218→│  │                                                  ││
+  1219→│  │              INTERACTIVE MAP                     ││
+  1220→│  │                                                  ││
+  1221→│  │   Filter: [MTN ●] [Orange ●] [Both ●]           ││
+  1222→│  │                                                  ││
+  1223→│  │   ● = Active (has float)                         ││
+  1224→│  │   ○ = Active (no float)                          ││
+  1225→│  │   ✖ = Closed since last report                   ││
+  1226→│  │   ★ = New since last report                      ││
+  1227→│  │                                                  ││
+  1228→│  └──────────────────────────────────────────────────┘│
+  1229→│                                                      │
+  1230→│  ┌──────────────────────────────────────────────────┐│
+  1231→│  │ DELTA: WEEK 9 vs WEEK 10                         ││
+  1232→│  │                                                  ││
+  1233→│  │ New agents:                                      ││
+  1234→│  │  ★ Orange Money Agent, Rue 12      MTN+Orange   ││
+  1235→│  │  ★ MoMo Kiosque Carrefour         MTN          ││
+  1236→│  │  ★ Agent Mobile Makepe             Orange       ││
+  1237→│  │  ... +5 more                                    ││
+  1238→│  │                                                  ││
+  1239→│  │ Closed agents:                                   ││
+  1240→│  │  ✖ Point MoMo Ecole               MTN          ││
+  1241→│  │  ✖ Orange Money Pharmacie          Orange       ││
+  1242→│  │                                                  ││
+  1243→│  │ Status changes:                                  ││
+  1244→│  │  ↕ Agent Rue 5: had float → no float            ││
+  1245→│  │  ↕ Kiosque B3: MTN only → MTN+Orange            ││
+  1246→│  └──────────────────────────────────────────────────┘│
+  1247→│                                                      │
+  1248→│  [Download CSV]  [Download GeoJSON]  [View API]      │
+  1249→│                                                      │
+  1250→└──────────────────────────────────────────────────────┘
+  1251→```
+  1252→
+  1253→### 6.2 Export & API Access Interface
+  1254→
+  1255→```
+  1256→EXPORT PANEL
+  1257→┌──────────────────────────────────────────┐
+  1258→│  Data Export                              │
+  1259→│                                          │
+  1260→│  FORMAT                                  │
+  1261→│  [CSV ●]  [GeoJSON]  [PDF Report]       │
+  1262→│                                          │
+  1263→│  SCOPE                                   │
+  1264→│  Vertical: [Mobile Money ▼]             │
+  1265→│  Area:     [Bonamoussadi ▼]             │
+  1266→│  Period:   [Week 10 ▼]                  │
+  1267→│  Include:  [✓] Current snapshot          │
+  1268→│            [✓] Delta from previous       │
+  1269→│            [ ] Full history              │
+  1270→│            [✓] Photo URLs                │
+  1271→│            [ ] Agent metadata            │
+  1272→│                                          │
+  1273→│  CONFIDENCE FILTER                       │
+  1274→│  Min. confidence: [70%  ─────●──]       │
+  1275→│                                          │
+  1276→│  [Generate Export]                        │
+  1277→│                                          │
+  1278→│  API ENDPOINT                            │
+  1279→│  ┌──────────────────────────────────────┐│
+  1280→│  │ GET /api/snapshots?                  ││
+  1281→│  │   vertical=mobile_money&             ││
+  1282→│  │   week=2026-W10&                     ││
+  1283→│  │   min_confidence=70                  ││
+  1284→│  │                                      ││
+  1285→│  │ Authorization: Bearer <token>        ││
+  1286→│  │                                [Copy]││
+  1287→│  └──────────────────────────────────────┘│
+  1288→└──────────────────────────────────────────┘
+  1289→```
+  1290→
+  1291→---
+  1292→
+  1293→## 7. Gamification & Engagement
+  1294→
+  1295→### 7.1 XP & Level System (Existing -- Refinements)
+  1296→
+  1297→The existing Profile screen shows XP balance and badges. The gamification system should be woven throughout the app, not siloed in the profile.
+  1298→
+  1299→```
+  1300→XP AWARD MOMENTS (visible in-flow)
+  1301→───────────────────────────────────
+  1302→
+  1303→1. POST-CAPTURE: Animated XP popup
+  1304→   ┌────────────────────────┐
+  1305→   │     ✓ +5 XP            │
+  1306→   │  ████████████░░ Lv 12  │
+  1307→   │  2,450 / 3,000 XP      │
+  1308→   └────────────────────────┘
+  1309→
+  1310→2. QUALITY BONUS: Extra XP for high-quality submissions
+  1311→   ┌────────────────────────┐
+  1312→   │  +5 XP base            │
+  1313→   │  +2 XP quality bonus   │  <- Photo had EXIF GPS match
+  1314→   │  +1 XP streak bonus    │  <- 5th submission today
+  1315→   │  ─────────────────     │
+  1316→   │  +8 XP total           │
+  1317→   └────────────────────────┘
+  1318→
+  1319→3. LEVEL-UP: Full-screen celebration
+  1320→   ┌──────────────────────────────┐
+  1321→   │                              │
+  1322→   │         ★ LEVEL UP! ★        │
+  1323→   │                              │
+  1324→   │      Contributeur Senior     │
+  1325→   │           Level 12           │
+  1326→   │                              │
+  1327→   │   New unlock: Batch Mode     │
+  1328→   │                              │
+  1329→   │   [Continuer]                │
+  1330→   └──────────────────────────────┘
+  1331→```
+  1332→
+  1333→### 7.2 Streak System
+  1334→
+  1335→```
+  1336→DAILY STREAK (visible on Home screen)
+  1337→┌──────────────────────────────────────┐
+  1338→│ 🔥 Streak: 7 jours                   │
+  1339→│ L  M  M  J  V  S  D                 │
+  1340→│ ●  ●  ●  ●  ●  ●  ●                │
+  1341→│ Record: 14 jours                     │
+  1342→│ Bonus: +2 XP par soumission         │
+  1343→└──────────────────────────────────────┘
+  1344→
+  1345→WEEKLY STREAK (visible on Profile)
+  1346→┌──────────────────────────────────────┐
+  1347→│ This week: 34/50 target              │
+  1348→│ ████████████████░░░░░░ 68%           │
+  1349→│                                      │
+  1350→│ Complete 50 to earn:                 │
+  1351→│ ★ Weekly Champion badge              │
+  1352→│ +50 bonus XP                         │
+  1353→└──────────────────────────────────────┘
+  1354→```
+  1355→
+  1356→### 7.3 Achievement Badges
+  1357→
+  1358→| Badge | Criteria | Icon Concept |
+  1359→|---|---|---|
+  1360→| **First Steps** | Complete 1st submission | Baby footprint |
+  1361→| **Explorer** | Submit in 3 different zones | Compass |
+  1362→| **Specialist** | 50 submissions in one vertical | Vertical-specific icon with star |
+  1363→| **Quality Star** | 10 consecutive submissions with >90% quality | Star with checkmark |
+  1364→| **Night Owl** | 10 submissions after 6pm (alcohol vertical) | Moon |
+  1365→| **Rain Walker** | Submit during rainy season (June-Oct) | Cloud with rain |
+  1366→| **Streak Master** | 14-day consecutive streak | Fire |
+  1367→| **Urban Validator** | 100 total submissions | City skyline |
+  1368→| **Data Champion** | 500 total submissions | Trophy |
+  1369→| **Trust Elite** | Maintain 95%+ trust score for 4 weeks | Shield with star |
+  1370→
+  1371→### 7.4 Leaderboard (Quality-Weighted)
+  1372→
+  1373→```
+  1374→LEADERBOARD (Existing Analytics screen -- Enhanced)
+  1375→┌──────────────────────────────────────────┐
+  1376→│  [←]    Classement / Leaderboard         │
+  1377→│                                          │
+  1378→│  [This Week ▼]  [Bonamoussadi ▼]        │
+  1379→│                                          │
+  1380→│  RANKING = Submissions x Quality Score   │
+  1381→│  (Not just quantity -- quality matters!)  │
+  1382→│                                          │
+  1383→│  ┌──────────────────────────────────────┐│
+  1384→│  │ 🥇 1. jean_p                         ││
+  1385→│  │    67 sub x 94% qual = 6,298 pts    ││
+  1386→│  │    ████████████████████████████      ││
+  1387→│  │                                      ││
+  1388→│  │ 🥈 2. fatima_n                       ││
+  1389→│  │    31 sub x 95% qual = 2,945 pts    ││
+  1390→│  │    ██████████████░░░░░░░░░░░░       ││
+  1391→│  │                                      ││
+  1392→│  │ 🥉 3. paul_m                         ││
+  1393→│  │    48 sub x 91% qual = 4,368 pts    ││
+  1394→│  │    ████████████████████░░░░░░       ││
+  1395→│  │                                      ││
+  1396→│  │  4. sarah_k     43 x 88% = 3,784   ││
+  1397→│  │  5. eric_t      28 x 85% = 2,380   ││
+  1398→│  │  6. alice_m     14 x 90% = 1,260   ││
+  1399→│  │                                      ││
+  1400→│  │  ─── Your Position ───               ││
+  1401→│  │  ★ YOU: #3                           ││
+  1402→│  │  48 sub x 91% qual = 4,368 pts      ││
+  1403→│  │  Next rank: +1,930 pts               ││
+  1404→│  └──────────────────────────────────────┘│
+  1405→│                                          │
+  1406→│  ┌──────────────────────────────────────┐│
+  1407→│  │ TOP BY VERTICAL                      ││
+  1408→│  │ Pharmacy:     jean_p    (18 sub)     ││
+  1409→│  │ Mobile Money: marie_c   (24 sub)     ││
+  1410→│  │ Fuel:         paul_m    (8 sub)      ││
+  1411→│  │ Alcohol:      sarah_k   (15 sub)     ││
+  1412→│  └──────────────────────────────────────┘│
+  1413→└──────────────────────────────────────────┘
+  1414→```
+  1415→
+  1416→**Critical design decision:** The leaderboard ranks by `submissions * quality_score`, NOT by submission count alone. This prevents gaming (submitting many low-quality/fraudulent entries to climb the board). Quality score incorporates the fraud detection signals from Teammate 6.
+  1417→
+  1418→### 7.5 Daily Target Visualization
+  1419→
+  1420→```
+  1421→DAILY PROGRESS (Home screen widget)
+  1422→┌──────────────────────────────────────┐
+  1423→│ Aujourd'hui / Today                  │
+  1424→│                                      │
+  1425→│  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐   │
+  1426→│  │  12 │ │  3  │ │  87 │ │  7  │   │
+  1427→│  │ sub │ │enri │ │ %qu │ │days │   │
+  1428→│  │     │ │ ch  │ │ al  │ │strk │   │
+  1429→│  └─────┘ └─────┘ └─────┘ └─────┘   │
+  1430→│                                      │
+  1431→│  Target: 15/day                      │
+  1432→│  ████████████████████████░░░ 80%     │
+  1433→│  3 more to hit daily bonus (+10 XP)  │
+  1434→└──────────────────────────────────────┘
+  1435→```
+  1436→
+  1437→---
+  1438→
+  1439→## 8. Benchmark Research
+  1440→
+  1441→### 8.1 ODK Collect / KoboToolbox
+  1442→
+  1443→**What works:**
+  1444→- **Offline-first architecture**: Both ODK Collect and KoboCollect are designed for zero-connectivity environments. Forms are downloaded once and work entirely offline. ADL's current offline queue (`offlineQueue.ts`) follows this pattern correctly.
+  1445→- **Skip logic and validation**: KoboToolbox supports cascading selections and conditional field display. ADL should adopt this for vertical-specific fields (e.g., show `fuelTypes` only when vertical is `fuel_station`).
+  1446→- **GPS auto-capture**: Both tools auto-capture GPS at form start, with accuracy indicators. ADL already does this.
+  1447→
+  1448→**What does not work:**
+  1449→- **Form-centric UX**: ODK Collect is designed around filling out a survey form, not capturing a real-world POI. The "form" metaphor creates cognitive overhead for field agents who think in terms of "places" not "records."
+  1450→- **No visual feedback**: ODK Collect shows a plain list of saved forms with no map, no gamification, no progress visualization. This leads to agent disengagement.
+  1451→- **Desktop-first design**: KoboToolbox's form builder is a desktop web app that does not translate well to mobile review workflows.
+  1452→- **No photo overlay guides**: Both tools treat photos as generic attachments, not as structured evidence with composition guides.
+  1453→
+  1454→**ADL advantage:** The map-first, POI-centric approach is fundamentally better for location data capture than the form-centric approach of ODK/Kobo. The existing Home screen with map + list toggle is the right paradigm.
+  1455→
+  1456→### 8.2 Mapillary
+  1457→
+  1458→**What works:**
+  1459→- **Continuous capture mode**: Mapillary's auto-capture (every 2 seconds while moving) is the inspiration for ADL's batch capture mode.
+  1460→- **Screen dimming during capture**: Saves battery during long capture sessions. ADL should implement this.
+  1461→- **Upload queue with progress**: Shows pending uploads, upload progress, and retry controls. ADL's submission queue design follows this pattern.
+  1462→- **Distance and coverage tracking**: Shows total distance covered and coverage percentage on a map.
+  1463→
+  1464→**What does not work:**
+  1465→- **Street-level imagery focus**: Mapillary captures street-view imagery, not structured POI data. The camera-only workflow does not support the data fields ADL needs.
+  1466→- **No offline map tiles**: Mapillary requires connectivity for map display. ADL must support offline map tiles.
+  1467→- **No gamification beyond contribution count**: No quality-weighted scoring, no streaks, no badges.
+  1468→
+  1469→**ADL advantage:** Mapillary's capture workflow combined with structured data entry (photo + fields) is a stronger approach than either tool alone.
+  1470→
+  1471→### 8.3 OpenStreetMap (iD Editor, JOSM, StreetComplete)
+  1472→
+  1473→**What works:**
+  1474→- **StreetComplete** (Android app) is the closest benchmark to ADL's field capture:
+  1475→  - Shows "quests" on a map (tasks to complete at specific locations)
+  1476→  - Simple question-and-answer flow for each quest
+  1477→  - Gamification with solved quest counts
+  1478→  - Offline-capable
+  1479→- **iD Editor**: Simple web-based editing with visual context.
+  1480→- **Tag-based data model**: OSM's key-value tags are analogous to ADL's JSONB details.
+  1481→
+  1482→**What does not work:**
+  1483→- **Volunteer-driven quality**: No formal review process, no fraud detection, no incentive alignment.
+  1484→- **Technical barrier**: Contributing to OSM requires understanding the data model (nodes, ways, tags). ADL abstracts this with vertical-specific forms.
+  1485→- **No photo evidence**: OSM does not require or store photo evidence for edits. ADL's photo-first approach is critical for trust.
+  1486→
+  1487→**ADL advantage:** StreetComplete's "quest" model mapped to ADL's "assignment" system, combined with photo evidence and fraud detection, creates a more trustworthy data product.
+  1488→
+  1489→### 8.4 African Tech Design Patterns
+  1490→
+  1491→**M-Pesa App:**
+  1492→- **Simplicity**: The M-Pesa app uses a "less is more" approach. The home screen shows 6 large icons (Send, Withdraw, Pay, Save, Borrow, More). Each is a single action.
+  1493→- **Trust through simplicity**: Financial apps in Africa succeed when they minimize decision points. Users trust apps that feel simple and predictable.
+  1494→- **Offline resilience**: M-Pesa's USSD fallback (works on feature phones without internet) is a benchmark for reliability expectations.
+  1495→- **Green color scheme**: M-Pesa uses Safaricom green. ADL's forest green (`#4c7c59`) serves a similar trust signal.
+  1496→
+  1497→**Jumia App:**
+  1498→- **Performance-first design**: Jumia adopted a "less is more" design philosophy after observing that low-end devices and poor connections caused users to abandon the app. Light pages, compressed images, and step-by-step checkout flows improved conversion.
+  1499→- **Step-by-step flows**: Jumia's checkout is divided into steps "not only for performance reasons but also to inform the user of progress." ADL's proposed 4-step capture wizard follows this pattern.
+  1500→- **Localized experience**: Support for multiple languages and local payment methods.
+  1501→
+  1502→**Key takeaways for ADL from African tech:**
+  1503→1. **Minimize data usage**: Compress photos before upload. Cache map tiles. Use lazy loading for screens (already implemented with `React.lazy`).
+  1504→2. **Step-based flows**: Break complex actions into discrete steps with progress indicators.
+  1505→3. **Large touch targets**: African users often use devices with cracked screens or in dusty/humid conditions. Generous touch targets compensate.
+  1506→4. **Trust signals**: Show verification badges, sync status, and quality scores prominently. Users in emerging markets are more skeptical of digital tools.
+  1507→5. **Bottom navigation**: Both M-Pesa and Jumia use bottom tab bars. ADL already implements this correctly.
+  1508→
+  1509→### 8.5 Comparative Feature Matrix
+  1510→
+  1511→| Feature | ODK Collect | KoboCollect | Mapillary | StreetComplete | ADL (Current) | ADL (Proposed) |
+  1512→|---|---|---|---|---|---|---|
+  1513→| Offline data capture | Yes | Yes | Partial | Yes | Yes | Yes |
+  1514→| Offline map tiles | No | No | No | Yes | No | **Yes** |
+  1515→| Photo with overlay guides | No | No | No | No | No | **Yes** |
+  1516→| GPS auto-capture | Yes | Yes | Yes | Yes | Yes | Yes |
+  1517→| EXIF validation | No | No | Yes | No | Yes | Yes |
+  1518→| Fraud detection | No | No | No | No | Yes | **Enhanced** |
+  1519→| Step-based wizard | Yes | Yes | No | Yes | No | **Yes** |
+  1520→| Batch capture mode | No | No | Yes | No | No | **Yes** |
+  1521→| Voice input | No | No | No | No | No | **Yes** |
+  1522→| Gamification | No | No | Basic | Basic | Yes | **Enhanced** |
+  1523→| Quality-weighted leaderboard | No | No | No | No | No | **Yes** |
+  1524→| Assignment system | No | No | No | Yes (quests) | Yes | **Enhanced** |
+  1525→| Admin review queue | Yes | Yes | No | No | Yes | **Enhanced** |
+  1526→| Delta reports | No | No | No | No | Yes | **Enhanced** |
+  1527→| Client dashboard | No | Yes | No | No | No | **Yes** |
+  1528→| Bilingual (EN/FR) | Yes | Yes | No | Partial | Yes | Yes |
+  1529→| PWA (no app store needed) | No | No | No | No | Yes | Yes |
+  1530→
+  1531→---
+  1532→
+  1533→## 9. Component Recommendations
+  1534→
+  1535→### 9.1 Key Components to Build or Refactor
+  1536→
+  1537→| Component | Status | Priority | Notes |
+  1538→|---|---|---|---|
+  1539→| **SyncStatusBar** | NEW | P0 | Always-visible sync indicator below header. Replaces offline-only banner. |
+  1540→| **CaptureWizard** | REFACTOR | P0 | Refactor ContributionFlow from single-page to 4-step wizard. |
+  1541→| **PhotoCapture** | REFACTOR | P0 | Add overlay guides per vertical, GPS confidence indicator. |
+  1542→| **BatchCaptureMode** | NEW | P1 | Camera-stays-active rapid capture for dense areas. |
+  1543→| **SubmissionQueue** | NEW | P1 | Dedicated screen showing pending/failed/synced items with retry. Currently partial in Profile. |
+  1544→| **VoiceInput** | NEW | P2 | Web Speech API wrapper for text fields. French-Cameroon locale. |
+  1545→| **AssignmentCard** | NEW | P1 | Home screen widget showing active assignment with progress. |
+  1546→| **ProximityBar** | NEW | P2 | Map overlay showing nearby POIs that need data/enrichment. |
+  1547→| **QualityPreview** | NEW | P1 | Pre-submit quality score breakdown (GPS accuracy, photo, completeness). |
+  1548→| **DailyProgress** | NEW | P2 | Home screen widget showing daily stats and target progress. |
+  1549→
+  1550→### 9.2 Tailwind Component Patterns
+  1551→
+  1552→These patterns formalize what the existing codebase already uses:
+  1553→
+  1554→```
+  1555→CARD COMPONENT
+  1556→──────────────
+  1557→bg-white p-5 rounded-2xl border border-gray-100 shadow-sm
+  1558→
+  1559→PRIMARY BUTTON
+  1560→──────────────
+  1561→h-14 bg-[#0f2b46] text-white rounded-xl font-bold text-xs
+  1562→uppercase tracking-wider shadow-lg flex items-center
+  1563→justify-center active:scale-95 transition-all
+  1564→
+  1565→CTA BUTTON (Contribute/Add)
+  1566→────────────────────────────
+  1567→h-14 bg-[#c86b4a] text-white rounded-xl font-bold text-xs
+  1568→uppercase tracking-wider shadow-lg
+  1569→
+  1570→SUCCESS INDICATOR
+  1571→─────────────────
+  1572→text-[#4c7c59] bg-[#eaf3ee] rounded-full px-3 py-1
+  1573→text-[10px] font-bold uppercase tracking-widest
+  1574→
+  1575→STATUS BADGE
+  1576→────────────
+  1577→px-2 py-0.5 rounded-full text-[9px] font-bold uppercase
+  1578→tracking-widest
+  1579→
+  1580→FORM FIELD
+  1581→──────────
+  1582→h-11 px-3 bg-gray-100 rounded-xl text-xs font-semibold
+  1583→text-[#0f2b46]
+  1584→
+  1585→SECTION LABEL
+  1586→─────────────
+  1587→text-[10px] font-bold text-gray-400 uppercase tracking-widest
+  1588→
+  1589→BOTTOM NAV
+  1590→──────────
+  1591→h-16 bg-white border-t border-gray-200 flex items-center
+  1592→justify-around
+  1593→
+  1594→FAB (Floating Action Button)
+  1595→────────────────────────────
+  1596→w-14 h-14 bg-[#c86b4a] text-white rounded-full shadow-2xl
+  1597→flex items-center justify-center
+  1598→```
+  1599→
+  1600→### 9.3 Animation & Feedback
+  1601→
+  1602→| Interaction | Feedback | Duration |
+  1603→|---|---|---|
+  1604→| Button press | `active:scale-95` | 100ms |
+  1605→| Screen transition | Slide from right (forward) / left (back) | 200ms |
+  1606→| Submission success | Checkmark animation + XP popup | 800ms |
+  1607→| Sync complete | Green pulse on sync indicator | 300ms |
+  1608→| Error | Shake animation on error element | 200ms |
+  1609→| Level up | Full-screen overlay with confetti | 1500ms |
+  1610→| Photo capture | Shutter flash (white overlay) | 100ms |
+  1611→| GPS lock | Pulsing blue dot → solid blue dot | Continuous → 0ms |
+  1612→
+  1613→---
+  1614→
+  1615→## 10. Implementation Priority
+  1616→
+  1617→### Phase 1: Core Field Optimization (Week 1-2)
+  1618→1. **SyncStatusBar** -- Always-visible sync status on all screens
+  1619→2. **CaptureWizard** -- Refactor ContributionFlow to 4-step wizard
+  1620→3. **PhotoCapture** -- Add overlay guides and GPS confidence indicator
+  1621→4. **QualityPreview** -- Pre-submit quality score on review step
+  1622→
+  1623→### Phase 2: Productivity Features (Week 3-4)
+  1624→5. **AssignmentCard** -- Home screen widget for active assignments
+  1625→6. **BatchCaptureMode** -- Rapid capture for dense commercial areas
+  1626→7. **SubmissionQueue** -- Dedicated queue screen with retry controls
+  1627→8. **DailyProgress** -- Home screen daily stats widget
+  1628→
+  1629→### Phase 3: Engagement & Polish (Week 5-6)
+  1630→9. **Enhanced Gamification** -- Streak system, achievement badges, quality-weighted leaderboard
+  1631→10. **VoiceInput** -- Web Speech API for text fields
+  1632→11. **ProximityBar** -- Nearby POI suggestions on map
+  1633→12. **Offline map tiles** -- Pre-cached Leaflet tiles for Bonamoussadi area
+  1634→
+  1635→### Phase 4: Admin & Client Dashboards (Week 7-8)
+  1636→13. **Admin split-panel review** -- Desktop-optimized review queue
+  1637→14. **Client dashboard** -- Vertical-specific views with delta visualization
+  1638→15. **Export interface** -- CSV, GeoJSON, PDF generation
+  1639→16. **API documentation** -- Interactive API explorer for clients
+  1640→
+  1641→---
+  1642→
+  1643→## Sources
+  1644→
+  1645→- [KoboToolbox Data Collection Tools Documentation](https://support.kobotoolbox.org/data-collection-tools.html)
+  1646→- [KoBoToolbox vs ODK: Complete M&E Data Collection Comparison](https://practicalmel.com/kobo-toolbox-vs-odk-complete-me-data-collection-comparison/)
+  1647→- [Mobile UX Design: The Ultimate Guide 2026](https://uxcam.com/blog/mobile-ux/)
+  1648→- [What design factors should I consider when designing a mobile app for outdoor use? (ResearchGate)](https://www.researchgate.net/post/What_design_factors_should_I_consider_when_designing_a_mobile_app_for_outdoor_use)
+  1649→- [Industrial UX: Sunlight Susceptible Screens (Medium)](https://medium.com/@callumjcoe/industrial-ux-sunlight-susceptible-screens-2e52b1d9706b)
+  1650→- [Designing for The Great Outdoors: Solving The UX Challenges of Outdoor App Use (Adobe)](https://theblog.adobe.com/designing-for-the-great-outdoors-solving-the-ux-challenges-of-outdoor-app-use/)
+  1651→- [UX researcher: Frontline workers require their apps to be straightforward (Resco)](https://www.resco.net/blog/mobile-platform-ux-ui/)
+  1652→- [Mobile-First Design for Construction Management Software (AlterSquare)](https://altersquare.medium.com/mobile-first-design-for-construction-management-software-field-usability-guide-3f52adf45b02)
+  1653→- [Jumia eCommerce Mobile App Design (Pixelmatters)](https://www.pixelmatters.com/work/jumia-ecommerce-mobile-app-design)
+  1654→- [Redesigning M-Pesa: A Simpler, Smarter Future for Mobile Money (Medium)](https://medium.com/@allan.kimutai1/redesigning-m-pesa-a-simpler-smarter-future-for-mobile-money-86c90c24b66d)
+  1655→- [Top Mobile App Trends in Africa 2025 (Graph Technologies)](https://graph.co.ke/blog/2025/05/13/top-mobile-app-trends-in-africa-2025/)
+  1656→- [How AI & Messaging Could Transform M-PESA into a Super-App (TechMoran)](https://techmoran.com/2025/12/31/how-ai-messaging-could-transform-m-pesa-into-africas-super-app-in-2026/)
+  1657→- [Mapillary/Data collection with Mapillary (OpenStreetMap Wiki)](https://wiki.openstreetmap.org/wiki/Mapillary/Data_collection_with_Mapillary)
+  1658→- [An Introduction to Mapillary](https://help.mapillary.com/hc/en-us/articles/115001770269-An-Introduction-to-Mapillary)
+  1659→- [Mapillary on Google Play](https://play.google.com/store/apps/details?id=com.mapillary.app&hl=en_US)
+  1660→- [What is the best color scheme for outdoor mobile apps in sunlight? (Quora)](https://www.quora.com/What-is-the-best-color-scheme-for-outdoor-mobile-apps-in-sunlight)
+  1661→- [10 Most Important Mobile UX Design Principles (UXBERT)](https://uxbert.com/10-mobile-ux-design-principles/)
+  1662→
