@@ -118,7 +118,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
             const replyToggle = toggleReplyReaction.bind(null, reply.id);
             return (
               <article key={reply.id} className="surface-card space-y-2">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <p className="font-label text-sm font-semibold text-on-surface">
                     {reply.authorDisplayName}
                   </p>
@@ -151,7 +151,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
                 placeholder="Partagez votre pensée avec bienveillance…"
                 className="w-full rounded-brand border border-outline-variant bg-surface-container-low px-4 py-3 font-body text-sm leading-7 text-on-surface placeholder:text-outline focus:border-primary focus:outline-none focus:ring-[3px] focus:ring-primary/15"
               />
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <label className="flex items-center gap-2 font-label text-sm text-on-surface-variant">
                   <input
                     type="checkbox"
@@ -162,7 +162,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
                 </label>
                 <button
                   type="submit"
-                  className="rounded-full bg-gradient-primary px-5 py-2.5 font-label text-sm font-semibold text-on-primary transition-transform hover:-translate-y-0.5"
+                  className="w-full rounded-full bg-gradient-primary px-5 py-2.5 font-label text-sm font-semibold text-on-primary transition-transform hover:-translate-y-0.5 sm:w-auto"
                 >
                   Envoyer
                 </button>

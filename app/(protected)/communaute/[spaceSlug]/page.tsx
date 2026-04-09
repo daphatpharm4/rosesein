@@ -77,14 +77,14 @@ export default async function SpacePage({ params, searchParams }: SpacePageProps
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Link
             href={`/communaute/${spaceSlug}/nouveau` as Route}
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary transition-transform hover:-translate-y-0.5"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary transition-transform hover:-translate-y-0.5 sm:w-auto"
           >
             Ouvrir un sujet
           </Link>
-          <div className="rounded-full bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant">
+          <div className="rounded-brand bg-surface-container-low px-4 py-3 text-sm leading-7 text-on-surface-variant sm:rounded-full">
             Charte de bienveillance active dans tout l&apos;espace.
           </div>
         </div>

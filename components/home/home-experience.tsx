@@ -61,6 +61,7 @@ export function HomeExperience({ children }: HomeExperienceProps) {
     let frameId = 0;
 
     if (heroSurface && !prefersReducedMotion) {
+      const prefersCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
       let nextSpotX = 74;
       let nextSpotY = 26;
       let nextDrift = Math.min(window.scrollY * 0.06, 44);
@@ -100,15 +101,19 @@ export function HomeExperience({ children }: HomeExperienceProps) {
         scheduleMotionFrame();
       };
 
-      heroSurface.addEventListener("pointermove", handlePointerMove);
-      heroSurface.addEventListener("pointerleave", resetPointer);
+      if (!prefersCoarsePointer) {
+        heroSurface.addEventListener("pointermove", handlePointerMove);
+        heroSurface.addEventListener("pointerleave", resetPointer);
+      }
       window.addEventListener("scroll", handleScroll, { passive: true });
       scheduleMotionFrame();
 
       return () => {
         observer?.disconnect();
-        heroSurface.removeEventListener("pointermove", handlePointerMove);
-        heroSurface.removeEventListener("pointerleave", resetPointer);
+        if (!prefersCoarsePointer) {
+          heroSurface.removeEventListener("pointermove", handlePointerMove);
+          heroSurface.removeEventListener("pointerleave", resetPointer);
+        }
         window.removeEventListener("scroll", handleScroll);
 
         if (frameId) {

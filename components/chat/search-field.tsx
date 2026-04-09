@@ -10,7 +10,7 @@ export function SearchField({ value, onChange }: SearchFieldProps) {
     <div className="space-y-2">
       <label
         htmlFor="conversation-search"
-        className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant"
+        className="font-label text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-on-surface-variant sm:text-xs sm:tracking-[0.16em]"
       >
         Rechercher une discussion
       </label>

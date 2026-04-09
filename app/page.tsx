@@ -236,10 +236,10 @@ export default async function HomePage() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                   <Link
                     href={nextStep.href}
-                    className="motion-cta inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                    className="motion-cta inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
                   >
                     {nextStep.cta}
                     <ArrowRight
@@ -250,7 +250,7 @@ export default async function HomePage() {
                   </Link>
                   <Link
                     href={"/aide" as Route}
-                    className="motion-cta inline-flex items-center gap-2 rounded-full bg-surface-container-low px-5 py-3 font-label text-sm font-semibold text-primary"
+                    className="motion-cta inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface-container-low px-5 py-3 font-label text-sm font-semibold text-primary sm:w-auto"
                   >
                     Trouver un repère ou une aide
                   </Link>

@@ -22,7 +22,7 @@ const feedbackMap: Record<string, string> = {
   "preferences-updated": "Vos préférences de notification ont été enregistrées.",
   "profile-kind-required": "Choisissez le profil à afficher dans votre compte.",
   "display-name-required": "Indiquez un prénom ou un nom d'usage d'au moins deux caractères.",
-  "profile-update-failed": "Le profil n'a pas pu être mis à jour. Vérifiez la connexion Supabase.",
+  "profile-update-failed": "Le profil n'a pas pu être mis à jour pour le moment.",
   "preferences-update-failed":
     "Les préférences de notification n'ont pas pu être enregistrées.",
   "privacy-request-sent": "Votre demande liée aux données personnelles a été transmise.",
@@ -53,9 +53,9 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           <div className="eyebrow">Compte et confidentialité</div>
           <h1 className="editorial-title">Votre compte, vos préférences, votre cadre.</h1>
           <p className="max-w-2xl text-base leading-7 text-on-surface-variant">
-            Cet espace relie maintenant votre profil, votre mode pseudonyme et vos
-            préférences de notification à Supabase. Les réglages restent limités à
-            votre compte et sont modifiables à tout moment.
+            Réglez ici ce qui vous représente et la façon dont vous souhaitez être
+            contactée. Ces choix restent liés à votre compte et peuvent être modifiés
+            à tout moment.
           </p>
         </div>
 
@@ -81,8 +81,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                   Profil visible dans l&apos;application
                 </p>
                 <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                  Modifiez votre identité d&apos;usage sans perdre la trace réelle côté
-                  équipe de modération.
+                  Ajustez votre identité d&apos;usage sans perdre le lien sécurisé avec
+                  l&apos;association si une modération ou un soutien devient nécessaire.
                 </p>
               </div>
             </div>
@@ -166,7 +166,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
             <button
               type="submit"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
             >
               Enregistrer le profil
             </button>
@@ -193,7 +193,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             <div className="rounded-brand bg-surface-container-low px-4 py-4 text-sm leading-7 text-on-surface-variant">
               <p>
                 <span className="font-semibold text-on-surface">Rôles actifs:</span>{" "}
-                {roles.length > 0 ? roles.join(", ") : "member"}
+                {roles.length > 0 ? roles.join(", ") : "membre"}
               </p>
               <p>
                 <span className="font-semibold text-on-surface">Mode public:</span>{" "}
@@ -214,17 +214,17 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
             <div className="rounded-brand bg-surface-container-low px-4 py-4 text-sm leading-7 text-on-surface-variant">
               <p className="font-semibold text-on-surface">Aide rapide</p>
-              <div className="mt-3 flex flex-wrap gap-3">
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Link
                   href={"/aide" as Route}
-                  className="inline-flex items-center gap-2 rounded-full bg-surface-container-lowest px-4 py-2.5 font-label text-sm font-semibold text-primary shadow-ambient"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface-container-lowest px-4 py-2.5 font-label text-sm font-semibold text-primary shadow-ambient sm:w-auto"
                 >
                   <LifeBuoy aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
                   Ouvrir l&apos;aide
                 </Link>
                 <Link
                   href={"/association/engagement" as Route}
-                  className="inline-flex items-center gap-2 rounded-full bg-surface-container-lowest px-4 py-2.5 font-label text-sm font-semibold text-primary shadow-ambient"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface-container-lowest px-4 py-2.5 font-label text-sm font-semibold text-primary shadow-ambient sm:w-auto"
                 >
                   Contacter l&apos;association
                 </Link>
@@ -234,7 +234,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             <form action={signOut}>
               <button
                 type="submit"
-                className="rounded-full bg-surface-container-lowest px-5 py-3 font-label text-sm font-semibold text-on-surface shadow-ambient"
+                className="w-full rounded-full bg-surface-container-lowest px-5 py-3 font-label text-sm font-semibold text-on-surface shadow-ambient"
               >
                 Se déconnecter
               </button>
@@ -376,7 +376,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
           <button
             type="submit"
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
           >
             Enregistrer les notifications
           </button>
@@ -423,7 +423,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
           <button
             type="submit"
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
           >
             Envoyer la demande
           </button>

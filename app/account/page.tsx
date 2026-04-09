@@ -16,9 +16,9 @@ type AccountPageProps = {
 
 const messageMap: Record<string, string> = {
   "signin-required":
-    "Connectez-vous pour ouvrir cette surface privée et reprendre la messagerie en sécurité.",
+    "Connectez-vous pour retrouver votre espace privé et vos échanges en toute sécurité.",
   "magic-link-sent":
-    "Un lien de connexion vous a été envoyé. Ouvrez votre boîte mail pour continuer.",
+    "Le lien de connexion a été envoyé. Ouvrez votre boîte mail pour continuer.",
   "signed-out": "Votre session a été fermée.",
   "email-required": "Renseignez une adresse email valide pour recevoir votre lien de connexion.",
   "profile-kind-required": "Choisissez votre profil pour finaliser l'accès à votre espace privé.",
@@ -62,9 +62,8 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           <div className="eyebrow">Compte et confidentialité</div>
           <h1 className="editorial-title">Entrer dans votre espace privé sans friction.</h1>
           <p className="text-base leading-8 text-on-surface-variant">
-            Commencez par le minimum nécessaire. Le compte ouvre ensuite la messagerie,
-            le parcours personnel et les futurs réglages sans vous demander plus que
-            l'essentiel.
+            Commencez par l&apos;essentiel. Votre compte vous redonne ensuite accès à la
+            messagerie, au parcours et à vos réglages, sans surcharge inutile.
           </p>
         </div>
 
@@ -202,7 +201,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                     </div>
                     <div>
                       <dt className="font-semibold text-on-surface">Rôle</dt>
-                      <dd>{roles.length > 0 ? roles.join(", ") : "member"}</dd>
+                      <dd>{roles.length > 0 ? roles.join(", ") : "membre"}</dd>
                     </div>
                   </dl>
                 </div>
@@ -226,8 +225,8 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                     Finaliser votre profil en douceur
                   </p>
                   <p className="text-sm leading-7 text-on-surface-variant">
-                    Commencez par votre rôle et votre nom d&apos;usage. Les options de
-                    confidentialité restent facultatives et peuvent attendre.
+                    Commencez par votre profil et votre nom d&apos;usage. Les options de
+                    confidentialité peuvent attendre si vous manquez d&apos;énergie.
                   </p>
                 </div>
 
@@ -296,7 +295,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
 
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
                 >
                   Finaliser mon profil
                   <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2} />
@@ -350,7 +349,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
 
               <button
                 type="submit"
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
               >
                 Envoyer le lien
                 <MailCheck aria-hidden="true" className="h-4 w-4" strokeWidth={2} />

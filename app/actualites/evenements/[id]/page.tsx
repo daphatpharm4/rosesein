@@ -165,7 +165,7 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
                   <input type="hidden" name="eventId" value={event.id} />
                   <button
                     type="submit"
-                    className="motion-cta rounded-full bg-surface-container-low px-5 py-3 font-label text-sm font-semibold text-on-surface"
+                    className="motion-cta w-full rounded-full bg-surface-container-low px-5 py-3 font-label text-sm font-semibold text-on-surface sm:w-auto"
                   >
                     Annuler mon inscription
                   </button>
@@ -245,7 +245,7 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
 
                   <button
                     type="submit"
-                    className="motion-cta inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                    className="motion-cta inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
                   >
                     <Sparkles aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
                     Confirmer mon inscription
@@ -268,7 +268,7 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
               </p>
               <Link
                 href={`/account?status=complete-profile&redirectTo=${encodeURIComponent(`/actualites/evenements/${event.id}`)}` as Route}
-                className="motion-cta inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                className="motion-cta inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
               >
                 Finaliser mon profil
               </Link>
@@ -287,7 +287,7 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
               </p>
               <Link
                 href={`/account?redirectTo=${encodeURIComponent(`/actualites/evenements/${event.id}`)}` as Route}
-                className="motion-cta inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                className="motion-cta inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
               >
                 Se connecter
               </Link>

@@ -65,14 +65,14 @@ export default function HelpPage() {
                 secours locaux. Depuis la France et l&apos;Union européenne, le <strong>112</strong>{" "}
                 permet de joindre les urgences.
               </p>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <a
                   href="tel:112"
-                  className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
                 >
                   Appeler le 112
                 </a>
-                <p className="rounded-full bg-surface-container-lowest px-4 py-3 text-sm text-on-surface shadow-ambient">
+                <p className="rounded-brand bg-surface-container-lowest px-4 py-3 text-sm leading-7 text-on-surface shadow-ambient sm:rounded-full">
                   Si possible, contactez aussi votre équipe de soins habituelle.
                 </p>
               </div>

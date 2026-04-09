@@ -26,12 +26,12 @@ export function ResourceCard({ resource }: Props) {
 
   return (
     <article className="surface-card space-y-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
           <FormatIcon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
         </div>
         <span
-          className={`inline-flex items-center rounded-full px-3 py-1 font-label text-xs font-semibold ${DIFFICULTY_COLOURS[resource.difficulty]}`}
+          className={`inline-flex self-start items-center rounded-full px-3 py-1 font-label text-xs font-semibold ${DIFFICULTY_COLOURS[resource.difficulty]}`}
         >
           {formatDifficulty(resource.difficulty)}
         </span>

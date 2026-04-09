@@ -20,11 +20,11 @@ export function CommunitySpaceCard({ space }: Props) {
 
   return (
     <Link href={`/communaute/${space.slug}` as Route} className="surface-card group space-y-4 block">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
           <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
         </div>
-        <span className="rounded-full bg-secondary-container px-3 py-1 font-label text-xs font-semibold text-on-secondary-container">
+        <span className="self-start rounded-full bg-secondary-container px-3 py-1 font-label text-xs font-semibold text-on-secondary-container">
           {KIND_LABELS[space.allowedKind] ?? space.allowedKind}
         </span>
       </div>

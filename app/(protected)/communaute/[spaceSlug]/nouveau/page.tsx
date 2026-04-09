@@ -55,8 +55,8 @@ export default async function NewCommunityThreadPage({
           <div className="eyebrow">Nouveau sujet</div>
           <h1 className="editorial-title">Ouvrir un échange dans {result.space.title}</h1>
           <p className="max-w-2xl text-base leading-7 text-on-surface-variant">
-            Posez une question, partagez un retour d&apos;expérience, ou lancez une
-            discussion utile. Le ton doit rester concret, calme et bienveillant.
+            Posez une question, partagez un vécu, ou lancez une discussion utile. Le
+            ton reste simple, calme et bienveillant.
           </p>
         </div>
 
@@ -82,7 +82,7 @@ export default async function NewCommunityThreadPage({
               </p>
               <p className="mt-2 text-sm leading-7 text-on-surface-variant">
                 On parle depuis son vécu, on évite les injonctions, on ne remplace pas
-                un avis médical, et on protège les informations sensibles d&apos;autrui.
+                un avis médical et on protège les informations sensibles d&apos;autrui.
               </p>
             </div>
           </div>
@@ -133,7 +133,7 @@ export default async function NewCommunityThreadPage({
 
           <button
             type="submit"
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
           >
             <PenSquare aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
             Publier le sujet

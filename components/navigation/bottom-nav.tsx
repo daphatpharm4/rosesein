@@ -37,22 +37,24 @@ export function BottomNav({ currentPath }: BottomNavProps) {
   return (
     <nav
       aria-label="Navigation principale"
-      className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-screen-md px-4 pb-4"
+      className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-screen-md px-3 pb-[max(var(--safe-area-bottom),0.75rem)] sm:px-4 sm:pb-4"
     >
-      <div className="shell-bar flex items-center justify-around rounded-brand-xl border border-outline-variant/25 bg-background/92 px-3 py-3 shadow-ambient backdrop-blur-sm">
+      <div className="shell-bar grid grid-cols-4 gap-1.5 rounded-[2rem] border border-outline-variant/25 bg-background/92 px-2 py-2 shadow-ambient backdrop-blur-sm sm:rounded-brand-xl sm:px-3 sm:py-3">
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
             aria-current={isActive(href) ? "page" : undefined}
-            className={`bottom-nav-item flex min-w-16 flex-col items-center gap-1 rounded-full px-4 py-2 text-center ${
+            className={`bottom-nav-item flex min-h-[3.5rem] min-w-0 flex-col items-center justify-center gap-1 rounded-[1.25rem] px-2 py-2 text-center sm:min-w-16 sm:rounded-full sm:px-4 ${
               isActive(href)
                 ? "bg-surface-container-low text-primary"
                 : "text-on-surface-variant hover:bg-surface-container-low/70 hover:text-on-surface"
             }`}
           >
             <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-            <span className="font-label text-[11px] font-semibold">{label}</span>
+            <span className="truncate font-label text-[0.68rem] font-semibold leading-none sm:text-[11px]">
+              {label}
+            </span>
           </Link>
         ))}
       </div>

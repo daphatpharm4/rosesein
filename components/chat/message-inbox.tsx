@@ -94,17 +94,17 @@ export function MessageInbox({ conversations }: MessageInboxProps) {
                 puis écrivez seulement si vous en avez besoin.
               </p>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
                 href={"/messages/nouveau" as Route}
-                className="motion-cta inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                className="motion-cta inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
               >
                 <MessageSquarePlus aria-hidden="true" className="h-4 w-4" strokeWidth={2} />
                 Nouveau message ou groupe
               </Link>
               <Link
                 href={"/aide" as Route}
-                className="motion-cta inline-flex items-center gap-2 rounded-full bg-surface-container-lowest px-5 py-3 font-label text-sm font-semibold text-primary shadow-ambient"
+                className="motion-cta inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface-container-lowest px-5 py-3 font-label text-sm font-semibold text-primary shadow-ambient sm:w-auto"
               >
                 Besoin d&apos;un repère
                 <ArrowRight aria-hidden="true" className="motion-link-arrow h-4 w-4" strokeWidth={2} />

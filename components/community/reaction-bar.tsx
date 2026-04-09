@@ -87,7 +87,7 @@ export function ReactionBar({ initialPayload, onToggle }: Props) {
   }
 
   return (
-    <div ref={rootRef} className="space-y-2 pt-3" aria-busy={isPending}>
+    <div ref={rootRef} className="space-y-2 pt-4" aria-busy={isPending}>
       <div className="flex flex-wrap gap-2">
         {REACTION_KINDS.map((kind) => {
           const { emoji, label } = REACTION_META[kind];
@@ -103,7 +103,7 @@ export function ReactionBar({ initialPayload, onToggle }: Props) {
                 aria-label={`Réagir : ${label}`}
                 aria-pressed={isActive}
                 disabled={isPending}
-                className={`flex min-h-11 items-center gap-1.5 rounded-full px-3.5 py-2 font-label text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-70 ${
+                className={`flex min-h-12 items-center gap-2 rounded-full px-4 py-2.5 font-label text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-70 ${
                   isActive
                     ? "bg-primary/10 text-primary"
                     : s.count > 0
@@ -122,7 +122,8 @@ export function ReactionBar({ initialPayload, onToggle }: Props) {
                     onClick={() => setOpenKind(isOpen ? null : kind)}
                     aria-expanded={isOpen}
                     aria-controls={`${popoverId}-${kind}`}
-                    className="flex min-h-11 min-w-11 items-center justify-center rounded-full bg-surface-container-low px-3 py-2 font-label text-xs font-semibold text-on-surface-variant transition-colors hover:bg-surface-container"
+                    aria-haspopup="dialog"
+                    className="flex min-h-12 min-w-12 items-center justify-center rounded-full bg-surface-container-low px-4 py-2.5 font-label text-xs font-semibold text-on-surface-variant transition-colors hover:bg-surface-container"
                     aria-label={`Voir ${s.count} réaction${s.count > 1 ? "s" : ""} pour ${label}`}
                   >
                     {s.count}
@@ -131,7 +132,7 @@ export function ReactionBar({ initialPayload, onToggle }: Props) {
                   {isOpen ? (
                     <div
                       id={`${popoverId}-${kind}`}
-                      className="absolute left-0 top-full z-50 mt-2 w-[min(18rem,calc(100vw-3rem))] rounded-brand-md border border-outline-variant/30 bg-background/95 p-3 shadow-ambient backdrop-blur-sm"
+                      className="absolute left-0 top-full z-50 mt-2 w-[min(16rem,calc(100vw-2.5rem))] rounded-brand-md border border-outline-variant/30 bg-background/95 p-3 shadow-ambient backdrop-blur-sm"
                     >
                       <p className="font-label text-[11px] font-semibold uppercase tracking-[0.16em] text-outline">
                         {label}

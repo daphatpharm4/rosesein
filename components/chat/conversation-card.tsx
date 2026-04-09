@@ -64,25 +64,25 @@ export function ConversationCard({ conversation, index = 0 }: ConversationCardPr
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="mb-2 flex items-start justify-between gap-3">
+          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <h3 className="font-headline text-base font-semibold text-on-surface">
                 {conversation.name}
               </h3>
-              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-outline">
-                {conversation.scope === "association" ? "Association" : "Prive"}
+              <p className="mt-1 text-[0.72rem] uppercase tracking-[0.14em] text-outline sm:text-xs sm:tracking-[0.16em]">
+                {conversation.scope === "association" ? "Association" : "Privé"}
               </p>
             </div>
             <span
-              className={`whitespace-nowrap font-label text-xs ${
+              className={`font-label text-[0.72rem] sm:whitespace-nowrap sm:text-xs ${
                 conversation.active ? "text-primary" : "text-on-surface-variant"
               }`}
             >
               {conversation.timestamp}
             </span>
           </div>
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-sm leading-6 text-on-surface-variant">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <p className="line-clamp-2 text-sm leading-6 text-on-surface-variant">
               {conversation.preview}
             </p>
             {conversation.unreadCount ? (

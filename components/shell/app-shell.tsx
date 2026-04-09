@@ -24,7 +24,7 @@ export async function AppShell({
     context?.roles.some((role) => role === "moderator" || role === "admin") ?? false;
 
   return (
-    <div className={`min-h-screen ${difficultDayMode ? "bg-primary/5" : ""}`}>
+    <div className={`min-h-dvh ${difficultDayMode ? "bg-primary/5" : ""}`}>
       <TopAppBar
         title={title}
         showAdminLink={hasStaffAccess}
@@ -32,10 +32,10 @@ export async function AppShell({
       />
       <main
         id="main-content"
-        className={`mx-auto flex min-h-screen w-full flex-col pb-32 ${
+        className={`mx-auto flex min-h-dvh w-full flex-col ${
           difficultDayMode
-            ? "max-w-screen-sm gap-6 px-4 pt-32"
-            : "max-w-screen-md px-5 pt-28"
+            ? "max-w-screen-sm gap-5 px-4 pt-[calc(var(--safe-area-top)+5.75rem)] pb-[calc(var(--safe-area-bottom)+6.75rem)] sm:gap-6 sm:pt-[calc(var(--safe-area-top)+6.5rem)] sm:pb-32"
+            : "max-w-screen-md gap-8 px-4 pt-[calc(var(--safe-area-top)+5.5rem)] pb-[calc(var(--safe-area-bottom)+6.75rem)] sm:px-5 sm:pt-[calc(var(--safe-area-top)+6.25rem)] sm:pb-32"
         }`}
       >
         {difficultDayMode ? (
@@ -46,16 +46,16 @@ export async function AppShell({
               si vous avez besoin d&apos;orientation, et vos messages si vous voulez joindre
               une personne de confiance.
             </p>
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
                 href={"/aide" as Route}
-                className="rounded-full bg-surface-container-lowest px-4 py-2 font-label text-sm font-semibold text-primary shadow-ambient"
+                className="rounded-full bg-surface-container-lowest px-4 py-3 text-center font-label text-sm font-semibold text-primary shadow-ambient sm:w-auto"
               >
                 Ouvrir l&apos;aide
               </Link>
               <Link
                 href={"/messages" as Route}
-                className="rounded-full bg-surface-container-lowest px-4 py-2 font-label text-sm font-semibold text-primary shadow-ambient"
+                className="rounded-full bg-surface-container-lowest px-4 py-3 text-center font-label text-sm font-semibold text-primary shadow-ambient sm:w-auto"
               >
                 Lire mes messages
               </Link>

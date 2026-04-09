@@ -69,7 +69,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
               </div>
               <div className="space-y-2">
                 <div className="eyebrow">{getThreadLead(thread)}</div>
-                <h1 className="font-headline text-3xl font-bold text-on-surface">
+                <h1 className="font-headline text-2xl font-bold text-on-surface sm:text-3xl">
                   {thread.name}
                 </h1>
                 <p className="text-sm leading-7 text-on-surface-variant">
@@ -183,7 +183,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
 
                           <button
                             type="submit"
-                            className="rounded-full bg-surface-container-lowest px-5 py-3 font-label text-sm font-semibold text-primary shadow-ambient"
+                            className="w-full rounded-full bg-surface-container-lowest px-5 py-3 text-center font-label text-sm font-semibold text-primary shadow-ambient sm:w-auto"
                           >
                             Envoyer le signalement
                           </button>
@@ -226,7 +226,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
             <button
               type="submit"
               disabled={!thread.canSend}
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               Envoyer
               <Send aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />

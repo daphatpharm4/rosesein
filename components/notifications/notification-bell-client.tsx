@@ -47,7 +47,7 @@ export function NotificationBellClient({
       return undefined;
     }
 
-    function handlePointerDown(event: MouseEvent) {
+    function handlePointerDown(event: PointerEvent) {
       if (
         containerRef.current &&
         event.target instanceof Node &&
@@ -64,11 +64,11 @@ export function NotificationBellClient({
       }
     }
 
-    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
@@ -79,7 +79,7 @@ export function NotificationBellClient({
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="shell-action relative flex h-11 w-11 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant hover:bg-surface-container"
+        className="shell-action relative flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant hover:bg-surface-container sm:h-11 sm:w-11"
         aria-label={`Notifications${unreadCount > 0 ? ` — ${unreadCount} non lues` : ""}`}
         aria-expanded={open}
         aria-controls="notification-panel"
@@ -97,13 +97,16 @@ export function NotificationBellClient({
           role="dialog"
           aria-modal="false"
           aria-label="Notifications"
-          className="notification-panel glass-panel absolute right-0 top-14 z-50 w-[min(20rem,calc(100vw-2rem))] rounded-brand-md shadow-ambient sm:w-80"
+          className="notification-panel glass-panel fixed inset-x-3 top-[calc(var(--safe-area-top)+4.5rem)] z-50 rounded-brand-md shadow-ambient sm:absolute sm:right-0 sm:top-14 sm:w-80 sm:inset-x-auto"
         >
-          <div className="flex items-center justify-between gap-4 px-4 py-3">
+          <div className="flex items-center justify-between gap-4 px-4 py-3.5">
             <p className="font-headline text-sm font-semibold text-on-surface">Notifications</p>
             {unreadCount > 0 ? (
               <form action={markAllAction}>
-                <button type="submit" className="font-label text-xs font-semibold text-primary">
+                <button
+                  type="submit"
+                  className="min-h-11 rounded-full px-3 font-label text-xs font-semibold text-primary"
+                >
                   Tout marquer comme lu
                 </button>
               </form>
@@ -113,12 +116,12 @@ export function NotificationBellClient({
           {notifications.length === 0 ? (
             <p className="px-4 pb-4 text-sm text-on-surface-variant">Aucune notification.</p>
           ) : (
-            <ul className="max-h-[min(24rem,calc(100vh-7rem))] divide-y divide-outline-variant/30 overflow-y-auto">
+            <ul className="max-h-[min(24rem,calc(100dvh-var(--safe-area-top)-6rem))] divide-y divide-outline-variant/30 overflow-y-auto">
               {notifications.map((notif) => {
                 const Icon = KIND_ICONS[notif.kind];
                 const content = (
                   <div
-                    className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-surface-container-low ${
+                    className={`flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-surface-container-low ${
                       !notif.readAt ? "bg-primary/5" : ""
                     }`}
                   >

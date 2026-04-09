@@ -39,9 +39,9 @@ export default async function NewConversationPage({ searchParams }: NewConversat
           <div className="eyebrow">Messagerie entre membres</div>
           <h1 className="editorial-title">Écrire à une personne ou ouvrir un groupe privé.</h1>
           <p className="max-w-2xl text-base leading-7 text-on-surface-variant">
-            Recherchez des membres, puis choisissez le bon format: une conversation
-            directe ou un groupe privé entre membres. Le cadre reste modéré et la
-            charte de bienveillance s&apos;applique à chaque nouvel échange.
+            Recherchez une personne, puis choisissez le bon format: un message direct
+            ou un groupe privé. Chaque échange reste protégé par la charte de
+            bienveillance.
           </p>
         </div>
 
@@ -88,9 +88,8 @@ export default async function NewConversationPage({ searchParams }: NewConversat
                 Charte de bienveillance
               </p>
               <p className="mt-2 text-sm leading-7 text-on-surface-variant">
-                Pas de jugement, pas de pression, pas de conseils médicaux affirmés comme
-                des certitudes. Si un échange devient inconfortable, utilisez le
-                signalement ou contactez l&apos;association.
+                On parle depuis son vécu, sans pression ni certitudes médicales. Si un
+                échange devient inconfortable, signalez-le ou contactez l&apos;association.
               </p>
             </div>
           </div>
@@ -106,8 +105,8 @@ export default async function NewConversationPage({ searchParams }: NewConversat
                 Créer un groupe entre membres
               </p>
               <p className="text-sm leading-7 text-on-surface-variant">
-                Donnez un nom au groupe, écrivez le premier message, puis sélectionnez
-                au moins deux membres à inviter.
+                Donnez un nom au groupe, écrivez le premier message, puis choisissez
+                au moins deux personnes à inviter.
               </p>
             </div>
           </div>
@@ -140,14 +139,14 @@ export default async function NewConversationPage({ searchParams }: NewConversat
             </label>
 
             <div className="space-y-3">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
                   Membres à inviter
                 </p>
                 <p className="text-sm leading-6 text-on-surface-variant">
                   {members.length > 0
-                    ? "Sélectionnez au moins deux membres dans la liste filtrée."
-                    : "Lancez une recherche pour sélectionner des membres."}
+                    ? "Choisissez au moins deux personnes dans cette liste."
+                    : "Lancez une recherche pour afficher des membres."}
                 </p>
               </div>
 
@@ -186,7 +185,7 @@ export default async function NewConversationPage({ searchParams }: NewConversat
 
             <button
               type="submit"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
             >
               <Users aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
               Créer le groupe
@@ -199,13 +198,13 @@ export default async function NewConversationPage({ searchParams }: NewConversat
             <div className="space-y-2">
               <div className="eyebrow">Conversation directe</div>
               <p className="max-w-2xl text-sm leading-7 text-on-surface-variant">
-                Si vous préférez écrire à une seule personne, utilisez l&apos;un des
-                formulaires ci-dessous.
+                Si vous préférez écrire à une seule personne, utilisez directement le
+                formulaire correspondant ci-dessous.
               </p>
             </div>
             {members.map((member) => (
               <article key={member.id} className="surface-section space-y-4">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="font-headline text-lg font-semibold text-on-surface">
                       {member.visibleName}
@@ -215,7 +214,7 @@ export default async function NewConversationPage({ searchParams }: NewConversat
                       {member.isAnonymous ? " · profil pseudonyme" : ""}
                     </p>
                   </div>
-                  <span className="rounded-full bg-surface-container-low px-3 py-2 font-label text-xs font-semibold text-on-surface-variant">
+                  <span className="self-start rounded-full bg-surface-container-low px-3 py-2 font-label text-xs font-semibold text-on-surface-variant">
                     {member.hasExistingThread ? "Conversation existante" : "Nouveau contact"}
                   </span>
                 </div>
@@ -236,7 +235,7 @@ export default async function NewConversationPage({ searchParams }: NewConversat
                   </label>
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
                   >
                     <MessageSquarePlus aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
                     {member.hasExistingThread ? "Reprendre l'échange" : "Ouvrir la conversation"}
