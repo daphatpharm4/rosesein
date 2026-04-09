@@ -40,7 +40,16 @@ export async function requestAppointment(
       professionalId,
       patientNote,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("BOOKING_TEMPORARILY_PAUSED")) {
+      const [, pauseUntil] = error.message.split(":");
+      const pauseQuery = pauseUntil
+        ? `&resumeAt=${encodeURIComponent(pauseUntil)}`
+        : "";
+
+      redirect(`/professionnels/${slug}?error=booking-temporarily-paused${pauseQuery}`);
+    }
+
     redirect(`/professionnels/${slug}?error=booking-unavailable`);
   }
 

@@ -9,6 +9,7 @@ import {
   type ProfessionalKind,
   type SupportCategory,
 } from "@/lib/professional";
+import type { AppointmentActor } from "@/lib/professional-agenda";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type UserAppointment = {
@@ -61,6 +62,10 @@ export type PatientProfessionalAppointment = {
   consultationMode: ConsultationMode;
   patientNote: string | null;
   professionalNote: string | null;
+  cancelledAt: string | null;
+  cancelledBy: AppointmentActor | null;
+  cancellationReason: string | null;
+  lateCancellation: boolean;
   createdAt: string;
 };
 
@@ -123,6 +128,10 @@ type PatientProfessionalAppointmentRow = {
   status: ProfessionalAppointmentStatus;
   patient_note: string | null;
   professional_note: string | null;
+  cancelled_at: string | null;
+  cancelled_by: AppointmentActor | null;
+  cancellation_reason: string | null;
+  late_cancellation: boolean | null;
   created_at: string;
   professional_availabilities: AppointmentAvailabilityRelation | null;
   professional_profiles: AppointmentProfessionalRelation | null;
@@ -264,6 +273,10 @@ export async function getParcoursSnapshot(): Promise<ParcoursSnapshot> {
           status,
           patient_note,
           professional_note,
+          cancelled_at,
+          cancelled_by,
+          cancellation_reason,
+          late_cancellation,
           created_at,
           professional_availabilities!inner(starts_at, ends_at, consultation_mode),
           professional_profiles!inner(
@@ -346,6 +359,10 @@ export async function getParcoursSnapshot(): Promise<ParcoursSnapshot> {
         consultationMode: availability?.consultation_mode ?? "presentiel",
         patientNote: row.patient_note,
         professionalNote: row.professional_note,
+        cancelledAt: row.cancelled_at,
+        cancelledBy: row.cancelled_by,
+        cancellationReason: row.cancellation_reason,
+        lateCancellation: row.late_cancellation ?? false,
         createdAt: row.created_at,
       };
     }),

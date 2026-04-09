@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   CalendarCheck2,
   CalendarClock,
+  CircleAlert,
   FileText,
   LockKeyhole,
   NotebookPen,
@@ -19,9 +20,11 @@ import {
   PROFESSIONAL_APPOINTMENT_STATUS_LABELS,
   toDateTimeLocalValue,
 } from "@/lib/parcours";
+import { canPatientCancelOwnAppointment } from "@/lib/professional-agenda";
 import { CONSULTATION_MODE_LABELS } from "@/lib/professional";
 
 import {
+  cancelProfessionalAppointment,
   deleteAppointment,
   deleteParcoursDocument,
   deletePersonalNote,
@@ -46,10 +49,18 @@ const feedbackMap: Record<string, string> = {
   "note-deleted": "La note personnelle a été supprimée.",
   "document-uploaded": "Le document a été ajouté à votre espace privé.",
   "document-deleted": "Le document a été supprimé.",
+  "professional-appointment-cancelled":
+    "Le rendez-vous a été annulé et la disponibilité a été libérée côté professionnel.",
   "appointment-title-required": "Indiquez un titre d'au moins deux caractères pour le rendez-vous.",
   "appointment-date-required": "Choisissez une date et une heure pour le rendez-vous.",
   "appointment-save-failed": "Le rendez-vous n'a pas pu être enregistré.",
   "appointment-delete-failed": "Le rendez-vous n'a pas pu être supprimé.",
+  "professional-appointment-cancel-reason-required":
+    "Ajoutez un motif d'au moins quelques mots pour annuler le rendez-vous.",
+  "professional-appointment-cancel-window-closed":
+    "À moins de 24 heures du rendez-vous confirmé, l'annulation en ligne est fermée. Contactez directement le professionnel.",
+  "professional-appointment-cancel-failed":
+    "Le rendez-vous n'a pas pu être annulé pour le moment.",
   "note-title-required": "Ajoutez un titre d'au moins deux caractères pour la note.",
   "note-body-required": "Écrivez quelques mots pour enregistrer la note.",
   "note-save-failed": "La note n'a pas pu être enregistrée.",
@@ -75,6 +86,22 @@ function truncateText(value: string | null, maxLength = 180) {
   }
 
   return `${value.slice(0, maxLength).trimEnd()}…`;
+}
+
+function getCancellationActorLabel(value: "patient" | "professional" | "admin" | null) {
+  if (value === "patient") {
+    return "Annulation envoyée";
+  }
+
+  if (value === "professional") {
+    return "Motif communiqué par le professionnel";
+  }
+
+  if (value === "admin") {
+    return "Motif enregistré par l'équipe";
+  }
+
+  return "Motif d'annulation";
 }
 
 export default async function JourneyPage({ searchParams }: JourneyPageProps) {
@@ -450,9 +477,9 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
             <h2 className="font-headline text-2xl font-bold text-on-surface">
               Vos demandes auprès des professionnels
             </h2>
-            <p className="max-w-2xl text-sm leading-7 text-on-surface-variant">
+            <p className="max-w-2xl text-base leading-8 text-on-surface-variant">
               Les demandes envoyées depuis l&apos;annuaire apparaissent ici avec leur statut,
-              pour que la confirmation par le professionnel reste visible côté patiente.
+              pour que la confirmation, les annulations et les messages restent visibles côté patiente.
             </p>
           </div>
 
@@ -461,27 +488,27 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
               {professionalAppointments.map((appointment) => (
                 <article
                   key={appointment.id}
-                  className="rounded-brand-xl border border-outline-variant/40 bg-surface-container-lowest px-5 py-5 shadow-ambient"
+                  className="rounded-brand-xl border border-outline-variant/40 bg-surface-container-lowest px-5 py-5 shadow-ambient sm:px-6 sm:py-6"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-2">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0 space-y-3">
                       <div>
-                        <p className="font-headline text-lg font-semibold text-on-surface">
+                        <p className="font-headline text-xl font-semibold leading-tight text-on-surface">
                           {appointment.professionalTitle
                             ? `${appointment.professionalTitle} ${appointment.professionalDisplayName}`
                             : appointment.professionalDisplayName}
                         </p>
-                        <p className="mt-1 text-sm leading-7 text-primary">
+                        <p className="mt-1 text-base leading-7 text-primary">
                           {appointment.professionalCategoryLabel}
                         </p>
                       </div>
-                      <p className="text-sm leading-7 text-on-surface-variant">
+                      <p className="text-base leading-8 text-on-surface-variant">
                         {formatProfessionalAppointmentSchedule(appointment.startsAt, appointment.endsAt)}
                       </p>
                     </div>
 
                     <span
-                      className={`rounded-full px-3 py-1 font-label text-xs font-semibold uppercase tracking-[0.14em] ${
+                      className={`rounded-full px-3 py-1.5 font-label text-xs font-semibold uppercase tracking-[0.14em] ${
                         professionalAppointmentStatusClasses[appointment.status]
                       }`}
                     >
@@ -489,10 +516,15 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
                     </span>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-outline">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-outline">
                     <span className="rounded-full bg-surface-container-low px-3 py-1">
                       {CONSULTATION_MODE_LABELS[appointment.consultationMode]}
                     </span>
+                    {appointment.lateCancellation ? (
+                      <span className="rounded-full bg-primary/8 px-3 py-1 text-primary">
+                        Annulation tardive enregistrée
+                      </span>
+                    ) : null}
                     {appointment.professionalSlug ? (
                       <Link
                         href={`/professionnels/${appointment.professionalSlug}`}
@@ -514,12 +546,85 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
                     </div>
                   ) : null}
 
+                  {appointment.cancellationReason ? (
+                    <div className="mt-4 rounded-brand-lg bg-surface-container-low px-4 py-4">
+                      <p className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-outline">
+                        {getCancellationActorLabel(appointment.cancelledBy)}
+                      </p>
+                      <p className="mt-2 text-base leading-8 text-on-surface-variant">
+                        {appointment.cancellationReason}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {appointment.status === "pending" || appointment.status === "confirmed" ? (
+                    canPatientCancelOwnAppointment(appointment.status, appointment.startsAt) ? (
+                      <details className="mt-4 rounded-brand-lg bg-surface-container-low px-4 py-4">
+                        <summary className="cursor-pointer list-none font-label text-sm font-semibold text-primary">
+                          {appointment.status === "pending"
+                            ? "Retirer cette demande"
+                            : "Annuler ce rendez-vous"}
+                        </summary>
+                        <p className="mt-3 text-sm leading-7 text-on-surface-variant">
+                          {appointment.status === "pending"
+                            ? "Le créneau sera de nouveau visible côté professionnel et pourra être reproposé."
+                            : "Au-delà de deux annulations tardives sur 90 jours, la réservation en ligne est temporairement suspendue pour protéger le cadre de prise de rendez-vous."}
+                        </p>
+                        <form action={cancelProfessionalAppointment} className="mt-4 space-y-3">
+                          <input type="hidden" name="appointmentId" value={appointment.id} />
+                          {appointment.professionalSlug ? (
+                            <input
+                              type="hidden"
+                              name="professionalSlug"
+                              value={appointment.professionalSlug}
+                            />
+                          ) : null}
+                          <label className="block space-y-2">
+                            <span className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+                              Motif transmis
+                            </span>
+                            <textarea
+                              name="cancellationReason"
+                              rows={3}
+                              minLength={8}
+                              required
+                              className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-base leading-7 text-on-surface"
+                              placeholder="Expliquez brièvement pourquoi vous devez annuler."
+                            />
+                          </label>
+                          <button
+                            type="submit"
+                            className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-surface-container-lowest px-5 py-3 font-label text-sm font-semibold text-primary shadow-ambient"
+                          >
+                            Confirmer l&apos;annulation
+                          </button>
+                        </form>
+                      </details>
+                    ) : (
+                      <div className="mt-4 rounded-brand-lg bg-primary/6 px-4 py-4">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+                            <CircleAlert aria-hidden="true" className="h-4 w-4" strokeWidth={1.9} />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="font-headline text-base font-semibold text-on-surface">
+                              Annulation en ligne fermée
+                            </p>
+                            <p className="text-sm leading-7 text-on-surface-variant">
+                              À moins de 24 heures d&apos;un rendez-vous confirmé, contactez directement le professionnel pour éviter une annulation tardive non expliquée.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  ) : null}
+
                   {appointment.professionalNote ? (
                     <div className="mt-4 rounded-brand-lg bg-secondary-container/40 px-4 py-4">
                       <p className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-on-secondary-container">
                         Message du professionnel
                       </p>
-                      <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                      <p className="mt-2 text-base leading-8 text-on-surface-variant">
                         {appointment.professionalNote}
                       </p>
                     </div>
@@ -537,7 +642,7 @@ export default async function JourneyPage({ searchParams }: JourneyPageProps) {
                   <p className="font-headline text-lg font-semibold text-on-surface">
                     Aucune demande professionnelle pour le moment
                   </p>
-                  <p className="mt-2 text-sm leading-7 text-on-surface-variant">
+                  <p className="mt-2 text-base leading-8 text-on-surface-variant">
                     Dès qu&apos;une demande est envoyée depuis une fiche professionnelle, elle
                     sera visible ici avec son statut de confirmation.
                   </p>

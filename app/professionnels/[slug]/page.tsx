@@ -9,7 +9,10 @@ import { AppShell } from "@/components/shell/app-shell";
 import { getCurrentUserContext } from "@/lib/auth";
 import { formatEventSchedule } from "@/lib/content";
 import { getPublishedEventsByProfessional } from "@/lib/events";
-import { getPublishedAvailabilities } from "@/lib/professional-agenda";
+import {
+  getPatientBookingRestriction,
+  getPublishedAvailabilities,
+} from "@/lib/professional-agenda";
 import {
   CONSULTATION_MODE_LABELS,
   SUBSCRIPTION_TIER_DEFINITIONS,
@@ -33,12 +36,22 @@ const feedbackMap: Record<string, string> = {
   "booking-missing-slot": "Choisissez un créneau avant d'envoyer votre demande.",
   "booking-unavailable":
     "Ce créneau n'est plus disponible. Sélectionnez-en un autre ou contactez directement le professionnel.",
+  "booking-temporarily-paused":
+    "La réservation en ligne est temporairement suspendue après plusieurs annulations tardives.",
   "booking-forbidden":
     "Ce compte ne peut pas envoyer de demande de rendez-vous depuis cette fiche.",
 };
 
 function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function formatResumeDate(value: string) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 export default async function ProfessionalProfilePage({
@@ -49,6 +62,7 @@ export default async function ProfessionalProfilePage({
   const query = (await searchParams) ?? {};
   const status = firstValue(query.status);
   const error = firstValue(query.error);
+  const resumeAt = firstValue(query.resumeAt);
   const [profile, context] = await Promise.all([
     getProfessionalBySlug(slug),
     getCurrentUserContext(),
@@ -58,28 +72,37 @@ export default async function ProfessionalProfilePage({
     notFound();
   }
 
-  const [availabilities, hostedEvents] = await Promise.all([
+  const viewerProfile = context.profile;
+  const isAdminViewer = context.roles.includes("admin");
+  const [availabilities, hostedEvents, bookingRestriction] = await Promise.all([
     profile.subscriptionTier === "solidaire"
       ? Promise.resolve([])
       : getPublishedAvailabilities(profile.id),
     profile.subscriptionTier === "partenaire"
       ? getPublishedEventsByProfessional(profile.id, 3)
       : Promise.resolve([]),
+    context.user && (isAdminViewer || viewerProfile?.profileKind !== "professional")
+      ? getPatientBookingRestriction(context.user.id)
+      : Promise.resolve(null),
   ]);
   const feedbackKey = error ?? status;
-  const feedback = feedbackKey ? feedbackMap[feedbackKey] : null;
+  const feedback = feedbackKey
+    ? feedbackKey === "booking-temporarily-paused" && resumeAt
+      ? `${feedbackMap[feedbackKey]} Vous pourrez réessayer à partir du ${formatResumeDate(resumeAt)} ou passer par un contact direct si besoin.`
+      : feedbackMap[feedbackKey]
+    : null;
   const feedbackTone = error
     ? "bg-primary/10 text-on-primary-container"
     : "bg-secondary-container text-on-secondary-container";
   const categoryLabel = getProfessionalCategoryLabel(profile);
   const headerTitle = profile.structureName ?? `${profile.title ? `${profile.title} ` : ""}${profile.displayName}`.trim();
   const tierDefinition = SUBSCRIPTION_TIER_DEFINITIONS[profile.subscriptionTier];
-  const viewerProfile = context.profile;
-  const isAdminViewer = context.roles.includes("admin");
   const hasCompletedProfile = viewerProfile !== null;
+  const isBookingPaused = bookingRestriction?.isBlocked ?? false;
   const canRequestAppointment =
     hasCompletedProfile
     && (isAdminViewer || viewerProfile.profileKind !== "professional")
+    && !isBookingPaused
     && profile.subscriptionTier !== "solidaire"
     && availabilities.length > 0;
   const requestAppointmentAction = requestAppointment.bind(null, slug, profile.id);
@@ -89,17 +112,17 @@ export default async function ProfessionalProfilePage({
   return (
     <AppShell title="Professionnels" currentPath="/professionnels">
       <section className="space-y-6">
-        <div className="surface-section space-y-5">
+        <div className="signature-profile-shell surface-section space-y-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-3">
+            <div className="max-w-3xl space-y-3">
               <div className="eyebrow">
                 {profile.professionalKind === "medical" ? "Parcours médical" : "Soins de support"}
               </div>
               <div className="space-y-2">
-                <h1 className="editorial-title">{headerTitle}</h1>
-                <p className="text-base font-medium text-primary">{categoryLabel}</p>
+                <h1 className="editorial-title max-w-3xl">{headerTitle}</h1>
+                <p className="max-w-2xl text-lg font-medium leading-8 text-primary">{categoryLabel}</p>
                 {profile.structureName ? (
-                  <p className="text-sm leading-7 text-on-surface-variant">
+                  <p className="text-base leading-8 text-on-surface-variant">
                     Interlocuteur référent: {profile.title ? `${profile.title} ` : ""}
                     {profile.displayName}
                   </p>
@@ -109,48 +132,62 @@ export default async function ProfessionalProfilePage({
             <SubscriptionBadge tier={profile.subscriptionTier} />
           </div>
 
-          {profile.bio ? (
-            <p className="max-w-2xl text-base leading-7 text-on-surface-variant">{profile.bio}</p>
-          ) : null}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_20rem] lg:items-start">
+            <div className="space-y-4">
+              {profile.bio ? (
+                <p className="max-w-2xl text-base leading-8 text-on-surface-variant">{profile.bio}</p>
+              ) : null}
 
-          <div className="flex flex-wrap items-center gap-3 text-sm leading-7 text-on-surface-variant">
-            {profile.city ? (
-              <span className="inline-flex items-center gap-1.5">
-                <MapPin aria-hidden="true" className="h-4 w-4 text-primary" strokeWidth={1.8} />
-                {profile.city}, {profile.country}
-              </span>
-            ) : null}
+              <div className="flex flex-wrap items-center gap-2.5 text-sm leading-7 text-on-surface-variant">
+                {profile.consultationModes.map((mode) => (
+                  <span
+                    key={mode}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-lowest/90 px-3 py-1.5 shadow-ambient"
+                  >
+                    {mode === "visio" ? (
+                      <Video aria-hidden="true" className="h-4 w-4 text-primary" strokeWidth={1.8} />
+                    ) : mode === "telephone" ? (
+                      <Phone aria-hidden="true" className="h-4 w-4 text-primary" strokeWidth={1.8} />
+                    ) : (
+                      <MapPin aria-hidden="true" className="h-4 w-4 text-primary" strokeWidth={1.8} />
+                    )}
+                    {CONSULTATION_MODE_LABELS[mode]}
+                  </span>
+                ))}
+              </div>
+            </div>
 
-            {profile.consultationModes.map((mode) => (
-              <span key={mode} className="inline-flex items-center gap-1.5">
-                {mode === "visio" ? (
-                  <Video aria-hidden="true" className="h-4 w-4 text-primary" strokeWidth={1.8} />
-                ) : mode === "telephone" ? (
-                  <Phone aria-hidden="true" className="h-4 w-4 text-primary" strokeWidth={1.8} />
+            <aside className="rounded-brand-xl border border-white/60 bg-white/72 px-4 py-4 shadow-ambient backdrop-blur-sm">
+              <p className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                Cadre de consultation
+              </p>
+              <div className="mt-4 space-y-3 text-sm leading-7 text-on-surface-variant">
+                {profile.city ? (
+                  <p className="inline-flex items-start gap-2">
+                    <MapPin aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-primary" strokeWidth={1.8} />
+                    <span>{profile.city}, {profile.country}</span>
+                  </p>
+                ) : null}
+                {profile.consultationPriceEur !== null ? (
+                  <p className="font-semibold text-on-surface">
+                    {profile.consultationPriceEur} € / consultation
+                  </p>
                 ) : (
-                  <MapPin aria-hidden="true" className="h-4 w-4 text-primary" strokeWidth={1.8} />
+                  <p>Tarif communiqué directement par le professionnel.</p>
                 )}
-                {CONSULTATION_MODE_LABELS[mode]}
-              </span>
-            ))}
-
-            {profile.consultationPriceEur !== null ? (
-              <span className="font-semibold text-on-surface">
-                {profile.consultationPriceEur} € / consultation
-              </span>
-            ) : null}
-
-            {profile.website ? (
-              <a
-                href={profile.website}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-primary"
-              >
-                <Globe aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-                Site web
-              </a>
-            ) : null}
+                {profile.website ? (
+                  <a
+                    href={profile.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 font-semibold text-primary"
+                  >
+                    <Globe aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+                    Ouvrir le site web
+                  </a>
+                ) : null}
+              </div>
+            </aside>
           </div>
         </div>
 
@@ -162,7 +199,7 @@ export default async function ProfessionalProfilePage({
                 {tierDefinition.publicHeadline}
               </p>
             </div>
-            <p className="text-sm leading-7 text-on-surface-variant">
+            <p className="text-base leading-8 text-on-surface-variant">
               {tierDefinition.publicDescription}
             </p>
             <p className="text-xs leading-6 text-on-surface-variant">
@@ -173,11 +210,11 @@ export default async function ProfessionalProfilePage({
 
         {hostedEvents.length > 0 ? (
           <section className="surface-section space-y-4">
-            <div>
-              <div className="eyebrow">Formats collectifs</div>
-              <h2 className="font-headline text-2xl font-bold text-on-surface">
-                Ateliers et webinaires publiés
-              </h2>
+              <div>
+                <div className="eyebrow">Formats collectifs</div>
+                <h2 className="font-headline text-2xl font-bold text-on-surface">
+                  Ateliers et webinaires publiés
+                </h2>
               <p className="max-w-2xl text-base leading-8 text-on-surface-variant">
                 Ces formats disposent d&apos;une page dédiée avec leurs propres inscriptions.
                 Pour une consultation individuelle, utilisez l&apos;agenda ou le contact direct.
@@ -191,7 +228,7 @@ export default async function ProfessionalProfilePage({
                   <h3 className="font-headline text-lg font-semibold text-on-surface">
                     {event.title}
                   </h3>
-                  <p className="text-sm leading-7 text-on-surface-variant">
+                  <p className="text-base leading-8 text-on-surface-variant">
                     {event.description}
                   </p>
                   <p className="text-sm font-semibold text-on-surface">
@@ -243,13 +280,16 @@ export default async function ProfessionalProfilePage({
         ) : null}
 
         {profile.subscriptionTier !== "solidaire" ? (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
             <section className="surface-section space-y-4">
               <div>
                 <div className="eyebrow">Disponibilités</div>
                 <h2 className="font-headline text-2xl font-bold text-on-surface">
                   Créneaux publiés
                 </h2>
+                <p className="mt-2 max-w-2xl text-base leading-8 text-on-surface-variant">
+                  La demande reste en attente tant que le professionnel ne l&apos;a pas confirmée. Les annulations côté patiente restent possibles en ligne jusqu&apos;à 24 heures avant un rendez-vous confirmé.
+                </p>
               </div>
 
               {availabilities.length > 0 ? (
@@ -263,13 +303,13 @@ export default async function ProfessionalProfilePage({
                       <textarea
                         name="patientNote"
                         rows={4}
-                        className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-sm leading-7 text-on-surface"
+                        className="w-full rounded-brand bg-surface-container-high px-4 py-4 text-base leading-7 text-on-surface sm:text-sm"
                         placeholder="Précisez brièvement votre besoin ou le contexte du rendez-vous."
                       />
                     </label>
                     <button
                       type="submit"
-                      className="inline-flex w-full items-center justify-center rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
+                      className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary sm:w-auto"
                     >
                       Envoyer une demande de rendez-vous
                     </button>
@@ -278,24 +318,24 @@ export default async function ProfessionalProfilePage({
                   <AvailabilityPicker availabilities={availabilities} />
                 )
               ) : (
-                <div className="rounded-brand bg-surface-container-lowest px-4 py-4 text-sm leading-7 text-on-surface-variant shadow-ambient">
+                <div className="rounded-brand bg-surface-container-lowest px-4 py-4 text-base leading-8 text-on-surface-variant shadow-ambient">
                   Aucun créneau n&apos;est publié pour le moment. Le contact direct reste possible.
                 </div>
               )}
             </section>
 
-            <aside className="space-y-4">
+            <aside className="space-y-4 lg:sticky lg:top-[calc(var(--safe-area-top)+6.5rem)]">
               {!context.user ? (
                 <div className="surface-card space-y-3">
                   <p className="font-headline text-lg font-semibold text-on-surface">
                     Se connecter pour demander un rendez-vous
                   </p>
-                  <p className="text-sm leading-7 text-on-surface-variant">
+                  <p className="text-base leading-8 text-on-surface-variant">
                     Les créneaux restent visibles publiquement, mais l&apos;envoi d&apos;une demande nécessite une session authentifiée.
                   </p>
                   <Link
                     href={`/account?status=signin-required&redirectTo=${encodeURIComponent(`/professionnels/${slug}`)}`}
-                    className="inline-flex items-center justify-center rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
                   >
                     Ouvrir mon compte
                   </Link>
@@ -305,12 +345,12 @@ export default async function ProfessionalProfilePage({
                   <p className="font-headline text-lg font-semibold text-on-surface">
                     Compléter le profil avant de réserver
                   </p>
-                  <p className="text-sm leading-7 text-on-surface-variant">
+                  <p className="text-base leading-8 text-on-surface-variant">
                     La demande de rendez-vous enregistre la personne qui prend contact. Il faut donc finaliser le profil avant l&apos;envoi.
                   </p>
                   <Link
                     href={`/account?status=complete-profile&redirectTo=${encodeURIComponent(`/professionnels/${slug}`)}`}
-                    className="inline-flex items-center justify-center rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-gradient-primary px-5 py-3 font-label text-sm font-semibold text-on-primary"
                   >
                     Compléter mon profil
                   </Link>
@@ -320,20 +360,37 @@ export default async function ProfessionalProfilePage({
                   <p className="font-headline text-lg font-semibold text-on-surface">
                     {isAdminViewer ? "Mode admin" : "Lecture seule depuis un compte pro"}
                   </p>
-                  <p className="text-sm leading-7 text-on-surface-variant">
+                  <p className="text-base leading-8 text-on-surface-variant">
                     {isAdminViewer
                       ? "Un compte administrateur peut tester le parcours, mais un profil complété reste nécessaire."
                       : "Les demandes de rendez-vous sont réservées aux patientes et aidants connectés."}
+                    </p>
+                </div>
+              ) : isBookingPaused ? (
+                <div className="surface-card space-y-3 bg-primary/6">
+                  <p className="font-headline text-lg font-semibold text-on-surface">
+                    Réservation temporairement suspendue
                   </p>
+                  <p className="text-base leading-8 text-on-surface-variant">
+                    Deux annulations tardives sur 90 jours ferment momentanément la prise de rendez-vous en ligne pour protéger le cadre des créneaux confirmés.
+                  </p>
+                  {bookingRestriction?.pauseUntil ? (
+                    <p className="text-sm leading-7 text-primary">
+                      Réouverture prévue le {formatResumeDate(bookingRestriction.pauseUntil)}.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 
-              <div className="surface-card space-y-3">
+              <div className="surface-card space-y-3 bg-secondary-container/25">
                 <p className="font-headline text-lg font-semibold text-on-surface">
-                  Repère avant de réserver
+                  Avant de réserver
+                </p>
+                <p className="text-base leading-8 text-on-surface-variant">
+                  Une demande n&apos;est pas confirmée immédiatement. Le professionnel la valide ensuite depuis son espace dédié.
                 </p>
                 <p className="text-sm leading-7 text-on-surface-variant">
-                  Une demande n&apos;est pas confirmée immédiatement. Le professionnel la valide ensuite depuis son espace dédié.
+                  Les annulations de dernière minute sont suivies pour protéger le cadre de prise de rendez-vous.
                 </p>
               </div>
             </aside>

@@ -44,6 +44,7 @@ Next steps:
    - supabase/migrations/0020_patient_professional_appointment_visibility.sql
    - supabase/migrations/0021_professional_profile_views.sql
    - supabase/migrations/0022_partner_professional_events.sql
+   - supabase/migrations/0023_professional_appointment_cancellation_controls.sql
 4. Start the app:
    npm run dev
 5. Run the local verification pack:

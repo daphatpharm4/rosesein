@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireCompletedProfile } from "@/lib/auth";
+import { cancelAppointment, getCancellationErrorCode } from "@/lib/professional-agenda";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function appendFeedback(targetPath: string, key: "status" | "error", value: string) {
@@ -136,6 +137,50 @@ export async function deleteAppointment(formData: FormData) {
 
   revalidatePath("/parcours");
   redirect(appendFeedback("/parcours", "status", "appointment-deleted"));
+}
+
+export async function cancelProfessionalAppointment(formData: FormData) {
+  const appointmentId = normalizeId(formData.get("appointmentId"));
+  const professionalSlug = normalizeId(formData.get("professionalSlug"));
+  const cancellationReason = normalizeRequiredText(formData.get("cancellationReason"));
+
+  if (!appointmentId) {
+    redirect("/parcours?error=professional-appointment-cancel-failed");
+  }
+
+  if (cancellationReason.length < 8) {
+    redirect("/parcours?error=professional-appointment-cancel-reason-required");
+  }
+
+  await requireCompletedProfile("/parcours");
+
+  try {
+    await cancelAppointment({
+      appointmentId,
+      reason: cancellationReason,
+    });
+  } catch (error) {
+    const code = getCancellationErrorCode(error);
+
+    if (code === "reason-required") {
+      redirect("/parcours?error=professional-appointment-cancel-reason-required");
+    }
+
+    if (code === "window-closed") {
+      redirect("/parcours?error=professional-appointment-cancel-window-closed");
+    }
+
+    redirect("/parcours?error=professional-appointment-cancel-failed");
+  }
+
+  revalidatePath("/parcours");
+  revalidatePath("/pro");
+  revalidatePath("/pro/agenda");
+  if (professionalSlug) {
+    revalidatePath(`/professionnels/${professionalSlug}`);
+  }
+
+  redirect(appendFeedback("/parcours", "status", "professional-appointment-cancelled"));
 }
 
 export async function savePersonalNote(formData: FormData) {

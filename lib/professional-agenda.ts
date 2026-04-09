@@ -5,6 +5,13 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ConsultationMode } from "@/lib/professional";
 
 export type AppointmentStatus = "pending" | "confirmed" | "declined" | "cancelled" | "completed";
+export type AppointmentActor = "patient" | "professional" | "admin";
+
+export const PATIENT_SELF_CANCELLATION_NOTICE_HOURS = 24;
+export const LATE_CANCELLATION_NOTICE_HOURS = 48;
+export const LATE_CANCELLATION_WINDOW_DAYS = 90;
+export const LATE_CANCELLATION_LIMIT = 2;
+export const LATE_CANCELLATION_BOOKING_PAUSE_DAYS = 30;
 
 export type Availability = {
   id: string;
@@ -25,6 +32,10 @@ export type ProfessionalAppointment = {
   status: AppointmentStatus;
   patientNote: string | null;
   professionalNote: string | null;
+  cancelledAt: string | null;
+  cancelledBy: AppointmentActor | null;
+  cancellationReason: string | null;
+  lateCancellation: boolean;
   startsAt: string;
   endsAt: string;
   consultationMode: ConsultationMode;
@@ -49,6 +60,10 @@ type AppointmentRow = {
   status: AppointmentStatus;
   patient_note: string | null;
   professional_note: string | null;
+  cancelled_at: string | null;
+  cancelled_by: AppointmentActor | null;
+  cancellation_reason: string | null;
+  late_cancellation: boolean | null;
   created_at: string;
   professional_availabilities:
     | {
@@ -85,6 +100,85 @@ function mapAvailabilityRow(row: AvailabilityRow): Availability {
     consultationMode: row.consultation_mode,
     isPublished: row.is_published,
     createdAt: row.created_at,
+  };
+}
+
+export function getHoursUntilAppointment(value: string, now = new Date()) {
+  return (new Date(value).getTime() - now.getTime()) / (1000 * 60 * 60);
+}
+
+export function canPatientCancelOwnAppointment(
+  status: AppointmentStatus,
+  startsAt: string,
+  now = new Date(),
+) {
+  if (status === "pending") {
+    return true;
+  }
+
+  if (status !== "confirmed") {
+    return false;
+  }
+
+  return getHoursUntilAppointment(startsAt, now) >= PATIENT_SELF_CANCELLATION_NOTICE_HOURS;
+}
+
+export function isLateCancellationWindow(startsAt: string, now = new Date()) {
+  return getHoursUntilAppointment(startsAt, now) < LATE_CANCELLATION_NOTICE_HOURS;
+}
+
+function addDays(date: Date, days: number) {
+  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+type LateCancellationSnapshot = {
+  cancelled_at: string | null;
+};
+
+export async function getPatientBookingRestriction(patientId: string) {
+  const supabase = await createSupabaseServerClient();
+  const thresholdDate = addDays(new Date(), -LATE_CANCELLATION_WINDOW_DAYS).toISOString();
+  const { data, error } = await supabase
+    .from("professional_appointments")
+    .select("cancelled_at")
+    .eq("patient_id", patientId)
+    .eq("cancelled_by", "patient")
+    .eq("late_cancellation", true)
+    .not("cancelled_at", "is", null)
+    .gte("cancelled_at", thresholdDate)
+    .order("cancelled_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as LateCancellationSnapshot[];
+  if (rows.length < LATE_CANCELLATION_LIMIT) {
+    return {
+      isBlocked: false,
+      pauseUntil: null,
+      lateCancellationCount: rows.length,
+    };
+  }
+
+  const latestCancelledAt = rows[0]?.cancelled_at;
+  if (!latestCancelledAt) {
+    return {
+      isBlocked: false,
+      pauseUntil: null,
+      lateCancellationCount: rows.length,
+    };
+  }
+
+  const pauseUntil = addDays(
+    new Date(latestCancelledAt),
+    LATE_CANCELLATION_BOOKING_PAUSE_DAYS,
+  );
+
+  return {
+    isBlocked: pauseUntil.getTime() > Date.now(),
+    pauseUntil: pauseUntil.toISOString(),
+    lateCancellationCount: rows.length,
   };
 }
 
@@ -163,6 +257,10 @@ export async function getProfessionalAgendaSnapshot(
             status,
             patient_note,
             professional_note,
+            cancelled_at,
+            cancelled_by,
+            cancellation_reason,
+            late_cancellation,
             created_at,
             professional_availabilities!inner(starts_at, ends_at, consultation_mode)
           `,
@@ -213,6 +311,10 @@ export async function getProfessionalAgendaSnapshot(
         status: row.status,
         patientNote: row.patient_note,
         professionalNote: row.professional_note,
+        cancelledAt: row.cancelled_at,
+        cancelledBy: row.cancelled_by,
+        cancellationReason: row.cancellation_reason,
+        lateCancellation: row.late_cancellation ?? false,
         startsAt: availability?.starts_at ?? row.created_at,
         endsAt: availability?.ends_at ?? row.created_at,
         consultationMode: availability?.consultation_mode ?? "presentiel",
@@ -228,6 +330,11 @@ export async function bookAppointment(input: {
   professionalId: string;
   patientNote?: string | null;
 }) {
+  const restriction = await getPatientBookingRestriction(input.patientId);
+  if (restriction.isBlocked) {
+    throw new Error(`BOOKING_TEMPORARILY_PAUSED:${restriction.pauseUntil ?? ""}`);
+  }
+
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("professional_appointments").insert({
     availability_id: input.availabilityId,
@@ -284,4 +391,45 @@ export async function updateAppointmentStatus(input: {
   if (error) {
     throw error;
   }
+}
+
+export async function cancelAppointment(input: {
+  appointmentId: string;
+  reason: string;
+}) {
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("cancel_professional_appointment", {
+    target_appointment_id: input.appointmentId,
+    cancellation_reason_input: input.reason,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export function getCancellationErrorCode(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("CANCELLATION_REASON_REQUIRED")) {
+    return "reason-required";
+  }
+
+  if (message.includes("PATIENT_CANCELLATION_WINDOW_CLOSED")) {
+    return "window-closed";
+  }
+
+  if (message.includes("APPOINTMENT_NOT_FOUND")) {
+    return "not-found";
+  }
+
+  if (message.includes("APPOINTMENT_FORBIDDEN")) {
+    return "forbidden";
+  }
+
+  if (message.includes("APPOINTMENT_STATUS_INVALID")) {
+    return "invalid-status";
+  }
+
+  return "unknown";
 }

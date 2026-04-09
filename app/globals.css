@@ -357,6 +357,95 @@
     pointer-events: none;
   }
 
+  .signature-profile-shell {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background:
+      radial-gradient(
+        circle at 88% 14%,
+        color-mix(in srgb, rgb(var(--color-primary-container)) 18%, transparent) 0%,
+        transparent 26%
+      ),
+      radial-gradient(
+        circle at 14% 88%,
+        color-mix(in srgb, rgb(var(--color-secondary-container)) 82%, transparent) 0%,
+        transparent 34%
+      ),
+      linear-gradient(
+        160deg,
+        rgba(255, 255, 255, 0.9) 0%,
+        rgba(248, 249, 250, 0.95) 48%,
+        rgba(241, 244, 245, 0.98) 100%
+      );
+  }
+
+  .signature-profile-shell::before,
+  .signature-profile-shell::after {
+    content: "";
+    position: absolute;
+    border-radius: 9999px;
+    pointer-events: none;
+  }
+
+  .signature-profile-shell::before {
+    top: -3rem;
+    right: -4rem;
+    width: clamp(10rem, 20vw, 14rem);
+    aspect-ratio: 1;
+    border: 1px solid rgba(255, 247, 247, 0.72);
+    background:
+      radial-gradient(circle, rgba(255, 255, 255, 0.56) 0%, rgba(255, 255, 255, 0) 70%);
+    opacity: 0.92;
+  }
+
+  .signature-profile-shell::after {
+    left: -4.5rem;
+    bottom: -5.25rem;
+    width: clamp(12rem, 24vw, 16rem);
+    aspect-ratio: 1;
+    border: 1px solid rgba(178, 37, 79, 0.12);
+    opacity: 0.56;
+  }
+
+  .pro-hero-shell {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background:
+      radial-gradient(
+        circle at 80% 18%,
+        color-mix(in srgb, rgb(var(--color-primary-container)) 16%, transparent) 0%,
+        transparent 24%
+      ),
+      radial-gradient(
+        circle at 18% 82%,
+        color-mix(in srgb, rgb(var(--color-secondary-container)) 76%, transparent) 0%,
+        transparent 30%
+      ),
+      linear-gradient(
+        160deg,
+        rgba(255, 255, 255, 0.9) 0%,
+        rgba(248, 249, 250, 0.94) 48%,
+        rgba(241, 244, 245, 0.98) 100%
+      );
+  }
+
+  .pro-hero-shell::before {
+    content: "";
+    position: absolute;
+    right: -3rem;
+    top: -3rem;
+    width: clamp(8rem, 16vw, 12rem);
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 247, 247, 0.68);
+    background:
+      radial-gradient(circle, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 70%);
+    pointer-events: none;
+    opacity: 0.88;
+  }
+
   .shell-bar {
     transition:
       transform 260ms var(--ease-out-quint),

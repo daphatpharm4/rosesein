@@ -8,7 +8,9 @@ import type { Route } from "next";
 import { parseEventDateTimeInput } from "@/lib/events";
 import { requireProfessional } from "@/lib/auth";
 import {
+  cancelAppointment,
   createAvailability,
+  getCancellationErrorCode,
   updateAppointmentStatus,
   type AppointmentStatus,
 } from "@/lib/professional-agenda";
@@ -95,4 +97,47 @@ export async function respondToAppointment(
       normalizedStatus === "confirmed" ? "appointment-confirmed" : "appointment-updated",
     ),
   );
+}
+
+export async function cancelAppointmentAsProfessional(
+  appointmentId: string,
+  formData: FormData,
+) {
+  const { user } = await requireProfessional("/pro/agenda");
+  const professionalProfile = await getProfessionalProfileByUserId(user.id);
+  const cancellationReasonValue = formData.get("cancellationReason");
+  const cancellationReason =
+    typeof cancellationReasonValue === "string" ? cancellationReasonValue.trim() : "";
+
+  if (!appointmentId) {
+    redirect("/pro/agenda?error=appointment-invalid");
+  }
+
+  if (cancellationReason.length < 8) {
+    redirect("/pro/agenda?error=appointment-cancel-reason-required");
+  }
+
+  try {
+    await cancelAppointment({
+      appointmentId,
+      reason: cancellationReason,
+    });
+  } catch (error) {
+    const code = getCancellationErrorCode(error);
+
+    if (code === "reason-required") {
+      redirect("/pro/agenda?error=appointment-cancel-reason-required");
+    }
+
+    redirect("/pro/agenda?error=appointment-invalid");
+  }
+
+  revalidatePath("/pro");
+  revalidatePath("/pro/agenda");
+  revalidatePath("/parcours");
+  if (professionalProfile) {
+    revalidatePath(`/professionnels/${professionalProfile.slug}`);
+  }
+
+  redirect(appendFeedback("/pro/agenda", "status", "appointment-cancelled"));
 }
